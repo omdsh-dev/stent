@@ -109,7 +109,7 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
 /**
  * Registry of enabled Stent patches with the shared bridge subscription.
  */
-export class StentRuntime {
+class StentRuntime {
   private readonly entries = new Map<PatchId, PatchEntry>()
   /** Load-time bindings per patch, recorded by the transformation hooks. */
   private readonly bindings = new Map<PatchId, StentBinding[]>()

@@ -81,6 +81,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1-0",
+    "@types/node": "^22.20.0",
     "@oh-my-dsh/stent": "workspace:^",
     "@deepseek-ai/dsh-agent": "^0.1.0-rc.0",
     "@deepseek-ai/dsh-commands": "^0.1.0-rc.0",

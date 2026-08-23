@@ -1,0 +1,7 @@
+# Editor-side declaration of the repository's text conventions.
+# Git attributes and checks enforce the same rules outside an editor.
+root = true
+
+[*]
+end_of_line = lf
+insert_final_newline = true

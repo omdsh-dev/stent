@@ -106,10 +106,10 @@ function stentRequiredRows(rows: StentProfileRows): Array<{ id: string; disabled
   const out: Array<{ id: string; disabled?: boolean }> = []
   for (const [id, row] of rows) {
     if (id === 'stent') continue
-    const raw = stentDescriptors(row?.config as StentRowConfig | undefined)
+    const raw = stentDescriptors(row.config as StentRowConfig | undefined)
     if (Array.isArray(raw) && raw.length > 0) {
       const entry: { id: string; disabled?: boolean } = { id }
-      if (typeof row?.disabled === 'boolean') entry.disabled = row.disabled
+      if (typeof row.disabled === 'boolean') entry.disabled = row.disabled
       out.push(entry)
     }
   }

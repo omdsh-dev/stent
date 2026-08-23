@@ -31,6 +31,16 @@ import type { StentPatchStub } from '@oh-my-dsh/stent'
 type BootstrapStent = (descriptors: StentPatchStub[]) => unknown
 type MarkStentDshLaunch = () => void
 
+interface StentModule {
+  bootstrapStent: BootstrapStent
+  markStentDshLaunch: MarkStentDshLaunch
+}
+
+async function loadStentModule(specifier: string): Promise<StentModule> {
+  const module = await import(specifier) as unknown as StentModule
+  return module
+}
+
 const configPath = process.env.STENT_CONFIG
 if (configPath !== undefined && configPath !== '') {
   let bootstrapStent: BootstrapStent
@@ -38,9 +48,13 @@ if (configPath !== undefined && configPath !== '') {
   const profileDir = process.env.STENT_PROFILE
   if (profileDir !== undefined && profileDir !== '') {
     const resolveFrom = createRequire(pathToFileURL(join(profileDir, 'package.json')))
-    ;({ bootstrapStent, markStentDshLaunch } = await import(pathToFileURL(resolveFrom.resolve('@oh-my-dsh/stent')).href))
+    const stentModule = await loadStentModule(pathToFileURL(resolveFrom.resolve('@oh-my-dsh/stent')).href)
+    bootstrapStent = stentModule.bootstrapStent
+    markStentDshLaunch = stentModule.markStentDshLaunch
   } else {
-    ;({ bootstrapStent, markStentDshLaunch } = await import('@oh-my-dsh/stent'))
+    const stentModule = await loadStentModule('@oh-my-dsh/stent')
+    bootstrapStent = stentModule.bootstrapStent
+    markStentDshLaunch = stentModule.markStentDshLaunch
   }
   markStentDshLaunch()
   const descriptors = JSON.parse(readFileSync(configPath, 'utf8')) as StentPatchStub[]

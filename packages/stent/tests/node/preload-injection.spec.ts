@@ -32,7 +32,9 @@ const tempDir = mkdtempSync(join(tmpdir(), 'stent-preload-'))
 const configPath = join(tempDir, 'stent-config.json')
 writeFileSync(configPath, JSON.stringify([patch]))
 
-afterAll(() => rmSync(tempDir, { recursive: true, force: true }))
+afterAll(() => {
+  rmSync(tempDir, { recursive: true, force: true })
+})
 
 /** Spawn the stent-dsh launcher shape and return the entry's stdout. */
 function run(configEnv: string | undefined, profileEnv?: string): { stdout: string; stderr: string } {
@@ -85,12 +87,12 @@ describe('stent preload injection (Stent launcher shape)', () => {
     }))
     writeFileSync(join(stubDir, 'index.js'), [
       'export function markStentDshLaunch() {',
-       '  globalThis[Symbol.for(\'oh-my-dsh.stent-dsh.launch\')] = true',
-       '}',
-       'export function isStentDshLaunch() {',
-       '  return globalThis[Symbol.for(\'oh-my-dsh.stent-dsh.launch\')] === true',
-       '}',
-       'export function bootstrapStent(descriptors) {',
+      '  globalThis[Symbol.for(\'oh-my-dsh.stent-dsh.launch\')] = true',
+      '}',
+      'export function isStentDshLaunch() {',
+      '  return globalThis[Symbol.for(\'oh-my-dsh.stent-dsh.launch\')] === true',
+      '}',
+      'export function bootstrapStent(descriptors) {',
       '  globalThis.__stentProfileMarker = { count: descriptors.length }',
       '}',
       '',

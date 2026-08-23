@@ -62,12 +62,10 @@ function isRecord(value: unknown): value is RecordValue {
  */
 export function resolveProfile({
   args,
-  source,
   launcherUrl,
   env = process.env,
 }: {
   args: LauncherArgs
-  source: boolean
   launcherUrl: string | URL
   env?: NodeJS.ProcessEnv
 }): ResolvedProfile {
@@ -88,11 +86,7 @@ export function resolveProfile({
   const profileDir = join(dshHome, 'profiles', profileName)
   if (!existsSync(profileDir)) {
     console.error(`stent-dsh: profile ${profileName} not found at ${profileDir} (DSH_HOME=${dshHome})`)
-    if (source) {
-      console.error(`  install the Stent npm bundle first: dsh plugin --profile ${profileName} add @oh-my-dsh/stent-pack`)
-    } else {
-      console.error(`  install the Stent npm bundle first: dsh plugin --profile ${profileName} add @oh-my-dsh/stent-pack`)
-    }
+    console.error(`  install the Stent npm bundle first: dsh plugin --profile ${profileName} add @oh-my-dsh/stent-pack`)
     process.exit(1)
   }
   return { dshHome, profileName, effectiveProfile, profileDir, installedMatch }
@@ -121,8 +115,8 @@ function createPatchLoader(yaml: YamlApi): (path: string) => PatchLayer {
   try {
     const jsTag = new yaml.Type('tag:yaml.org,2002:js', {
       kind: 'scalar',
-      resolve: (data) => data !== null,
-      construct: (data) => data,
+      resolve: data => data !== null,
+      construct: data => data,
     })
     yamlSchema = yaml.DEFAULT_SCHEMA.extend([jsTag])
   } catch {
@@ -228,7 +222,9 @@ export function composeStentConfig({
     enablePath,
     enableOverlay,
     patches,
-    cleanup: () => rmSync(temp, { recursive: true, force: true }),
+    cleanup: () => {
+      rmSync(temp, { recursive: true, force: true })
+    },
   }
 }
 

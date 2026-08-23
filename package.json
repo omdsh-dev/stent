@@ -25,7 +25,10 @@
   ],
   "scripts": {
     "build": "pnpm --filter @oh-my-dsh/stent run build && pnpm --filter @oh-my-dsh/stent-api run build && pnpm --filter @oh-my-dsh/stent-dsh run build && pnpm exec tsdown --config-loader unrun --config tsdown.config.ts",
-    "lint": "oxlint --config .oxlintrc.json --type-check --deny-warnings src",
+    "lint": "oxlint --config .oxlintrc.json --type-check --deny-warnings .",
+    "lint:fix": "oxlint --config .oxlintrc.json --type-check --deny-warnings --fix .",
+    "knip": "knip --treat-config-hints-as-errors",
+    "typecheck": "tsc -p tsconfig.vitest.json --noEmit",
     "test": "vitest run"
   },
   "dsh": {
@@ -39,16 +42,19 @@
     "@oh-my-dsh/stent-dsh": "^0.1.1"
   },
   "devDependencies": {
+    "@stylistic/eslint-plugin": "^5.10.0",
     "@types/node": "^22.20.0",
+    "eslint-plugin-sonarjs": "^4.1.0",
+    "happy-dom": "^20.0.0",
+    "knip": "^6.16.1",
+    "oxlint": "1.76.0",
+    "oxlint-tsgolint": "7.0.2001",
     "tsdown": "^0.22.2",
     "tsx": "^4.23.11",
     "typescript": "^6.0.3",
-    "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^4.1.8",
     "unrun": "^0.3.1",
-    "happy-dom": "^20.0.0",
-    "oxlint": "1.76.0",
-    "oxlint-tsgolint": "7.0.2001"
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^4.1.8"
   },
   "bin": {
     "stent-dsh": "lib/stent-dsh.js"

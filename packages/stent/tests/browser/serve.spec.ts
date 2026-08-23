@@ -9,7 +9,6 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { serveBrowserTransform, type ServeBrowserTransformOptions } from '@oh-my-dsh/stent'
@@ -73,7 +72,7 @@ async function createTestWebServer(): Promise<TestWebServer> {
   const address = httpServer.address()
   if (address === null || typeof address === 'string') throw new Error('test webserver did not expose a TCP address')
   return {
-    port: (address as AddressInfo).port,
+    port: (address).port,
     register(route) {
       const routes = route.kind === 'exact' ? exact : prefixes
       if (routes.has(route.path)) throw new Error(`test webserver: duplicate ${route.kind} route "${route.path}"`)
@@ -83,7 +82,10 @@ async function createTestWebServer(): Promise<TestWebServer> {
       }
     },
     close: () => new Promise<void>((resolve, reject) => {
-      httpServer.close(error => error === undefined ? resolve() : reject(error))
+      httpServer.close((error) => {
+        if (error === undefined) resolve()
+        else reject(error)
+      })
     }),
   }
 }

@@ -28,7 +28,7 @@ const seeds = new Map<string, unknown>()
 const materialized = new Map<string, unknown>()
 
 /** Install the `window.__ModuleLoader__` registration sink (once). */
-export function installModuleLoader(): void {
+function installModuleLoader(): void {
   const win = globalThis as typeof globalThis & {
     __ModuleLoader__?: { load(handoff: { id: string; factory: Factory }): void }
   }
@@ -45,7 +45,7 @@ export function installModuleLoader(): void {
 }
 
 /** Preload platform seed modules (ESM namespaces) into the module table. */
-export async function seed(...specs: string[]): Promise<void> {
+async function seed(...specs: string[]): Promise<void> {
   for (const spec of specs) {
     if (seeds.has(spec)) continue
     seeds.set(spec, await import(spec))
@@ -75,12 +75,13 @@ function resolve(spec: string): unknown {
  * @param id - the bundle registration id (package name, no `/client`).
  * @returns the factory's `module.exports`.
  */
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- callers provide the module table's typed view.
 export function materialize<T>(id: string): T {
   const cached = materialized.get(id)
   if (cached !== undefined) return cached as T
   const factory = factories.get(id)
   if (factory === undefined) throw new Error(`no registered factory for "${id}"`)
-  const exports = factory((spec) => resolve(spec))
+  const exports = factory(spec => resolve(spec))
   materialized.set(id, exports)
   return exports as T
 }

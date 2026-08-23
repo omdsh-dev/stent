@@ -73,7 +73,8 @@ function normalizeCli(path: string): string | undefined {
     const pkgJson = join(dir, 'package.json')
     if (existsSync(pkgJson)) {
       try {
-        if (JSON.parse(readFileSync(pkgJson, 'utf8')).name === '@deepseek-ai/dsh') {
+        const manifest = JSON.parse(readFileSync(pkgJson, 'utf8')) as unknown as { name?: unknown }
+        if (manifest.name === '@deepseek-ai/dsh') {
           const candidate = join(dir, 'lib/bin.js')
           if (existsSync(candidate)) return candidate
         }

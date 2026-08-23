@@ -67,7 +67,7 @@ export function main({
   process.on('SIGTERM', () => {})
 
   const host: ResolvedHost = resolveHost(args, { cwd: process.cwd(), env })
-  const profile = resolveProfile({ args, source: host.source, launcherUrl, env })
+  const profile = resolveProfile({ args, launcherUrl, env })
   const { requireFromProfile, yaml } = resolveYaml(profile.profileDir, host.fromCli)
   const config: StentConfig = composeStentConfig({
     args,

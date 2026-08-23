@@ -204,16 +204,21 @@ export const STENT_CATALOG_ENTRIES = [
   },
 ]
 
+interface ApiCatalogModule {
+  SERVICE_API?: Array<{ key: string }>
+}
+
 /** Push the stent entries into the official catalog once (idempotent). */
 export async function registerCatalogEntries(): Promise<void> {
   try {
     // Variable specifier: the official package is host-provided only, never
     // a trio dependency, so the import stays out of the type graph.
     const spec = '@deepseek-ai/dsh-tool-cordis/src/api-catalog.ts'
-    const catalog = await import(spec)
-    const list = catalog.SERVICE_API as unknown as Array<{ key: string }>
+    const catalog = await import(spec) as unknown as ApiCatalogModule
+    const list = catalog.SERVICE_API
+    if (list === undefined) return
     for (const entry of STENT_CATALOG_ENTRIES as Array<{ key: string }>) {
-      if (!list.some(existing => existing.key === entry.key)) list.push(entry as never)
+      if (!list.some(existing => existing.key === entry.key)) list.push(entry)
     }
   } catch {
     // Built host (no tsx, no ./src/* resolution): the inspect report still

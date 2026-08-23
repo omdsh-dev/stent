@@ -19,15 +19,12 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "types": ["node"],
+    "ignoreDeprecations": "6.0",
     "paths": {
       "@oh-my-dsh/stent": ["./packages/stent/src"],
       "@oh-my-dsh/stent-api": ["./packages/stent-api/src"],
       "@oh-my-dsh/stent-dsh": ["./packages/stent-dsh/src"]
     }
   },
-  "include": [
-    "src/stent-dsh.ts",
-    "src/stent-dsh-preload.ts",
-    "src/stent-dsh/**/*.ts"
-  ]
+  "include": ["src", "tests"]
 }

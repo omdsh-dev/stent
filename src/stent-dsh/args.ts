@@ -35,7 +35,7 @@ export function buildCliArgs(
 ): string[] {
   const [mode] = args.passthrough
   const patchArgs = [
-    ...args.patchFiles.flatMap((file) => ['--patch', file]),
+    ...args.patchFiles.flatMap(file => ['--patch', file]),
     ...(enableOverlay.length > 0 ? ['--patch', enablePath] : []),
   ]
   let cliArgs: string[]

@@ -37,8 +37,8 @@ writeFileSync(join(dshPkg, 'package.json'), JSON.stringify({
   name: '@deepseek-ai/dsh', version: '9.9.9', type: 'module', bin: { dsh: 'lib/bin.js' },
 }, null, 2))
 writeFileSync(binFile, [
-  "console.log(`FAKE-DSH argv=${JSON.stringify(process.argv.slice(2))}`)",
-  "console.log(`FAKE-DSH config=${process.env.STENT_CONFIG !== undefined} profile=${process.env.STENT_PROFILE}`)",
+  'console.log(`FAKE-DSH argv=${JSON.stringify(process.argv.slice(2))}`)',
+  'console.log(`FAKE-DSH config=${process.env.STENT_CONFIG !== undefined} profile=${process.env.STENT_PROFILE}`)',
   '',
 ].join('\n'))
 
@@ -108,9 +108,14 @@ writeFileSync(join(scriptShimDir, 'dsh'), [
   '',
 ].join('\n'))
 
-afterAll(() => rmSync(tempDir, { recursive: true, force: true }))
+afterAll(() => {
+  rmSync(tempDir, { recursive: true, force: true })
+})
 
-function run(argv: string[], options: { cwd?: string; path?: string; launcher?: string; dsh?: string } = {}): { status: number; stdout: string; stderr: string } {
+function run(
+  argv: string[],
+  options: { cwd?: string; path?: string; launcher?: string; dsh?: string } = {},
+): { status: number; stdout: string; stderr: string } {
   const env: NodeJS.ProcessEnv = { ...process.env, DSH_HOME: home }
   delete env.DSH_SOURCE
   delete env.DSH_CLI
