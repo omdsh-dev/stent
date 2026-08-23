@@ -26,7 +26,9 @@ function internalLoader(): InternalLoader | undefined {
   let raw: { getOrInitializeCascadedLoader?: () => unknown } | undefined
   try {
     const addon = require('node-addon-require-builtin') as { requireBuiltin(id: string): unknown }
-    raw = addon.requireBuiltin('internal/modules/esm/loader') as { getOrInitializeCascadedLoader?: () => unknown } | undefined
+    raw = addon.requireBuiltin('internal/modules/esm/loader') as
+      | { getOrInitializeCascadedLoader?: () => unknown }
+      | undefined
   } catch {
     return undefined
   }
@@ -53,7 +55,10 @@ export function retransformCommonJs(filename: string, clearSeen: (filename: stri
  * failed import restores the previous module job so the old instance remains
  * usable, matching the host HMR rollback contract.
  */
-export async function retransformEsm(url: string, clearSeen: (filename: string) => void): Promise<Record<string, unknown>> {
+export async function retransformEsm(
+  url: string,
+  clearSeen: (filename: string) => void,
+): Promise<Record<string, unknown>> {
   const loader = internalLoader()
   const cache = loader?.loadCache
   if (!cache) {
@@ -64,7 +69,7 @@ export async function retransformEsm(url: string, clearSeen: (filename: string) 
   const path = url.startsWith('file:') ? fileURLToPath(url) : url
   clearSeen(path)
   try {
-    return await import(url) as Record<string, unknown>
+    return (await import(url)) as Record<string, unknown>
   } catch (error) {
     if (job !== undefined) Map.prototype.set.call(cache, url, job)
     throw error

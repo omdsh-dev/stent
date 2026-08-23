@@ -1,0 +1,18 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "exclude": [
+    "duplicates"
+  ],
+  "entry": [
+    "tests/**/*.spec.ts"
+  ],
+  "project": [
+    "src/**/*.ts",
+    "tests/**/*.ts"
+  ],
+  "ignoreDependencies": [
+    "@stylistic/eslint-plugin",
+    "eslint-plugin-sonarjs",
+    "stent-api-fixture-mod"
+  ]
+}

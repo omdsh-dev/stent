@@ -83,7 +83,13 @@ function isPatchArray(value: StentPatchStub | readonly StentPatchStub[]): value 
  */
 export function serveBrowserTransform(ctx: Context, options: ServeBrowserTransformOptions): () => void {
   const httpServer = ctx.get('webServer') as
-    | { register(route: { kind: 'exact'; path: string; handler: (req: IncomingMessage, res: ServerResponse) => void }): () => void }
+    | {
+        register(route: {
+          kind: 'exact'
+          path: string
+          handler: (req: IncomingMessage, res: ServerResponse) => void
+        }): () => void
+      }
     | undefined
   if (httpServer === undefined) {
     throw new Error('stent: serveBrowserTransform requires the webServer service on the context')
@@ -95,14 +101,16 @@ export function serveBrowserTransform(ctx: Context, options: ServeBrowserTransfo
   // would silently never bind. Fail loud at registration instead.
   const filePath = patches[0]?.target.filePath
   if (filePath === undefined || filePath instanceof RegExp) {
-    throw new Error('stent: serveBrowserTransform needs a concrete filePath (RegExp or filePaths cannot name a file to read)')
+    throw new Error(
+      'stent: serveBrowserTransform needs a concrete filePath (RegExp or filePaths cannot name a file to read)',
+    )
   }
   const moduleName = patches[0]?.target.module
   for (const patch of patches) {
     if (patch.target.module !== moduleName || patch.target.filePath !== filePath) {
       throw new Error(
-        'stent: serveBrowserTransform patches must all target the same file '
-        + `(${moduleName} ${filePath}); ${patch.id} targets ${patch.target.module} ${String(patch.target.filePath)}`,
+        'stent: serveBrowserTransform patches must all target the same file ' +
+          `(${moduleName} ${filePath}); ${patch.id} targets ${patch.target.module} ${String(patch.target.filePath)}`,
       )
     }
   }
@@ -111,7 +119,9 @@ export function serveBrowserTransform(ctx: Context, options: ServeBrowserTransfo
   // Stent itself. Resolve through the Loader's config-tree anchor, whose
   // package manifest owns the composed plugin dependencies.
   if (ctx.baseUrl === undefined) {
-    throw new Error('stent: serveBrowserTransform requires ctx.baseUrl to resolve the target package from the composition')
+    throw new Error(
+      'stent: serveBrowserTransform requires ctx.baseUrl to resolve the target package from the composition',
+    )
   }
   const require = createRequire(ctx.baseUrl)
   const pkgDir = dirname(require.resolve(`${moduleName}/package.json`))
@@ -151,9 +161,9 @@ export function serveBrowserTransform(ctx: Context, options: ServeBrowserTransfo
         return source
       }
       throw new Error(
-        `stent: serveBrowserTransform patch(es) ${missing.join(', ')} rewrote nothing in `
-        + `${moduleName} ${filePath}; `
-        + 'the selector may miss the function or the file may be the wrong launch form',
+        `stent: serveBrowserTransform patch(es) ${missing.join(', ')} rewrote nothing in ` +
+          `${moduleName} ${filePath}; ` +
+          'the selector may miss the function or the file may be the wrong launch form',
       )
     }
     cached = { source, code: output.code }

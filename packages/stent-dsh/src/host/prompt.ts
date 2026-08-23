@@ -13,12 +13,7 @@
 
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
-import type {
-  AssembleContext,
-  PromptContext,
-  PromptSection,
-  ToolProviderResult,
-} from '@deepseek-ai/dsh-system-prompt'
+import type { AssembleContext, PromptContext, PromptSection, ToolProviderResult } from '@deepseek-ai/dsh-system-prompt'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {

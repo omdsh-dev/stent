@@ -34,7 +34,7 @@ function installModuleLoader(): void {
   }
   if (win.__ModuleLoader__ === undefined) {
     win.__ModuleLoader__ = {
-      load: (handoff) => {
+      load: handoff => {
         if (factories.has(handoff.id)) {
           throw new Error(`duplicate factory registration for "${handoff.id}"`)
         }

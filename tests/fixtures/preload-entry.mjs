@@ -10,7 +10,7 @@
  * transformed module.
  */
 import { readFileSync } from 'node:fs'
-import { add } from './node_modules/stent-target-fixture/index.mjs'
+import { add } from '../../packages/stent/tests/fixtures/node_modules/stent-target-fixture/index.mjs'
 import { checkRequiredPatches, flushBindingReports, isStentDshLaunch, runtime } from '@oh-my-dsh/stent'
 
 const configPath = process.env.STENT_CONFIG

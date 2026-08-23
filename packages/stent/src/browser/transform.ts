@@ -76,7 +76,7 @@ export type IdentityResolver = (id: string) => ModuleIdentity | undefined
  */
 export function repoSourceResolver(packageName: string, packageRoot: string, version: string): IdentityResolver {
   const root = packageRoot.endsWith('/') ? packageRoot : `${packageRoot}/`
-  return (id) => {
+  return id => {
     if (!id.startsWith(root)) return undefined
     return { name: packageName, version, path: relative(packageRoot, id).replaceAll('\\', '/') }
   }
@@ -87,7 +87,7 @@ export function repoSourceResolver(packageName: string, packageRoot: string, ver
  * @returns an identity resolver for module ids inside any installed package.
  */
 export function nodeModulesResolver(): IdentityResolver {
-  return (id) => {
+  return id => {
     const details = parse(id)
     if (!details) return undefined
     return { name: details.name, version: getPackageVersion(details.basedir), path: details.path }
@@ -103,7 +103,7 @@ export function nodeModulesResolver(): IdentityResolver {
  * @returns an identity resolver for Node-loaded module ids (paths or file URLs).
  */
 export function nodePackageResolver(): IdentityResolver {
-  return (id) => {
+  return id => {
     const path = id.startsWith('file:') ? fileURLToPath(id) : id
     return nodeModulesResolver()(path) ?? packageIdentityFromPath(path)
   }
@@ -143,7 +143,7 @@ export function createBrowserTransform(
   // Per-call pending counts: the transform function below runs once per
   // module, so counts accumulated during one call belong to that module.
   const pending = new Map<string, number>()
-  registerStentTransform(matcher, (patchId) => {
+  registerStentTransform(matcher, patchId => {
     pending.set(patchId, (pending.get(patchId) ?? 0) + 1)
   })
 
@@ -157,7 +157,8 @@ export function createBrowserTransform(
     const source = /\.tsx?$/.test(id) ? stripTypes(code, id) : code
     pending.clear()
     const result = transformer.transform(source, detectModuleType(id))
-    const output: TransformOutput = result.map === undefined ? { code: result.code } : { code: result.code, map: result.map }
+    const output: TransformOutput =
+      result.map === undefined ? { code: result.code } : { code: result.code, map: result.map }
     if (pending.size > 0) {
       output.bindings = [...pending].map(([patchId, nodes]) => ({
         patchId,
@@ -204,9 +205,12 @@ function parsePatchesFile(content: string, patchesPath: string): StentPatchStub[
     throw new Error(`stent: watched patches file ${patchesPath} must hold a JSON array of patch stubs`)
   }
   return parsed.map((entry: unknown, index) => {
-    const target: unknown = typeof entry === 'object' && entry !== null ? (entry as { target?: unknown }).target : undefined
+    const target: unknown =
+      typeof entry === 'object' && entry !== null ? (entry as { target?: unknown }).target : undefined
     if (typeof entry !== 'object' || entry === null || typeof target !== 'object' || target === null) {
-      throw new Error(`stent: watched patches file ${patchesPath} entry ${index} must be a patch stub object with a target`)
+      throw new Error(
+        `stent: watched patches file ${patchesPath} entry ${index} must be a patch stub object with a target`,
+      )
     }
     // patchInstrumentation (called by the caller's transform rebuild)
     // validates the remaining fields: id, module, versionRange, filePath,
@@ -233,10 +237,7 @@ function parsePatchesFile(content: string, patchesPath: string): StentPatchStub[
  * @param resolve - module identity resolver for the build's source layout.
  * @returns a transform function `(code, id, addWatchFile?) => output | null`.
  */
-export function createWatchedBrowserTransform(
-  patchesPath: string,
-  resolve: IdentityResolver,
-): WatchedBrowserTransform {
+export function createWatchedBrowserTransform(patchesPath: string, resolve: IdentityResolver): WatchedBrowserTransform {
   let cached: { content: string; transform: (code: string, id: string) => TransformOutput | null } | undefined
   const transformFor = (content: string): ((code: string, id: string) => TransformOutput | null) => {
     if (cached?.content === content) return cached.transform

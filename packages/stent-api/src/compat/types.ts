@@ -1,8 +1,4 @@
-import type {
-  StentOperation,
-  StentTarget,
-  PatchId,
-} from '@oh-my-dsh/stent'
+import type { StentOperation, StentTarget, PatchId } from '@oh-my-dsh/stent'
 
 /** Static patch descriptor of one compat target (the handler is bound at runtime). */
 export interface StentCompatPatch {

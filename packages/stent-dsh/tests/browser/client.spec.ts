@@ -20,7 +20,9 @@ await prepareClientBundles(
   ['@deepseek-ai/cordis', '@deepseek-ai/dsh-client-ui-slots', 'react', 'react/jsx-runtime'],
   ['@deepseek-ai/dsh-client-ui-commands/client', '@deepseek-ai/dsh-client-runtime/client'],
 )
-const { CommandUiRuntime } = materialize<typeof import('@deepseek-ai/dsh-client-ui-commands/client')>('@deepseek-ai/dsh-client-ui-commands')
+const { CommandUiRuntime } = materialize<typeof import('@deepseek-ai/dsh-client-ui-commands/client')>(
+  '@deepseek-ai/dsh-client-ui-commands',
+)
 
 /** Real slot/command faces; the stent client delegates through them. */
 async function bench() {
@@ -31,7 +33,9 @@ async function bench() {
   ctx.provide('inputTriggers', {
     registerSource(source: InputTriggerSource) {
       sources.set(`${source.trigger} ${source.name}`, source)
-      return () => { sources.delete(`${source.trigger} ${source.name}`) }
+      return () => {
+        sources.delete(`${source.trigger} ${source.name}`)
+      }
     },
   })
   ctx.provide('sessions', {
@@ -48,10 +52,15 @@ async function bench() {
       slots.set(options.name, {
         options,
         component,
-        dispose: () => { record.disposed = true },
+        dispose: () => {
+          record.disposed = true
+        },
       })
       registrations.push(record)
-      return () => { record.disposed = true; slots.delete(options.name) }
+      return () => {
+        record.disposed = true
+        slots.delete(options.name)
+      }
     },
   })
   await ctx.plugin(CommandUiRuntime).await()
@@ -109,7 +118,9 @@ describe('stent-dsh browser entry', () => {
   it('removes a command when its contributing fiber disposes (HMR safety)', async () => {
     const ctx = new Context()
     ctx.provide('inputTriggers', {
-      registerSource() { return () => {} },
+      registerSource() {
+        return () => {}
+      },
     })
     ctx.provide('sessions', {
       scope: () => undefined,
@@ -120,7 +131,9 @@ describe('stent-dsh browser entry', () => {
     ctx.provide('remote', { commands: commandsRemote, $on: () => () => {} })
     ctx.provide('remote.commands', commandsRemote)
     ctx.provide('slots', {
-      register() { return () => {} },
+      register() {
+        return () => {}
+      },
     })
     await ctx.plugin(CommandUiRuntime).await()
     await apply(ctx)
@@ -160,7 +173,14 @@ describe('stentClient keyed-slot arbitration', () => {
     let gained = 0
     let lost: { plugin?: string } | undefined
     const low = service.registerKeyedSlot(
-      keyed(1, 'mod-low', { onGain: () => { gained++ }, onLost: (winner) => { lost = winner } }),
+      keyed(1, 'mod-low', {
+        onGain: () => {
+          gained++
+        },
+        onLost: winner => {
+          lost = winner
+        },
+      }),
       () => null,
     )
     const high = service.registerKeyedSlot(keyed(2, 'mod-high'), () => null)

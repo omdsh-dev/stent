@@ -22,7 +22,9 @@ function readStdin(): Promise<string> {
     process.stdin.on('data', (chunk: string) => {
       data += chunk
     })
-    process.stdin.on('end', () => { resolve(data) })
+    process.stdin.on('end', () => {
+      resolve(data)
+    })
     process.stdin.on('error', reject)
   })
 }
@@ -51,7 +53,7 @@ try {
   bootstrapStent(payload.patches)
   // The entry is a runtime-provided module specifier; its shape is the
   // documented default-export function contract.
-  const mod = await import(payload.entry) as { default?: unknown }
+  const mod = (await import(payload.entry)) as { default?: unknown }
   const fn = mod.default
   if (typeof fn !== 'function') {
     throw new Error(`stent testkit: entry ${payload.entry} has no default export function`)
@@ -72,11 +74,13 @@ try {
   await flushBindingReports()
   const bindings: Record<string, ReturnType<typeof runtime.bindingsOf>> = {}
   for (const patch of payload.patches) bindings[patch.id] = runtime.bindingsOf(patch.id)
-  process.stdout.write(JSON.stringify({
-    bindings,
-    ...(result === undefined ? {} : { result }),
-    ...(error === undefined ? {} : { error }),
-  }))
+  process.stdout.write(
+    JSON.stringify({
+      bindings,
+      ...(result === undefined ? {} : { result }),
+      ...(error === undefined ? {} : { error }),
+    }),
+  )
   process.exit(0)
 } catch (error) {
   console.error(`stent testkit runner: ${error instanceof Error ? error.message : String(error)}`)

@@ -1,4 +1,9 @@
-import { createBrowserTransform, repoSourceResolver, nodeModulesResolver, patchInstrumentation } from '../../src/index.ts'
+import {
+  createBrowserTransform,
+  repoSourceResolver,
+  nodeModulesResolver,
+  patchInstrumentation,
+} from '../../src/index.ts'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -20,22 +25,30 @@ const patch = {
 describe('patchInstrumentation validation', () => {
   it('rejects malformed static fields instead of installing a never-matching config', () => {
     expect(() => patchInstrumentation({ ...patch, id: 'has space' })).toThrow(/patch id/)
-    expect(() => patchInstrumentation({
-      ...patch,
-      target: { ...patch.target, module: '' },
-    })).toThrow(/module/)
-    expect(() => patchInstrumentation({
-      ...patch,
-      target: { ...patch.target, versionRange: '' },
-    })).toThrow(/versionRange/)
-    expect(() => patchInstrumentation({
-      ...patch,
-      target: { ...patch.target, filePath: 42 as never },
-    })).toThrow(/filePath/)
-    expect(() => patchInstrumentation({
-      ...patch,
-      operation: 'sideways' as never,
-    })).toThrow(/operation/)
+    expect(() =>
+      patchInstrumentation({
+        ...patch,
+        target: { ...patch.target, module: '' },
+      }),
+    ).toThrow(/module/)
+    expect(() =>
+      patchInstrumentation({
+        ...patch,
+        target: { ...patch.target, versionRange: '' },
+      }),
+    ).toThrow(/versionRange/)
+    expect(() =>
+      patchInstrumentation({
+        ...patch,
+        target: { ...patch.target, filePath: 42 as never },
+      }),
+    ).toThrow(/filePath/)
+    expect(() =>
+      patchInstrumentation({
+        ...patch,
+        operation: 'sideways' as never,
+      }),
+    ).toThrow(/operation/)
   })
 
   it('accepts a valid patch and returns the instrumentation config', () => {
@@ -69,8 +82,11 @@ describe('createBrowserTransform', () => {
   it('repoSourceResolver maps source-tree ids to the package identity', () => {
     const packageRoot = ['/repo', 'packages', 'client', 'x'].join('/')
     const resolver = repoSourceResolver('@example/client-x', packageRoot, '0.0.1')
-    expect(resolver(`${packageRoot}/src/client/index.ts`))
-      .toEqual({ name: '@example/client-x', version: '0.0.1', path: 'src/client/index.ts' })
+    expect(resolver(`${packageRoot}/src/client/index.ts`)).toEqual({
+      name: '@example/client-x',
+      version: '0.0.1',
+      path: 'src/client/index.ts',
+    })
     expect(resolver(`${['/repo', 'packages', 'client', 'y'].join('/')}/src/client/index.ts`)).toBeUndefined()
   })
 
@@ -135,12 +151,20 @@ describe('createBrowserTransform', () => {
     const patchGetter = {
       ...patch,
       id: 'web/getter-before',
-      target: { ...patch.target, filePath: 'accessors.js', functionQuery: { methodName: 'value', kind: 'Sync' as const } },
+      target: {
+        ...patch.target,
+        filePath: 'accessors.js',
+        functionQuery: { methodName: 'value', kind: 'Sync' as const },
+      },
     }
     const patchSetter = {
       ...patch,
       id: 'web/setter-before',
-      target: { ...patch.target, filePath: 'accessors.js', functionQuery: { methodName: 'name', kind: 'Sync' as const } },
+      target: {
+        ...patch.target,
+        filePath: 'accessors.js',
+        functionQuery: { methodName: 'name', kind: 'Sync' as const },
+      },
     }
     const transform = createBrowserTransform(
       [patchInstrumentation(patchGetter), patchInstrumentation(patchSetter)],
@@ -172,14 +196,15 @@ describe('createBrowserTransform', () => {
     const patchCollision = {
       ...patch,
       id: 'web/collision-before',
-      target: { ...patch.target, filePath: 'collision.js', functionQuery: { functionName: 'readOuter', kind: 'Sync' as const } },
+      target: {
+        ...patch.target,
+        filePath: 'collision.js',
+        functionQuery: { functionName: 'readOuter', kind: 'Sync' as const },
+      },
     }
     const transform = createBrowserTransform([patchInstrumentation(patchCollision)], nodeModulesResolver())
     const id = `${fixtureDir}collision.js`
-    const source = [
-      'const stentCall = "outer"',
-      'export function readOuter() { return stentCall }',
-    ].join('\n')
+    const source = ['const stentCall = "outer"', 'export function readOuter() { return stentCall }'].join('\n')
     const output = transform(source, id)
     expect(output).not.toBeNull()
     // The injected record variable must not shadow the module-level binding
@@ -193,7 +218,11 @@ describe('createBrowserTransform', () => {
     const patchArgs = {
       ...patch,
       id: 'web/args-keep',
-      target: { ...patch.target, filePath: 'args-arrow.js', functionQuery: { expressionName: 'bad', kind: 'Sync' as const } },
+      target: {
+        ...patch.target,
+        filePath: 'args-arrow.js',
+        functionQuery: { expressionName: 'bad', kind: 'Sync' as const },
+      },
     }
     const transform = createBrowserTransform([patchInstrumentation(patchArgs)], nodeModulesResolver())
     const id = `${fixtureDir}args-arrow.js`
@@ -219,50 +248,76 @@ describe('multi-match selection', () => {
     )
 
   it('transforms every function the selector picks by default (name query)', () => {
-    const output = multiTransform({ ...multiTarget, functionQuery: { methodName: 'close', kind: 'Sync' } })(multiSource(), multiId)!
-    expect((output.code.match(/web\/multi/g) ?? [])).toHaveLength(2)
+    const output = multiTransform({ ...multiTarget, functionQuery: { methodName: 'close', kind: 'Sync' } })(
+      multiSource(),
+      multiId,
+    )!
+    expect(output.code.match(/web\/multi/g) ?? []).toHaveLength(2)
   })
 
   it('transforms every function the selector picks by default (raw astQuery)', () => {
-    const output = multiTransform({ ...multiTarget, astQuery: 'ClassBody > [key.name="close"] > FunctionExpression' })(multiSource(), multiId)!
-    expect((output.code.match(/web\/multi/g) ?? [])).toHaveLength(2)
+    const output = multiTransform({ ...multiTarget, astQuery: 'ClassBody > [key.name="close"] > FunctionExpression' })(
+      multiSource(),
+      multiId,
+    )!
+    expect(output.code.match(/web\/multi/g) ?? []).toHaveLength(2)
   })
 
   it('selects the index-th match when a name query carries an index', () => {
-    const first = multiTransform({ ...multiTarget, functionQuery: { methodName: 'close', kind: 'Sync', index: 0 } })(multiSource(), multiId)!
-    expect((first.code.match(/web\/multi/g) ?? [])).toHaveLength(1)
+    const first = multiTransform({ ...multiTarget, functionQuery: { methodName: 'close', kind: 'Sync', index: 0 } })(
+      multiSource(),
+      multiId,
+    )!
+    expect(first.code.match(/web\/multi/g) ?? []).toHaveLength(1)
     expect(first.code.indexOf('web/multi')).toBeLessThan(first.code.indexOf('beta:'))
 
-    const second = multiTransform({ ...multiTarget, functionQuery: { methodName: 'close', kind: 'Sync', index: 1 } })(multiSource(), multiId)!
-    expect((second.code.match(/web\/multi/g) ?? [])).toHaveLength(1)
+    const second = multiTransform({ ...multiTarget, functionQuery: { methodName: 'close', kind: 'Sync', index: 1 } })(
+      multiSource(),
+      multiId,
+    )!
+    expect(second.code.match(/web\/multi/g) ?? []).toHaveLength(1)
     expect(second.code.indexOf('web/multi')).toBeGreaterThan(second.code.indexOf('alpha:'))
   })
 
   it('forwards target.index as the behavior bag for raw astQuery targets', () => {
-    const output = multiTransform({ ...multiTarget, astQuery: 'ClassBody > [key.name="close"] > FunctionExpression', index: 1 })(multiSource(), multiId)!
-    expect((output.code.match(/web\/multi/g) ?? [])).toHaveLength(1)
+    const output = multiTransform({
+      ...multiTarget,
+      astQuery: 'ClassBody > [key.name="close"] > FunctionExpression',
+      index: 1,
+    })(multiSource(), multiId)!
+    expect(output.code.match(/web\/multi/g) ?? []).toHaveLength(1)
     expect(output.code.indexOf('web/multi')).toBeGreaterThan(output.code.indexOf('alpha:'))
   })
 
   it('rejects malformed index fields at instrumentation build time', () => {
-    expect(() => patchInstrumentation({
-      id: 'web/bad-index', operation: 'before',
-      target: { ...multiTarget, astQuery: 'FunctionDeclaration', index: -1 },
-    })).toThrow(/target\.index/)
-    expect(() => patchInstrumentation({
-      id: 'web/bad-fq-index', operation: 'before',
-      target: { ...multiTarget, functionQuery: { methodName: 'close', kind: 'Sync', index: 1.5 } },
-    })).toThrow(/functionQuery\.index/)
+    expect(() =>
+      patchInstrumentation({
+        id: 'web/bad-index',
+        operation: 'before',
+        target: { ...multiTarget, astQuery: 'FunctionDeclaration', index: -1 },
+      }),
+    ).toThrow(/target\.index/)
+    expect(() =>
+      patchInstrumentation({
+        id: 'web/bad-fq-index',
+        operation: 'before',
+        target: { ...multiTarget, functionQuery: { methodName: 'close', kind: 'Sync', index: 1.5 } },
+      }),
+    ).toThrow(/functionQuery\.index/)
   })
 
   it('rejects constructor targets loudly instead of emitting unevaluatable code', () => {
-    expect(() => multiTransform({
-      ...multiTarget,
-      astQuery: 'ClassBody > [key.name="constructor"] > FunctionExpression',
-    })(multiSource(), multiId)).toThrow(/constructor targets are not supported/)
-    expect(() => multiTransform({
-      ...multiTarget,
-      functionQuery: { methodName: 'constructor', kind: 'Sync' },
-    })(multiSource(), multiId)).toThrow(/constructor targets are not supported/)
+    expect(() =>
+      multiTransform({
+        ...multiTarget,
+        astQuery: 'ClassBody > [key.name="constructor"] > FunctionExpression',
+      })(multiSource(), multiId),
+    ).toThrow(/constructor targets are not supported/)
+    expect(() =>
+      multiTransform({
+        ...multiTarget,
+        functionQuery: { methodName: 'constructor', kind: 'Sync' },
+      })(multiSource(), multiId),
+    ).toThrow(/constructor targets are not supported/)
   })
 })

@@ -6,11 +6,11 @@ const runner = fileURLToPath(new URL('./child-runner.mjs', import.meta.url))
 
 /** Run one compat child case and return its stdout. */
 function runCase(name: string): string {
-  // tsconfig (whose paths lack these packages); children must resolve
-  // against this repo's own tsconfig so source-mode imports stay on src.
+  // The child resolves the package dependency from the API package's own
+  // workspace manifest after its build prerequisite has completed.
   const childEnv = { ...process.env }
   const result = spawnSync(process.execPath, ['--import', 'tsx/esm', runner, name], {
-    cwd: fileURLToPath(new URL('../../..', import.meta.url)),
+    cwd: fileURLToPath(new URL('../..', import.meta.url)),
     encoding: 'utf8',
     env: childEnv,
   })
@@ -46,7 +46,7 @@ describe('StentCompatService (child processes)', () => {
     expect(out).toContain('PASS re-register after unregister rewrites: "HELLO WORLD"')
   })
 
-  it('a single-plugin hot reload keeps the new generation\'s hook after the old generation unloads', () => {
+  it("a single-plugin hot reload keeps the new generation's hook after the old generation unloads", () => {
     const out = runCase('hmr')
     expect(out).toContain('PASS hmr gen1 rewrites: "HELLO WORLD"')
     expect(out).toContain('PASS hmr gen2 rewrites: "HELLO STENT"')
@@ -82,10 +82,16 @@ describe('StentCompatService (unit)', () => {
     const ctx = new Context()
     await ctx.plugin(StentService)
     await ctx.plugin(StentCompatService, {
-      targets: [{
-        name: 'greet',
-        patch: { id: 'compat/greet-observe', target: { module: 'stent-compat-target', versionRange: '*', filePath: 'index.mjs' }, operation: 'after' },
-      }],
+      targets: [
+        {
+          name: 'greet',
+          patch: {
+            id: 'compat/greet-observe',
+            target: { module: 'stent-compat-target', versionRange: '*', filePath: 'index.mjs' },
+            operation: 'after',
+          },
+        },
+      ],
     })
     expect(() => {
       ctx.stentCompat.registerPatch({
@@ -108,7 +114,12 @@ describe('StentCompatService (unit)', () => {
     await ctx.plugin(StentCompatService, {})
     const patch = {
       id: 'compat/cycle',
-      target: { module: 'm', versionRange: '*', filePath: 'f.js', functionQuery: { functionName: 'g', kind: 'Sync' as const } },
+      target: {
+        module: 'm',
+        versionRange: '*',
+        filePath: 'f.js',
+        functionQuery: { functionName: 'g', kind: 'Sync' as const },
+      },
       operation: 'after' as const,
       handler: () => {},
     }

@@ -11,45 +11,15 @@
       "project": [
         "src/**/*.ts"
       ],
+      "ignore": [
+        "packages/**"
+      ],
       "ignoreDependencies": [
         "@oh-my-dsh/stent-api",
-        "@oh-my-dsh/stent-dsh"
-      ]
-    },
-    "packages/stent": {
-      "entry": [
-        "tests/**/*.spec.ts"
-      ],
-      "project": [
-        "src/**/*.ts",
-        "tests/**/*.ts"
-      ],
-      "ignoreDependencies": [
+        "@oh-my-dsh/stent-dsh",
+        "@stylistic/eslint-plugin",
+        "eslint-plugin-sonarjs",
         "stent-target-fixture"
-      ]
-    },
-    "packages/stent-api": {
-      "entry": [
-        "tests/**/*.spec.ts"
-      ],
-      "project": [
-        "src/**/*.ts",
-        "tests/**/*.ts"
-      ],
-      "ignoreDependencies": [
-        "stent-compat-target"
-      ]
-    },
-    "packages/stent-dsh": {
-      "entry": [
-        "tests/**/*.spec.ts"
-      ],
-      "project": [
-        "src/**/*.ts",
-        "tests/**/*.ts"
-      ],
-      "ignoreDependencies": [
-        "stent-api-fixture-mod"
       ]
     }
   }

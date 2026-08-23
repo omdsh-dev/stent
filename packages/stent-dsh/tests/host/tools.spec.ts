@@ -58,10 +58,17 @@ describe('StentToolsService', () => {
     const ctx = await setup()
     const veto = vi.fn()
     const pass = vi.fn()
-    ctx.stentTools.onPreExecute(((_exec: never, _next: never) => { veto() }) as never)
-    ctx.stentTools.onPreExecute((_exec, next) => { pass(); return next() })
+    ctx.stentTools.onPreExecute(((_exec: never, _next: never) => {
+      veto()
+    }) as never)
+    ctx.stentTools.onPreExecute((_exec, next) => {
+      pass()
+      return next()
+    })
     const exec = { name: 'mod-echo' } as never
-    const decision = await ctx.waterfall('tools/pre-execute', exec, () => Promise.resolve<PreToolDecision>({ kind: 'allow' }))
+    const decision = await ctx.waterfall('tools/pre-execute', exec, () =>
+      Promise.resolve<PreToolDecision>({ kind: 'allow' }),
+    )
     expect(veto).toHaveBeenCalledTimes(1)
     expect(pass).not.toHaveBeenCalled()
     expect(decision).toBeUndefined()
@@ -70,9 +77,14 @@ describe('StentToolsService', () => {
   it('delegates through next() when a listener allows', async () => {
     const ctx = await setup()
     const pass = vi.fn()
-    ctx.stentTools.onPreExecute((_exec, next) => { pass(); return next() })
+    ctx.stentTools.onPreExecute((_exec, next) => {
+      pass()
+      return next()
+    })
     const exec = { name: 'mod-echo' } as never
-    const decision = await ctx.waterfall('tools/pre-execute', exec, () => Promise.resolve<PreToolDecision>({ kind: 'allow' }))
+    const decision = await ctx.waterfall('tools/pre-execute', exec, () =>
+      Promise.resolve<PreToolDecision>({ kind: 'allow' }),
+    )
     expect(pass).toHaveBeenCalledTimes(1)
     expect(decision).toEqual({ kind: 'allow' })
   })

@@ -36,15 +36,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Format
+        run: pnpm run pack:fmt:check
+
       - name: Lint
-        run: |
-          pnpm run lint
-          pnpm --filter @oh-my-dsh/stent run lint
-          pnpm --filter @oh-my-dsh/stent-api run lint
-          pnpm --filter @oh-my-dsh/stent-dsh run lint
+        run: pnpm run pack:lint
+
+      - name: Knip
+        run: pnpm run pack:knip
 
       - name: Build
-        run: pnpm run build
+        run: pnpm run pack:build
 
       - name: Test
-        run: pnpm test
+        run: pnpm run pack:test

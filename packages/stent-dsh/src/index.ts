@@ -24,8 +24,11 @@ export { StentToolsService } from './host/tools.ts'
 export { StentPromptService } from './host/prompt.ts'
 export { StentCommandsService } from './host/commands.ts'
 export {
-  installStentBootstrap, checkStentRequiredPatches, scheduleRequiredPatchCheck,
-  type StentProfileRow, type StentProfileRows,
+  installStentBootstrap,
+  checkStentRequiredPatches,
+  scheduleRequiredPatchCheck,
+  type StentProfileRow,
+  type StentProfileRows,
 } from './bootstrap/profile.ts'
 export { STENT_CATALOG_ENTRIES, registerCatalogEntries } from './catalog.ts'
 

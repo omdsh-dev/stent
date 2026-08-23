@@ -11,19 +11,20 @@
  * @module @oh-my-dsh/stent
  */
 
+export { STENT_DSH_LAUNCH_KEY, isStentDshLaunch, markStentDshLaunch } from './activation.ts'
+export { GLOBAL_BRIDGE_KEY, installBridge, isStentInstalled, publish, type StentBridgeCall } from './bridge.ts'
 export {
-  STENT_DSH_LAUNCH_KEY,
-  isStentDshLaunch,
-  markStentDshLaunch,
-} from './activation.ts'
-export {
-  GLOBAL_BRIDGE_KEY,
-  installBridge,
-  isStentInstalled,
-  publish,
-  type StentBridgeCall,
-} from './bridge.ts'
-export { bootstrapStent, checkRequiredPatches, expandPatchStub, flushBindingReports, installStentHooks, patchInstrumentation, retransformCommonJs, retransformEsm, type StentInstrumentationConfig, type InstrumentationConfig } from './node/loader.ts'
+  bootstrapStent,
+  checkRequiredPatches,
+  expandPatchStub,
+  flushBindingReports,
+  installStentHooks,
+  patchInstrumentation,
+  retransformCommonJs,
+  retransformEsm,
+  type StentInstrumentationConfig,
+  type InstrumentationConfig,
+} from './node/loader.ts'
 export {
   createBrowserTransform,
   createWatchedBrowserTransform,

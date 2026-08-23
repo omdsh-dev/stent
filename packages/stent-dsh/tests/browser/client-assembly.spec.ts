@@ -8,6 +8,8 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { materialize, prepareClientBundles, seedMap } from './module-loader.ts'
 
+const packageRoot = process.cwd()
+
 // ui-primitives is a heavy render-only package (markdown/highlighting);
 // the command service only touches it on render paths, so stub it in the
 // module table instead of pulling its dependency tree into tests.
@@ -23,8 +25,12 @@ await prepareClientBundles(
   ['@deepseek-ai/cordis', '@deepseek-ai/dsh-client-ui-slots', 'react', 'react/jsx-runtime'],
   ['@deepseek-ai/dsh-client-ui-commands/client', '@deepseek-ai/dsh-client-runtime/client'],
 )
-const { CommandUiRuntime } = materialize<typeof import('@deepseek-ai/dsh-client-ui-commands/client')>('@deepseek-ai/dsh-client-ui-commands')
-const { SlotRegistry } = materialize<typeof import('@deepseek-ai/dsh-client-runtime/client')>('@deepseek-ai/dsh-client-runtime')
+const { CommandUiRuntime } = materialize<typeof import('@deepseek-ai/dsh-client-ui-commands/client')>(
+  '@deepseek-ai/dsh-client-ui-commands',
+)
+const { SlotRegistry } = materialize<typeof import('@deepseek-ai/dsh-client-runtime/client')>(
+  '@deepseek-ai/dsh-client-runtime',
+)
 
 /**
  * Browser assembly: the real browser command and slot services (the
@@ -37,10 +43,12 @@ async function assemble() {
   const ctx = new Context()
   // The Loader resolves entries against ctx.baseUrl; under happy-dom the
   // environment location is http://localhost:3000, so pin the base (and the
-  // fixture url below) to real file paths via process.cwd().
-  ctx.baseUrl = join(process.cwd(), 'packages/stent-dsh/tests')
+  // fixture url below) to real file paths from the package root.
+  ctx.baseUrl = join(packageRoot, 'tests')
   ctx.provide('inputTriggers', {
-    registerSource() { return () => {} },
+    registerSource() {
+      return () => {}
+    },
   })
   ctx.provide('sessions', {
     scope: () => undefined,
@@ -55,10 +63,12 @@ async function assemble() {
   await apply(ctx)
   // Observe the slot registry notifications from the Mod's registration.
   const changed: string[] = []
-  const listen = ctx.on('slots/changed', (key: string) => { changed.push(key) })
+  const listen = ctx.on('slots/changed', (key: string) => {
+    changed.push(key)
+  })
   await ctx.plugin(Loader)
   const id = await ctx.loader.create({
-    name: pathToFileURL(join(process.cwd(), 'packages/stent-dsh/tests/fixtures/node_modules/stent-client-fixture-mod/index.mjs')).href,
+    name: pathToFileURL(join(packageRoot, 'tests/fixtures/node_modules/stent-client-fixture-mod/index.mjs')).href,
   })
   await ctx.loader.await()
   return { ctx, id, changed, listen }

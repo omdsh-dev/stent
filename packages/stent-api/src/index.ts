@@ -10,12 +10,6 @@
  * @module @oh-my-dsh/stent-api
  */
 
-export {
-  buildCompatInstrumentations,
-} from './compat/instrumentation.ts'
-export {
-  StentCompatService,
-} from './compat/service.ts'
-export type {
-  StentCompatConfig, StentCompatPatch, StentCompatTarget,
-} from './compat/types.ts'
+export { buildCompatInstrumentations } from './compat/instrumentation.ts'
+export { StentCompatService } from './compat/service.ts'
+export type { StentCompatConfig, StentCompatPatch, StentCompatTarget } from './compat/types.ts'

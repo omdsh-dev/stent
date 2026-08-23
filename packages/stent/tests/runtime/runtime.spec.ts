@@ -1,4 +1,15 @@
-import { runtime, validatePatchId, validatePatchStatic, StentService, getStent, STENT_DSH_LAUNCH_KEY, markStentDshLaunch, GLOBAL_BRIDGE_KEY, installBridge, isStentInstalled } from '../../src/index.ts'
+import {
+  runtime,
+  validatePatchId,
+  validatePatchStatic,
+  StentService,
+  getStent,
+  STENT_DSH_LAUNCH_KEY,
+  markStentDshLaunch,
+  GLOBAL_BRIDGE_KEY,
+  installBridge,
+  isStentInstalled,
+} from '../../src/index.ts'
 import { publish, subscribeBridge } from '../../src/bridge.ts'
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -71,24 +82,37 @@ describe('stent runtime registry', () => {
   })
 
   it('enable on an unregistered id throws', () => {
-    expect(() => { runtime.enable('nope', () => {}) }).toThrow(/unregistered/)
+    expect(() => {
+      runtime.enable('nope', () => {})
+    }).toThrow(/unregistered/)
   })
 
   it('enable with a non-function handler fails loud instead of crashing in dispatch', () => {
     runtime.register(baseInfo('a'))
-    expect(() => { runtime.enable('a', 42 as never) }).toThrow(/must be a function/)
+    expect(() => {
+      runtime.enable('a', 42 as never)
+    }).toThrow(/must be a function/)
     expect(runtime.isEnabled('a')).toBe(false)
   })
 
   it('validatePatchId rejects unsafe ids and accepts safe ones', () => {
     for (const bad of ['', 'has space', '汉字', 'a'.repeat(121), 'semi;colon']) {
-      expect(() => { validatePatchId(bad) }).toThrow(/patch id/)
+      expect(() => {
+        validatePatchId(bad)
+      }).toThrow(/patch id/)
     }
-    expect(() => { validatePatchId('vendor/pkg:patch-name_1.2') }).not.toThrow()
+    expect(() => {
+      validatePatchId('vendor/pkg:patch-name_1.2')
+    }).not.toThrow()
   })
 
   it('rejects a second replace patch on the same target', () => {
-    const target = { module: 'pkg', versionRange: '*', filePath: 'index.js', functionQuery: { functionName: 'run', kind: 'Sync' as const } }
+    const target = {
+      module: 'pkg',
+      versionRange: '*',
+      filePath: 'index.js',
+      functionQuery: { functionName: 'run', kind: 'Sync' as const },
+    }
     runtime.register({ id: 'r1', target, operation: 'replace', priority: 0, enabled: false })
     expect(() => {
       runtime.register({ id: 'r2', target, operation: 'replace', priority: 0, enabled: false })
@@ -100,7 +124,12 @@ describe('stent runtime registry', () => {
   })
 
   it('re-registering into an already-claimed replace target still fails', () => {
-    const target = { module: 'pkg', versionRange: '*', filePath: 'index.js', functionQuery: { functionName: 'run', kind: 'Sync' as const } }
+    const target = {
+      module: 'pkg',
+      versionRange: '*',
+      filePath: 'index.js',
+      functionQuery: { functionName: 'run', kind: 'Sync' as const },
+    }
     // A patch first registered as `before` must not bypass the exclusive
     // replace scan by re-registering the same id as `replace`.
     runtime.register({ id: 'x1', target, operation: 'before', priority: 0, enabled: false })
@@ -112,12 +141,28 @@ describe('stent runtime registry', () => {
 
   it('allows replace patches on different targets', () => {
     runtime.register({
-      id: 'x1', target: { module: 'pkg', versionRange: '*', filePath: 'a.js', functionQuery: { functionName: 'f', kind: 'Sync' as const } },
-      operation: 'replace', priority: 0, enabled: false,
+      id: 'x1',
+      target: {
+        module: 'pkg',
+        versionRange: '*',
+        filePath: 'a.js',
+        functionQuery: { functionName: 'f', kind: 'Sync' as const },
+      },
+      operation: 'replace',
+      priority: 0,
+      enabled: false,
     })
     runtime.register({
-      id: 'x2', target: { module: 'pkg', versionRange: '*', filePath: 'b.js', functionQuery: { functionName: 'g', kind: 'Sync' as const } },
-      operation: 'replace', priority: 0, enabled: false,
+      id: 'x2',
+      target: {
+        module: 'pkg',
+        versionRange: '*',
+        filePath: 'b.js',
+        functionQuery: { functionName: 'g', kind: 'Sync' as const },
+      },
+      operation: 'replace',
+      priority: 0,
+      enabled: false,
     })
   })
 
@@ -134,8 +179,11 @@ describe('stent runtime registry', () => {
     expect(runtime.allBindings().map(record => record.file)).toEqual(['index.js', 'lib.js', 'run.js'])
     // list() entries carry the recorded bindings regardless of registration.
     runtime.register({
-      id: 'bind/a', target: { module: 'pkg', versionRange: '*', filePath: 'index.js' },
-      operation: 'before', priority: 0, enabled: false,
+      id: 'bind/a',
+      target: { module: 'pkg', versionRange: '*', filePath: 'index.js' },
+      operation: 'before',
+      priority: 0,
+      enabled: false,
     })
     expect(runtime.list().find(info => info.id === 'bind/a')?.bindings).toHaveLength(2)
   })
@@ -152,12 +200,24 @@ describe('stent runtime registry', () => {
 
   it('validatePatchStatic accepts filePaths and rejects invalid combinations', () => {
     const base = { module: 'pkg', versionRange: '*' }
-    expect(() => { validatePatchStatic({ target: { ...base, filePaths: ['a.js', 'b.js'] }, operation: 'before' }) }).not.toThrow()
-    expect(() => { validatePatchStatic({ target: { ...base, filePath: 'a.js' }, operation: 'before' }) }).not.toThrow()
-    expect(() => { validatePatchStatic({ target: { ...base, filePath: 'a.js', filePaths: ['b.js'] }, operation: 'before' }) }).toThrow(/not both/)
-    expect(() => { validatePatchStatic({ target: { ...base, filePaths: [] }, operation: 'before' }) }).toThrow(/filePaths/)
-    expect(() => { validatePatchStatic({ target: { ...base, filePaths: [''] }, operation: 'before' }) }).toThrow(/filePaths/)
-    expect(() => { validatePatchStatic({ target: { ...base }, operation: 'before' }) }).toThrow(/filePath or filePaths/)
+    expect(() => {
+      validatePatchStatic({ target: { ...base, filePaths: ['a.js', 'b.js'] }, operation: 'before' })
+    }).not.toThrow()
+    expect(() => {
+      validatePatchStatic({ target: { ...base, filePath: 'a.js' }, operation: 'before' })
+    }).not.toThrow()
+    expect(() => {
+      validatePatchStatic({ target: { ...base, filePath: 'a.js', filePaths: ['b.js'] }, operation: 'before' })
+    }).toThrow(/not both/)
+    expect(() => {
+      validatePatchStatic({ target: { ...base, filePaths: [] }, operation: 'before' })
+    }).toThrow(/filePaths/)
+    expect(() => {
+      validatePatchStatic({ target: { ...base, filePaths: [''] }, operation: 'before' })
+    }).toThrow(/filePaths/)
+    expect(() => {
+      validatePatchStatic({ target: { ...base }, operation: 'before' })
+    }).toThrow(/filePath or filePaths/)
   })
 })
 
@@ -171,7 +231,9 @@ describe('StentService', () => {
     const fiber = ctx.plugin({
       name: 'stent-gated-fixture',
       inject: ['stent'],
-      apply: () => { applied = true },
+      apply: () => {
+        applied = true
+      },
     })
     await Promise.resolve()
     expect(applied).toBe(false)
@@ -183,13 +245,15 @@ describe('StentService', () => {
     installBridge()
     const ctx = new Context()
     let applied = false
-    await expect(ctx.plugin({
-      name: 'legacy-stent-fixture',
-      apply: (app: Context) => {
-        applied = true
-        getStent(app)
-      },
-    })).rejects.toThrow(/getStent\(ctx\) requires the stent-dsh launch path/)
+    await expect(
+      ctx.plugin({
+        name: 'legacy-stent-fixture',
+        apply: (app: Context) => {
+          applied = true
+          getStent(app)
+        },
+      }),
+    ).rejects.toThrow(/getStent\(ctx\) requires the stent-dsh launch path/)
     expect(applied).toBe(true)
     expect(ctx.get('stent')).toBeUndefined()
     await ctx.fiber.dispose()
@@ -203,7 +267,9 @@ describe('StentService', () => {
     await ctx.plugin({
       name: 'stent-gated-fixture',
       inject: ['stent'],
-      apply: () => { applied = true },
+      apply: () => {
+        applied = true
+      },
     })
     expect(applied).toBe(true)
     await ctx.fiber.dispose()
@@ -215,7 +281,12 @@ describe('StentService', () => {
     expect(service).toBeInstanceOf(StentService)
     const id = service.register({
       id: 'service/a',
-      target: { module: 'pkg', versionRange: '*', filePath: 'index.js', functionQuery: { functionName: 'f', kind: 'Sync' as const } },
+      target: {
+        module: 'pkg',
+        versionRange: '*',
+        filePath: 'index.js',
+        functionQuery: { functionName: 'f', kind: 'Sync' as const },
+      },
       operation: 'after',
       handler: () => {},
     })
@@ -229,7 +300,12 @@ describe('StentService', () => {
     expect(ctx.stent).toBeInstanceOf(StentService)
     ctx.stent.register({
       id: 'service/b',
-      target: { module: 'pkg', versionRange: '*', filePath: 'index.js', functionQuery: { functionName: 'g', kind: 'Sync' as const } },
+      target: {
+        module: 'pkg',
+        versionRange: '*',
+        filePath: 'index.js',
+        functionQuery: { functionName: 'g', kind: 'Sync' as const },
+      },
       operation: 'before',
       handler: () => {},
     })
@@ -239,36 +315,46 @@ describe('StentService', () => {
   it('rejects invalid patches with descriptive errors', () => {
     const ctx = new Context()
     const service = new StentService(ctx)
-    expect(() => service.register({
-      id: 'x',
-      target: { module: '', versionRange: '*', filePath: 'f.js' },
-      operation: 'before',
-      handler: () => {},
-    })).toThrow(/module/)
-    expect(() => service.register({
-      id: 'x',
-      target: { module: 'm', versionRange: '*', filePath: 'f.js' },
-      operation: 'sideways' as never,
-      handler: () => {},
-    })).toThrow(/operation/)
-    expect(() => service.register({
-      id: 'x',
-      target: { module: 'm', versionRange: '*', filePath: 'f.js' },
-      operation: 'before',
-      handler: undefined as never,
-    })).toThrow(/handler/)
-    expect(() => service.register({
-      id: 'x',
-      target: { module: 'm', versionRange: '*', filePath: 'f.js' },
-      operation: 'before',
-      handler: () => {},
-    })).toThrow(/functionQuery or astQuery/)
-    expect(() => service.register({
-      id: 'x',
-      target: { module: 'm', versionRange: '*', filePath: 'f.js', astQuery: '   ' },
-      operation: 'before',
-      handler: () => {},
-    })).toThrow(/astQuery must not be blank/)
+    expect(() =>
+      service.register({
+        id: 'x',
+        target: { module: '', versionRange: '*', filePath: 'f.js' },
+        operation: 'before',
+        handler: () => {},
+      }),
+    ).toThrow(/module/)
+    expect(() =>
+      service.register({
+        id: 'x',
+        target: { module: 'm', versionRange: '*', filePath: 'f.js' },
+        operation: 'sideways' as never,
+        handler: () => {},
+      }),
+    ).toThrow(/operation/)
+    expect(() =>
+      service.register({
+        id: 'x',
+        target: { module: 'm', versionRange: '*', filePath: 'f.js' },
+        operation: 'before',
+        handler: undefined as never,
+      }),
+    ).toThrow(/handler/)
+    expect(() =>
+      service.register({
+        id: 'x',
+        target: { module: 'm', versionRange: '*', filePath: 'f.js' },
+        operation: 'before',
+        handler: () => {},
+      }),
+    ).toThrow(/functionQuery or astQuery/)
+    expect(() =>
+      service.register({
+        id: 'x',
+        target: { module: 'm', versionRange: '*', filePath: 'f.js', astQuery: '   ' },
+        operation: 'before',
+        handler: () => {},
+      }),
+    ).toThrow(/astQuery must not be blank/)
   })
 
   it('bindings() snapshots one patch or every recorded binding', () => {
@@ -305,11 +391,18 @@ describe('StentService', () => {
     const ctx = new Context()
     const patch = {
       id: 'service/hmr',
-      target: { module: 'pkg', versionRange: '*', filePath: 'index.js', functionQuery: { functionName: 'f', kind: 'Sync' as const } },
+      target: {
+        module: 'pkg',
+        versionRange: '*',
+        filePath: 'index.js',
+        functionQuery: { functionName: 'f', kind: 'Sync' as const },
+      },
       operation: 'after' as const,
       handler: () => {},
     }
-    const host = async (app: Context) => { getStent(app).register(patch) }
+    const host = async (app: Context) => {
+      getStent(app).register(patch)
+    }
     // Generation 2 of the same plugin (the same callback, re-applied)
     // registers while generation 1 still owns the patch — the overlapping
     // window of a hot reload.
@@ -329,12 +422,21 @@ describe('StentService', () => {
     const ctx = new Context()
     const patch = {
       id: 'service/x',
-      target: { module: 'pkg', versionRange: '*', filePath: 'index.js', functionQuery: { functionName: 'f', kind: 'Sync' as const } },
+      target: {
+        module: 'pkg',
+        versionRange: '*',
+        filePath: 'index.js',
+        functionQuery: { functionName: 'f', kind: 'Sync' as const },
+      },
       operation: 'after' as const,
       handler: () => {},
     }
-    const pluginA = async (app: Context) => { getStent(app).register(patch) }
-    const pluginB = async (app: Context) => { getStent(app).register({ ...patch, handler: () => {} }) }
+    const pluginA = async (app: Context) => {
+      getStent(app).register(patch)
+    }
+    const pluginB = async (app: Context) => {
+      getStent(app).register({ ...patch, handler: () => {} })
+    }
     const fiberA = await ctx.plugin(pluginA)
     let threw = ''
     try {
@@ -355,7 +457,12 @@ describe('StentService', () => {
     const ctx = new Context()
     const patch = {
       id: 'service/entry-owned',
-      target: { module: 'pkg', versionRange: '*', filePath: 'index.js', functionQuery: { functionName: 'f', kind: 'Sync' as const } },
+      target: {
+        module: 'pkg',
+        versionRange: '*',
+        filePath: 'index.js',
+        functionQuery: { functionName: 'f', kind: 'Sync' as const },
+      },
       operation: 'after' as const,
       handler: () => {},
     }
@@ -377,11 +484,18 @@ describe('StentService', () => {
     const ctx = new Context()
     const patch = {
       id: 'service/removable',
-      target: { module: 'pkg', versionRange: '*', filePath: 'index.js', functionQuery: { functionName: 'f', kind: 'Sync' as const } },
+      target: {
+        module: 'pkg',
+        versionRange: '*',
+        filePath: 'index.js',
+        functionQuery: { functionName: 'f', kind: 'Sync' as const },
+      },
       operation: 'after' as const,
       handler: () => {},
     }
-    const plugin = async (app: Context) => { getStent(app).register(patch) }
+    const plugin = async (app: Context) => {
+      getStent(app).register(patch)
+    }
     const fiber = await ctx.plugin(plugin)
     const service = ctx.get('stent') as StentService
     // The plugin call returns a wrapper; the ownership token is the real
@@ -413,8 +527,18 @@ describe('bridge multi-listener dispatch', () => {
 
   it('runs every listener in registration order and returns the last result', () => {
     const seen: string[] = []
-    disposers.push(subscribeBridge(() => { seen.push('first'); return 'first-result' }))
-    disposers.push(subscribeBridge(() => { seen.push('second'); return 'second-result' }))
+    disposers.push(
+      subscribeBridge(() => {
+        seen.push('first')
+        return 'first-result'
+      }),
+    )
+    disposers.push(
+      subscribeBridge(() => {
+        seen.push('second')
+        return 'second-result'
+      }),
+    )
     expect(publish(call('bridge/multi'))).toBe('second-result')
     expect(seen).toEqual(['first', 'second'])
   })

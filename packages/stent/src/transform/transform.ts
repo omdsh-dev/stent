@@ -28,8 +28,18 @@
 import type { CustomTransform } from '@apm-js-collab/code-transformer'
 import { create } from '@apm-js-collab/code-transformer'
 import type {
-  ArrowFunctionExpression, Expression, FunctionDeclaration, FunctionExpression,
-  Identifier, Literal, Node, Pattern, Program, Property, SpreadElement, Statement,
+  ArrowFunctionExpression,
+  Expression,
+  FunctionDeclaration,
+  FunctionExpression,
+  Identifier,
+  Literal,
+  Node,
+  Pattern,
+  Program,
+  Property,
+  SpreadElement,
+  Statement,
 } from 'estree'
 import { GLOBAL_BRIDGE_KEY } from '../bridge.ts'
 
@@ -48,10 +58,7 @@ const OUTER_ARGUMENTS = 'stentOuterArguments'
  * node the transform actually rewrites; the Node loader counts these into
  * its load-time binding records.
  */
-export function registerStentTransform(
-  matcher: ReturnType<typeof create>,
-  onMatch?: (patchId: string) => void,
-): void {
+export function registerStentTransform(matcher: ReturnType<typeof create>, onMatch?: (patchId: string) => void): void {
   matcher.addTransform('stent', (state, node, parent, ancestry) => {
     const patchId = state.stentPatchId
     const operation = state.stentOperation
@@ -96,8 +103,8 @@ export function createStentTransform(
       // and new.target would silently become undefined. Fail the transform
       // loudly instead of emitting a module that breaks at evaluation.
       throw new Error(
-        'stent: constructor targets are not supported (super() and new.target cannot survive '
-        + 'the traced-closure replay); patch a method or factory instead',
+        'stent: constructor targets are not supported (super() and new.target cannot survive ' +
+          'the traced-closure replay); patch a method or factory instead',
       )
     }
     const matched = matchFunction(node)
@@ -134,23 +141,27 @@ export function createStentTransform(
     // body's `arguments` identifiers (lexical references only — nested
     // non-arrow functions own their `arguments` and are not descended into)
     // to the capture.
-    const outerArgsName = matched.arrow && mapOuterArguments(matched.body, undefined)
-      ? refs.unique(OUTER_ARGUMENTS)
-      : undefined
+    const outerArgsName =
+      matched.arrow && mapOuterArguments(matched.body, undefined) ? refs.unique(OUTER_ARGUMENTS) : undefined
     if (outerArgsName) mapOuterArguments(matched.body, outerArgsName)
 
     // const stentOuterArguments = arguments
     // Only arrows: the arrow's own lexical resolution makes `arguments` here
     // refer to the enclosing scope, preserving the body's outer reference.
-    const capture: Statement | undefined = outerArgsName === undefined ? undefined : {
-      type: 'VariableDeclaration',
-      kind: 'const',
-      declarations: [{
-        type: 'VariableDeclarator',
-        id: { type: 'Identifier', name: outerArgsName },
-        init: { type: 'Identifier', name: 'arguments' },
-      }],
-    }
+    const capture: Statement | undefined =
+      outerArgsName === undefined
+        ? undefined
+        : {
+            type: 'VariableDeclaration',
+            kind: 'const',
+            declarations: [
+              {
+                type: 'VariableDeclarator',
+                id: { type: 'Identifier', name: outerArgsName },
+                init: { type: 'Identifier', name: 'arguments' },
+              },
+            ],
+          }
 
     // const stentArguments = <args>
     // Regular functions rebuild from their own `arguments` object; arrows have
@@ -158,68 +169,27 @@ export function createStentTransform(
     // handler mutations then flow through apply() to the replayed body.
     const args: Statement = matched.arrow
       ? {
-        type: 'VariableDeclaration',
-        kind: 'const',
-        declarations: [{
-          type: 'VariableDeclarator',
-          id: { type: 'Identifier', name: argsName },
-          init: {
-            type: 'ArrayExpression',
-            elements: matched.params.map(patternToExpression),
-          },
-        }],
-      }
-      : {
-        type: 'VariableDeclaration',
-        kind: 'const',
-        declarations: [{
-          type: 'VariableDeclarator',
-          id: { type: 'Identifier', name: argsName },
-          init: {
-            type: 'CallExpression',
-            optional: false,
-            callee: {
-              type: 'MemberExpression',
-              computed: false,
-              optional: false,
-              object: {
-                type: 'MemberExpression',
-                computed: false,
-                optional: false,
-                object: {
-                  type: 'MemberExpression',
-                  computed: false,
-                  optional: false,
-                  object: { type: 'Identifier', name: 'Array' },
-                  property: { type: 'Identifier', name: 'prototype' },
-                },
-                property: { type: 'Identifier', name: 'slice' },
+          type: 'VariableDeclaration',
+          kind: 'const',
+          declarations: [
+            {
+              type: 'VariableDeclarator',
+              id: { type: 'Identifier', name: argsName },
+              init: {
+                type: 'ArrayExpression',
+                elements: matched.params.map(patternToExpression),
               },
-              property: { type: 'Identifier', name: 'call' },
             },
-            arguments: [{ type: 'Identifier', name: 'arguments' }],
-          },
-        }],
-      }
-
-    // const stentTraced = () => (function () { <original body> }).apply(this, stentArguments)
-    const traced: Statement = {
-      type: 'VariableDeclaration',
-      kind: 'const',
-      declarations: [{
-        type: 'VariableDeclarator',
-        id: { type: 'Identifier', name: tracedName },
-        init: {
-          type: 'ArrowFunctionExpression',
-          expression: false,
-          generator: false,
-          async: false,
-          params: [],
-          body: {
-            type: 'BlockStatement',
-            body: [{
-              type: 'ReturnStatement',
-              argument: {
+          ],
+        }
+      : {
+          type: 'VariableDeclaration',
+          kind: 'const',
+          declarations: [
+            {
+              type: 'VariableDeclarator',
+              id: { type: 'Identifier', name: argsName },
+              init: {
                 type: 'CallExpression',
                 optional: false,
                 callee: {
@@ -227,44 +197,92 @@ export function createStentTransform(
                   computed: false,
                   optional: false,
                   object: {
-                    type: 'FunctionExpression',
-                    id: null,
-                    params: matched.params,
-                    body: { type: 'BlockStatement', body: statements },
-                    generator: matched.generator,
-                    async: matched.async,
+                    type: 'MemberExpression',
+                    computed: false,
+                    optional: false,
+                    object: {
+                      type: 'MemberExpression',
+                      computed: false,
+                      optional: false,
+                      object: { type: 'Identifier', name: 'Array' },
+                      property: { type: 'Identifier', name: 'prototype' },
+                    },
+                    property: { type: 'Identifier', name: 'slice' },
                   },
-                  property: { type: 'Identifier', name: 'apply' },
+                  property: { type: 'Identifier', name: 'call' },
                 },
-                arguments: [
-                  { type: 'ThisExpression' },
-                  { type: 'Identifier', name: argsName },
-                ],
+                arguments: [{ type: 'Identifier', name: 'arguments' }],
               },
-            }],
+            },
+          ],
+        }
+
+    // const stentTraced = () => (function () { <original body> }).apply(this, stentArguments)
+    const traced: Statement = {
+      type: 'VariableDeclaration',
+      kind: 'const',
+      declarations: [
+        {
+          type: 'VariableDeclarator',
+          id: { type: 'Identifier', name: tracedName },
+          init: {
+            type: 'ArrowFunctionExpression',
+            expression: false,
+            generator: false,
+            async: false,
+            params: [],
+            body: {
+              type: 'BlockStatement',
+              body: [
+                {
+                  type: 'ReturnStatement',
+                  argument: {
+                    type: 'CallExpression',
+                    optional: false,
+                    callee: {
+                      type: 'MemberExpression',
+                      computed: false,
+                      optional: false,
+                      object: {
+                        type: 'FunctionExpression',
+                        id: null,
+                        params: matched.params,
+                        body: { type: 'BlockStatement', body: statements },
+                        generator: matched.generator,
+                        async: matched.async,
+                      },
+                      property: { type: 'Identifier', name: 'apply' },
+                    },
+                    arguments: [{ type: 'ThisExpression' }, { type: 'Identifier', name: argsName }],
+                  },
+                },
+              ],
+            },
           },
         },
-      }],
+      ],
     }
 
     // const stentCall = { id, operation, arguments: stentArguments, self, traced }
     const call: Statement = {
       type: 'VariableDeclaration',
       kind: 'const',
-      declarations: [{
-        type: 'VariableDeclarator',
-        id: { type: 'Identifier', name: callName },
-        init: {
-          type: 'ObjectExpression',
-          properties: [
-            property('id', { type: 'Literal', value: patchId }),
-            property('operation', { type: 'Literal', value: operation }),
-            property('arguments', { type: 'Identifier', name: argsName }),
-            property('self', { type: 'ThisExpression' }),
-            property('traced', { type: 'Identifier', name: tracedName }),
-          ],
+      declarations: [
+        {
+          type: 'VariableDeclarator',
+          id: { type: 'Identifier', name: callName },
+          init: {
+            type: 'ObjectExpression',
+            properties: [
+              property('id', { type: 'Literal', value: patchId }),
+              property('operation', { type: 'Literal', value: operation }),
+              property('arguments', { type: 'Identifier', name: argsName }),
+              property('self', { type: 'ThisExpression' }),
+              property('traced', { type: 'Identifier', name: tracedName }),
+            ],
+          },
         },
-      }],
+      ],
     }
 
     // globalThis["__stentBridge"]
@@ -334,20 +352,22 @@ export function createStentTransform(
       })
       const iterableCheck: Expression = matched.async
         ? {
-          type: 'LogicalExpression',
-          operator: '||',
-          left: isIterable('iterator'),
-          right: isIterable('asyncIterator'),
-        }
+            type: 'LogicalExpression',
+            operator: '||',
+            left: isIterable('iterator'),
+            right: isIterable('asyncIterator'),
+          }
         : isIterable('iterator')
       publish = {
         type: 'VariableDeclaration',
         kind: 'const',
-        declarations: [{
-          type: 'VariableDeclarator',
-          id: { type: 'Identifier', name: resultName },
-          init: publishCall(),
-        }],
+        declarations: [
+          {
+            type: 'VariableDeclarator',
+            id: { type: 'Identifier', name: resultName },
+            init: publishCall(),
+          },
+        ],
       }
       const delegate: Statement = {
         type: 'IfStatement',
@@ -412,9 +432,7 @@ function isConstructorTarget(node: Node, parent: Node): boolean {
  * @returns the function with its body and params, or `undefined` to skip.
  */
 function matchFunction(node: Node): MatchedFunction | undefined {
-  const fn = node.type === 'MethodDefinition' || node.type === 'Property'
-    ? (node as { value?: unknown }).value
-    : node
+  const fn = node.type === 'MethodDefinition' || node.type === 'Property' ? (node as { value?: unknown }).value : node
   if (typeof fn !== 'object' || fn === null) return undefined
   const type = (fn as { type?: string }).type
   if (type !== 'FunctionDeclaration' && type !== 'FunctionExpression' && type !== 'ArrowFunctionExpression') {
@@ -463,7 +481,7 @@ function patternToExpression(pattern: Pattern): Expression | SpreadElement | nul
     case 'ObjectPattern':
       return {
         type: 'ObjectExpression',
-        properties: pattern.properties.map((prop) => {
+        properties: pattern.properties.map(prop => {
           if (prop.type === 'RestElement') {
             return { type: 'SpreadElement', argument: patternToExpression(prop.argument) as Expression }
           }
@@ -481,7 +499,7 @@ function patternToExpression(pattern: Pattern): Expression | SpreadElement | nul
     case 'ArrayPattern':
       return {
         type: 'ArrayExpression',
-        elements: pattern.elements.map((element) => {
+        elements: pattern.elements.map(element => {
           if (element === null) return null
           if (element.type === 'RestElement') {
             return { type: 'SpreadElement', argument: patternToExpression(element.argument) as Expression }

@@ -73,8 +73,8 @@ export function checkRequiredPatches(patches: readonly StentPatchStub[]): void {
     .map(patch => `${patch.id} (${patch.target.module} ${String(patch.target.filePath)}, ${patch.operation})`)
   if (missing.length > 0) {
     throw new Error(
-      'stent: required patch(es) bound nothing at load time; the target file may be the wrong '
-      + `launch form (src vs lib) or the function may have moved: ${missing.join('; ')}`,
+      'stent: required patch(es) bound nothing at load time; the target file may be the wrong ' +
+        `launch form (src vs lib) or the function may have moved: ${missing.join('; ')}`,
     )
   }
 }
@@ -216,10 +216,7 @@ function installAsyncHooks(configPath: string): void {
   if (asyncHooksInstalled) return
   asyncHooksInstalled = true
   const channel = new MessageChannel()
-  // The global MessageChannel is DOM-typed while the host tsconfig keeps the
-  // DOM lib in scope; Node's runtime ports are the worker_threads class,
-  // which carries unref() — the cast is a type-only correction.
-  const port = channel.port1 as unknown as MessagePort
+  const port = channel.port1
   asyncBindingPort = port
   port.on('message', (message: unknown) => {
     // A flush reply acknowledges that every binding report posted before it
@@ -233,8 +230,12 @@ function installAsyncHooks(configPath: string): void {
     for (const record of message) {
       if (typeof record !== 'object' || record === null) continue
       const report = record as Partial<StentBindingReport>
-      if (typeof report.patchId === 'string' && typeof report.module === 'string'
-        && typeof report.file === 'string' && typeof report.nodes === 'number') {
+      if (
+        typeof report.patchId === 'string' &&
+        typeof report.module === 'string' &&
+        typeof report.file === 'string' &&
+        typeof report.nodes === 'number'
+      ) {
         runtime.recordBindings(report.patchId, [{ module: report.module, file: report.file, nodes: report.nodes }])
       }
     }
@@ -264,7 +265,7 @@ function installAsyncHooks(configPath: string): void {
  */
 export async function flushBindingReports(timeoutMs = 200): Promise<void> {
   if (asyncBindingPort === undefined) return
-  await new Promise<void>((resolve) => {
+  await new Promise<void>(resolve => {
     const timer = setTimeout(() => {
       const index = flushWaiters.indexOf(resolve)
       if (index >= 0) flushWaiters.splice(index, 1)
@@ -281,10 +282,15 @@ export async function flushBindingReports(timeoutMs = 200): Promise<void> {
 /** Serialize the installation stack for the async hook entry. */
 function writeAsyncConfig(): void {
   if (!asyncConfigPath) return
-  writeFileSync(asyncConfigPath, JSON.stringify(states.map(state => ({
-    active: state.active,
-    instrumentations: state.instrumentations.map(serializeInstrumentation),
-  }))))
+  writeFileSync(
+    asyncConfigPath,
+    JSON.stringify(
+      states.map(state => ({
+        active: state.active,
+        instrumentations: state.instrumentations.map(serializeInstrumentation),
+      })),
+    ),
+  )
 }
 
 /**
@@ -328,7 +334,7 @@ export function installStentHooks(instrumentations: StentInstrumentationConfig[]
   // Every node the transform actually rewrites increments the installation's
   // pending counts; flushBindings turns them into runtime binding records
   // after each transformed file.
-  registerStentTransform(matcher, (patchId) => {
+  registerStentTransform(matcher, patchId => {
     state.pending.set(patchId, (state.pending.get(patchId) ?? 0) + 1)
   })
 
@@ -436,7 +442,10 @@ function installCompileWrapper(): void {
  * @param url - the module URL, used to read CommonJS sources Node leaves null.
  * @returns the source string.
  */
-function readSource(result: { source?: string | ArrayBuffer | NodeJS.TypedArray | null | undefined }, url: string): string {
+function readSource(
+  result: { source?: string | ArrayBuffer | NodeJS.TypedArray | null | undefined },
+  url: string,
+): string {
   if (typeof result.source === 'string') return result.source
   if (result.source instanceof ArrayBuffer) return Buffer.from(new Uint8Array(result.source)).toString('utf8')
   if (result.source != null) return Buffer.from(result.source as Uint8Array).toString('utf8')
@@ -459,7 +468,7 @@ function readSource(result: { source?: string | ArrayBuffer | NodeJS.TypedArray 
  * @returns the freshly evaluated module exports.
  */
 export function retransformCommonJs(filename: string): unknown {
-  return reloadCommonJs(filename, (path) => {
+  return reloadCommonJs(filename, path => {
     for (const state of states) state.seen.delete(path)
   })
 }
@@ -487,7 +496,7 @@ export function retransformCommonJs(filename: string): unknown {
  * @returns the freshly evaluated module namespace.
  */
 export async function retransformEsm(url: string): Promise<Record<string, unknown>> {
-  return reloadEsm(url, (path) => {
+  return reloadEsm(url, path => {
     for (const state of states) state.seen.delete(path)
   })
 }

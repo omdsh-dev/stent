@@ -69,17 +69,14 @@ export function resolveProfile({
   launcherUrl: string | URL
   env?: NodeJS.ProcessEnv
 }): ResolvedProfile {
-  const installedMatch = fileURLToPath(launcherUrl)
-    .match(/^(.*)\/profiles\/([^/]+)\/node_modules\/@oh-my-dsh\/stent-pack\/lib\/stent-dsh\.(?:js|mjs)$/)
+  const installedMatch = fileURLToPath(launcherUrl).match(
+    /^(.*)\/profiles\/([^/]+)\/node_modules\/@oh-my-dsh\/stent-pack\/lib\/stent-dsh\.(?:js|mjs)$/,
+  )
   const installedHome = installedMatch?.[1]
   const installedProfile = installedMatch?.[2]
   const installed = installedHome !== undefined && installedProfile !== undefined
-  const dshHome = installed
-    ? installedHome
-    : env.DSH_HOME ?? join(homedir(), '.dsh')
-  const profileName = installed
-    ? (args.profile ?? installedProfile)
-    : args.profile ?? env.DSH_PROFILE ?? 'default'
+  const dshHome = installed ? installedHome : (env.DSH_HOME ?? join(homedir(), '.dsh'))
+  const profileName = installed ? (args.profile ?? installedProfile) : (args.profile ?? env.DSH_PROFILE ?? 'default')
   // An installed profile bin already identifies the profile. Reuse that name
   // when forwarding to the official CLI, even when the caller omits `web`.
   const effectiveProfile = args.profile ?? (installed ? installedProfile : undefined)
@@ -93,13 +90,24 @@ export function resolveProfile({
 }
 
 /** Resolve js-yaml from the profile first, then from the CLI package. */
-export function resolveYaml(profileDir: string, fromCli: NodeJS.Require): { requireFromProfile: NodeJS.Require; yaml: YamlApi } {
+export function resolveYaml(
+  profileDir: string,
+  fromCli: NodeJS.Require,
+): { requireFromProfile: NodeJS.Require; yaml: YamlApi } {
   const requireFromProfile = createRequire(join(profileDir, 'package.json'))
   let yaml: YamlApi | undefined
-  try { yaml = requireFromProfile('js-yaml') as YamlApi } catch { /* not in the profile */ }
+  try {
+    yaml = requireFromProfile('js-yaml') as YamlApi
+  } catch {
+    /* not in the profile */
+  }
   if (yaml === undefined) {
     // The CLI's own declared dependencies carry js-yaml (either host mode).
-    try { yaml = fromCli('js-yaml') as YamlApi } catch { /* not resolvable from the CLI */ }
+    try {
+      yaml = fromCli('js-yaml') as YamlApi
+    } catch {
+      /* not resolvable from the CLI */
+    }
   }
   if (yaml === undefined) {
     console.error('stent-dsh: js-yaml is required (install it in the profile or beside the CLI)')
@@ -126,9 +134,7 @@ function createPatchLoader(yaml: YamlApi): (path: string) => PatchLayer {
   return (path: string): PatchLayer => {
     if (!existsSync(path)) return []
     const text = readFileSync(path, 'utf8')
-    const data = yamlSchema !== undefined
-      ? yaml.load(text, { schema: yamlSchema })
-      : yaml.load(text)
+    const data = yamlSchema !== undefined ? yaml.load(text, { schema: yamlSchema }) : yaml.load(text)
     return Array.isArray(data) ? data : []
   }
 }
@@ -168,9 +174,10 @@ export function composeStentConfig({
     try {
       const manifestPathname = requireFromProfile.resolve(`${manifestPath}/package.json`)
       const manifest = JSON.parse(readFileSync(manifestPathname, 'utf8')) as RecordValue
-      const patchRel = isRecord(manifest.dsh) && isRecord(manifest.dsh.bundle) && typeof manifest.dsh.bundle.patch === 'string'
-        ? manifest.dsh.bundle.patch
-        : undefined
+      const patchRel =
+        isRecord(manifest.dsh) && isRecord(manifest.dsh.bundle) && typeof manifest.dsh.bundle.patch === 'string'
+          ? manifest.dsh.bundle.patch
+          : undefined
       if (typeof patchRel !== 'string') return undefined
       return resolve(join(manifestPathname, '..', patchRel))
     } catch {
@@ -179,9 +186,9 @@ export function composeStentConfig({
   }
 
   const profilePkgPath = join(profileDir, 'package.json')
-  const profilePkg = (existsSync(profilePkgPath)
-    ? JSON.parse(readFileSync(profilePkgPath, 'utf8'))
-    : {}) as ProfileManifest
+  const profilePkg = (
+    existsSync(profilePkgPath) ? JSON.parse(readFileSync(profilePkgPath, 'utf8')) : {}
+  ) as ProfileManifest
   const bundlesValue = profilePkg.dsh?.profile?.bundles
   const bundles = Array.isArray(bundlesValue) ? bundlesValue : []
 

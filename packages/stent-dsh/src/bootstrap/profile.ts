@@ -80,9 +80,13 @@ export async function checkStentRequiredPatches(rows: StentProfileRows): Promise
 /** The live loader's composed entries, read as the id → row map. */
 function composedStentRows(ctx: Context): StentProfileRows {
   const rows = new Map<string, StentProfileRow>()
-  const loader = (ctx as unknown as {
-    loader?: { entries?: () => Iterable<{ options?: Partial<{ id?: unknown; config?: unknown; disabled?: unknown }> }> }
-  }).loader
+  const loader = (
+    ctx as unknown as {
+      loader?: {
+        entries?: () => Iterable<{ options?: Partial<{ id?: unknown; config?: unknown; disabled?: unknown }> }>
+      }
+    }
+  ).loader
   for (const entry of loader?.entries?.() ?? []) {
     const options = entry.options
     if (options !== undefined && typeof options.id === 'string') {
@@ -130,7 +134,10 @@ interface StentBindingView {
  * Written straight to stderr like the preload's launch marker, so no
  * logging-level filter can hide it.
  */
-function logHookSummary(descriptors: readonly StentPatchStub[], runtime: { bindingsOf: (id: string) => StentBindingView[] }): void {
+function logHookSummary(
+  descriptors: readonly StentPatchStub[],
+  runtime: { bindingsOf: (id: string) => StentBindingView[] },
+): void {
   if (descriptors.length === 0) return
   const lines: string[] = []
   for (const patch of descriptors) {
@@ -185,12 +192,15 @@ export function scheduleRequiredPatchCheck(ctx: Context): void {
         const enabled = stentRequiredRows(composedStentRows(ctx)).filter(({ disabled }) => disabled === false)
         if (enabled.length === 0) return
         throw new Error(
-          'stent: rows ' + enabled.map(({ id }) => id).join(', ')
-          + ' declare Stent patches but are enabled on a plain-dsh boot (the hooks are not installed); '
-          + 'launch through stent-dsh, which enables Stent-required rows itself',
+          'stent: rows ' +
+            enabled.map(({ id }) => id).join(', ') +
+            ' declare Stent patches but are enabled on a plain-dsh boot (the hooks are not installed); ' +
+            'launch through stent-dsh, which enables Stent-required rows itself',
         )
       })()
     }, 0)
-    return () => { clearTimeout(timer) }
+    return () => {
+      clearTimeout(timer)
+    }
   }, 'stent: required patch check')
 }

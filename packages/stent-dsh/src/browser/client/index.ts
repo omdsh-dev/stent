@@ -154,9 +154,11 @@ export class StentClientService extends Service {
     // client plugin; this facade intentionally exposes a stable narrow face
     // instead. The call targets the implementation signature, which accepts
     // the same fields.
-    return (this.ctx.slots as unknown as {
-      register(options: StentSlotOptions, component: unknown): () => void
-    }).register(options, component)
+    return (
+      this.ctx.slots as unknown as {
+        register(options: StentSlotOptions, component: unknown): () => void
+      }
+    ).register(options, component)
   }
 
   /**
@@ -192,9 +194,11 @@ export class StentClientService extends Service {
       active: true,
       registered: undefined,
     }
-    const slotRegister = (this.ctx.slots as unknown as {
-      register(options: StentSlotOptions, component: unknown): () => void
-    }).register.bind(this.ctx.slots)
+    const slotRegister = (
+      this.ctx.slots as unknown as {
+        register(options: StentSlotOptions, component: unknown): () => void
+      }
+    ).register.bind(this.ctx.slots)
     const current = claims.find(candidate => candidate.owner)
     const priority = options.priority ?? 0
     if (current === undefined || priority > (current.options.priority ?? 0)) {
@@ -211,8 +215,8 @@ export class StentClientService extends Service {
       // priorities queue silently.
       if (priority === (current.options.priority ?? 0)) {
         this.ctx.logger.warn(
-          `stent-client: keyed slot "${options.name}" key "${key}" claimed by both `
-          + `${current.options.plugin ?? 'an earlier claimant'} (earlier) and ${options.plugin ?? 'this claimant'}; the earlier one owns it`,
+          `stent-client: keyed slot "${options.name}" key "${key}" claimed by both ` +
+            `${current.options.plugin ?? 'an earlier claimant'} (earlier) and ${options.plugin ?? 'this claimant'}; the earlier one owns it`,
         )
       }
       claims.push(claim)
@@ -253,9 +257,11 @@ export class StentClientService extends Service {
     if (next === undefined) return
     next.owner = true
     if (next.registered === undefined) {
-      next.registered = (this.ctx.slots as unknown as {
-        register(options: StentSlotOptions, component: unknown): () => void
-      }).register(next.options, next.component)
+      next.registered = (
+        this.ctx.slots as unknown as {
+          register(options: StentSlotOptions, component: unknown): () => void
+        }
+      ).register(next.options, next.component)
     }
     next.options.onGain?.()
   }

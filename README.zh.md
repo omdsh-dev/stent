@@ -66,8 +66,8 @@ dsh plugin --profile web add @oh-my-dsh/stent-pack
 
 安装时由 pnpm 解析这些 npm semver 依赖;启动时 `stent-dsh` 调用 DSH 的 module-fallback healer,把 bundle 的依赖闭包映射到 `$DSH_HOME/profiles/node_modules`,使 Profile 和 preload 解析到同一套 trio 副本。
 
-- host 源码安装在 `apps/cli/package.json` 中声明 bundle;先执行 harness workspace 的 `pnpm install` 和 `pnpm run build`,再通过插件通道安装已发布的 npm bundle(把 `@oh-my-dsh/stent-pack` 并入 `dsh.profile.bundles`)、启用 `stent-dsh` 行——启动一律走编译后的 `lib/stent-dsh.js`。
-- 消费侧构建使用根目录显式的 `build` 脚本;trio 与 launcher 在打包前由 tsdown 构建,不需要安装期 `prepare`。
+- host 源码安装在 `apps/cli/package.json` 中声明 bundle;先执行 harness workspace 的 `pnpm install` 和 `pnpm run pack:build`,再通过插件通道安装已发布的 npm bundle(把 `@oh-my-dsh/stent-pack` 并入 `dsh.profile.bundles`)、启用 `stent-dsh` 行——启动一律走编译后的 `lib/stent-dsh.js`。
+- 消费侧构建使用根目录显式的 `pack:build` 脚本;trio 与 launcher 在打包前分别由各包自己的 tsdown 命令构建,不需要安装期 `prepare`。
 
 ### 3.1 pnpm 11 供应链接缝
 
@@ -124,9 +124,11 @@ window.__ModuleLoader__.load({ id: "@oh-my-dsh/stent", factory: (require) => { .
 
 ## 7. Lint 检查
 
-Oxlint 从独立 workspace 根目录运行，使用与 DSH 一致的固定工具链（`oxlint` 与 `oxlint-tsgolint`），启用选定的 TypeScript 类型感知规则，并将 warning 视为失败。生成的 `lib/` 产物、JavaScript fixture launcher 和构建配置不属于本 TypeScript lint 面。
+每个包从自己的包根目录运行 Oxlint，使用固定的 DSH 工具链（`oxlint` 与 `oxlint-tsgolint`）和选定的 TypeScript 类型感知规则；根包与子包配置共享一份纳入版本控制的基线。warning 视为失败。生成的 `lib/` 产物、JavaScript fixture launcher 和构建配置不属于本 TypeScript lint 面。
 
-根 carrier 的 `pnpm run lint` 只检查自身的 `src/` launcher，并运行 Oxlint-tsgolint 的实验性 `--type-check` 诊断。三个实现包各自只暴露一个针对自身 source 的 `lint` 命令；测试由 `pnpm test` 负责，不再提供独立的 `typecheck` 或 `lint:fix` 命令。
+Oxfmt 是本 workspace 的统一格式化器，共享策略写在 `.oxfmtrc.json`：两空格缩进、单引号、无分号、尾随逗号和 120 列宽。每个包分别拥有自己的 `fmt` 与 `fmt:check` 命令；根 carrier 的 `pack:fmt:check` 负责编排根包和全部实现包的检查。生成的 `lib/` 产物、fixture 目录、JavaScript launcher fixture 和构建配置不属于格式化范围。
+
+根 carrier 只负责自身的 `src/` launcher 和 `tests/` 根集成测试。根包的 `lint`、`lint:fix`、`test`、`build` 与 `knip` 命令不会扫描实现包文件，也不提供 `pack:lint:fix`。三个实现包分别声明自己的工具链，并提供只作用于本包的独立 `lint`、`lint:fix`、`test`、`build` 与 `knip` 命令；类型检查由各包带类型感知的 lint 命令提供，不再单独提供 `typecheck` 脚本。根目录的 `pack:*` 脚本只负责编排：保持根包检查与各包命令分开，并通过 `pnpm --filter` 调用后者。
 
 ## 8. 时间线(节选)
 

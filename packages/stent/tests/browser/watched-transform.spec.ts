@@ -54,7 +54,9 @@ describe('createWatchedBrowserTransform', () => {
     const path = patchesFile([stub])
     const transform = createWatchedBrowserTransform(path, nodeModulesResolver())
     const watched: string[] = []
-    const addWatchFile = (file: string): void => { watched.push(file) }
+    const addWatchFile = (file: string): void => {
+      watched.push(file)
+    }
     transform(readFileSync(`${fixtureDir}index.mjs`, 'utf8'), `${fixtureDir}index.mjs`, addWatchFile)
     // A patch edit can make a previously unmatched module match, so the
     // watch registration must not depend on the module matching.
@@ -92,7 +94,9 @@ describe('createWatchedBrowserTransform', () => {
     expect(() => notArray('export const x = 1', '/tmp/x/index.js')).toThrow(/JSON array of patch stubs/)
 
     const noTarget = createWatchedBrowserTransform(patchesFile([{ id: 'web/x' }]), nodeModulesResolver())
-    expect(() => noTarget('export const x = 1', '/tmp/x/index.js')).toThrow(/entry 0 must be a patch stub object with a target/)
+    expect(() => noTarget('export const x = 1', '/tmp/x/index.js')).toThrow(
+      /entry 0 must be a patch stub object with a target/,
+    )
 
     const badId = createWatchedBrowserTransform(patchesFile([{ ...stub, id: 'has space' }]), nodeModulesResolver())
     expect(() => badId('export const x = 1', '/tmp/x/index.js')).toThrow(/patch id/)

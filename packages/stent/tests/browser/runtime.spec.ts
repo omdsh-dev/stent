@@ -29,7 +29,12 @@ describe('stent browser entry', () => {
     const service = ctx.get('stent') as StentService
     service.register({
       id: 'browser/after',
-      target: { module: 'pkg', versionRange: '*', filePath: 'index.js', functionQuery: { functionName: 'f', kind: 'Sync' } },
+      target: {
+        module: 'pkg',
+        versionRange: '*',
+        filePath: 'index.js',
+        functionQuery: { functionName: 'f', kind: 'Sync' },
+      },
       operation: 'after',
       handler: () => {},
     })
@@ -43,7 +48,12 @@ describe('stent browser entry', () => {
     const service = ctx.get('stent') as StentService
     service.register({
       id: 'browser/lifecycle',
-      target: { module: 'pkg', versionRange: '*', filePath: 'index.js', functionQuery: { functionName: 'g', kind: 'Sync' } },
+      target: {
+        module: 'pkg',
+        versionRange: '*',
+        filePath: 'index.js',
+        functionQuery: { functionName: 'g', kind: 'Sync' },
+      },
       operation: 'before',
       handler: () => {},
     })

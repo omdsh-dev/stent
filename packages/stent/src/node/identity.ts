@@ -43,7 +43,6 @@ export interface PackageIdentity {
 /** Manifest name/version cache, keyed by the package root directory. */
 const manifestCache = new Map<string, { name: string; version: string }>()
 
-
 /** Nearest package root for a file, or undefined when none exists up the tree. */
 function findPackageRoot(filename: string): string | undefined {
   let dir = dirname(filename)
@@ -74,7 +73,10 @@ export function packageIdentityFromPath(filename: string): PackageIdentity | und
         name?: unknown
         version?: unknown
       }
-      manifest = { name: typeof parsed.name === 'string' ? parsed.name : '', version: typeof parsed.version === 'string' ? parsed.version : '' }
+      manifest = {
+        name: typeof parsed.name === 'string' ? parsed.name : '',
+        version: typeof parsed.version === 'string' ? parsed.version : '',
+      }
     } catch {
       manifest = { name: '', version: '' }
     }

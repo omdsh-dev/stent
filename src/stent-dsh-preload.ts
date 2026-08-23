@@ -26,7 +26,8 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { StentPatchStub } from '@oh-my-dsh/stent'
+
+type StentPatchStub = Record<string, unknown>
 
 type BootstrapStent = (descriptors: StentPatchStub[]) => unknown
 type MarkStentDshLaunch = () => void
@@ -37,7 +38,7 @@ interface StentModule {
 }
 
 async function loadStentModule(specifier: string): Promise<StentModule> {
-  const module = await import(specifier) as unknown as StentModule
+  const module = (await import(specifier)) as unknown as StentModule
   return module
 }
 
@@ -62,5 +63,7 @@ if (configPath !== undefined && configPath !== '') {
   // The launch marker: only a Stent launcher reaches this line, so the
   // boot output always tells the user whether this is a Stent-enabled launch
   // or a plain host one.
-  process.stderr.write(`stent: Stent hooks installed (${descriptors.length} descriptor(s)) — this launch is stent-enabled\n`)
+  process.stderr.write(
+    `stent: Stent hooks installed (${descriptors.length} descriptor(s)) — this launch is stent-enabled\n`,
+  )
 }

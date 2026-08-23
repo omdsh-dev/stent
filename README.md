@@ -99,13 +99,13 @@ dsh plugin --profile web add @oh-my-dsh/stent-pack
 At installation, pnpm resolves those npm semver dependencies. At launch, `stent-dsh` asks DSH's module-fallback healer to map the bundle's dependency closure into `$DSH_HOME/profiles/node_modules`, so the Profile and the preload resolve the same trio copies.
 
 - Host source installs declare the bundle in `apps/cli/package.json`; run the
-  harness workspace's `pnpm install` and `pnpm run build`, then install the
+  harness workspace's `pnpm install` and `pnpm run pack:build`, then install the
   published npm bundle through the plugin channel (joining `@oh-my-dsh/stent-pack` to
   `dsh.profile.bundles`) and enable the `stent-dsh` row. Launches go
   through the compiled `lib/stent-dsh.js`.
-- Consumer-side builds use the explicit root `build` script. The trio and the
-  launcher are built with tsdown before packing; no install-time prepare build
-  is required.
+- Consumer-side builds use the explicit root `pack:build` script. The trio and the
+  launcher are built with their package-owned tsdown commands before packing; no
+  install-time prepare build is required.
 
 ### 3.1 pnpm 11 supply-chain seams
 
@@ -212,9 +212,11 @@ has registry `lib` artifacts, which drove the evolution below.
 
 ## 7. Linting
 
-Oxlint runs from the standalone root with the pinned DSH toolchain (`oxlint` plus `oxlint-tsgolint`), enables the selected type-aware TypeScript rules, and treats warnings as failures. Generated `lib/` output, JavaScript fixture launchers, and build configs stay outside this TypeScript lint face.
+Each package runs Oxlint from its own package root with the pinned DSH toolchain (`oxlint` plus `oxlint-tsgolint`) and selected type-aware TypeScript rules; the root and package configs share a checked-in baseline. Warnings are failures. Generated `lib/` output, JavaScript fixture launchers, and build configs stay outside this TypeScript lint face.
 
-The carrier root's `pnpm run lint` is scoped to its own `src/` launcher and runs Oxlint-tsgolint's experimental `--type-check` diagnostics. Each implementation package exposes one source-scoped `lint` command for its own source; tests remain covered by `pnpm test`, and there is no separate `typecheck` or `lint:fix` command.
+Oxfmt is the workspace formatter, with the shared policy in `.oxfmtrc.json`: two-space indentation, single quotes, no semicolons, trailing commas, and a 120-column print width. Each package owns its `fmt` and `fmt:check` commands; the carrier root's `pack:fmt:check` orchestrates the check across the root and all implementation packages. Generated `lib/` output, fixture trees, JavaScript launcher fixtures, and build configs remain outside the formatting face.
+
+The carrier root owns only the launcher under `src/` and its root integration tests under `tests/`. Its `lint`, `lint:fix`, `test`, `build`, and `knip` commands never scan implementation package files; it has no `pack:lint:fix` command. Each implementation package declares its own toolchain and exposes independent `lint`, `lint:fix`, `test`, `build`, and `knip` commands scoped to that package; type checking is provided by each package's type-aware lint command rather than a separate `typecheck` script. The `pack:*` scripts at the carrier root are orchestration only: they keep the root-package checks separate from the package-owned commands and invoke the latter with `pnpm --filter`.
 
 ## 8. Timeline (abridged)
 

@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "arrowParens": "avoid",
+  "bracketSpacing": true,
+  "endOfLine": "lf",
+  "ignorePatterns": [
+    "**/lib/**",
+    "**/node_modules/**",
+    "**/.sessions/**",
+    "**/.doc-typecheck-*/**",
+    "**/.node-next-types-*/**",
+    "**/.oxlint-contract-*/**",
+    "**/oxlint-contract-*",
+    "**/tests/fixtures/**",
+    "**/packages/*/tests/fixtures/**",
+    "**/*.js",
+    "**/*.mjs",
+    "**/*.config.ts"
+  ],
+  "insertFinalNewline": true,
+  "printWidth": 120,
+  "proseWrap": "preserve",
+  "semi": false,
+  "singleQuote": true,
+  "sortImports": false,
+  "sortPackageJson": false,
+  "tabWidth": 2,
+  "trailingComma": "all",
+  "useTabs": false
+}

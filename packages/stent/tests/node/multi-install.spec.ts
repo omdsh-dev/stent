@@ -17,7 +17,7 @@ function runScenario(name: string): string {
 }
 
 describe('stent concurrent installations (child processes)', () => {
-  it('transforms through each installation\'s own matcher', () => {
+  it("transforms through each installation's own matcher", () => {
     const out = runScenario('concurrent')
     expect(out).toContain('PASS concurrent add(2,3): 23')
     expect(out).toContain('PASS concurrent greet(world): "hello WORLD"')

@@ -100,7 +100,9 @@ function resolveInstalledCli({ cwd = process.cwd(), env = process.env }: Resolve
   if (explicit !== undefined) {
     const cli = normalizeCli(chaseShim(resolve(explicit)))
     if (cli !== undefined) return cli
-    console.error(`stent-dsh: DSH_CLI=${explicit} does not lead to an @deepseek-ai/dsh package (expected .../@deepseek-ai/dsh/lib/bin.js)`)
+    console.error(
+      `stent-dsh: DSH_CLI=${explicit} does not lead to an @deepseek-ai/dsh package (expected .../@deepseek-ai/dsh/lib/bin.js)`,
+    )
     process.exit(1)
   }
   try {
@@ -120,18 +122,21 @@ function resolveInstalledCli({ cwd = process.cwd(), env = process.env }: Resolve
     }
   }
   console.error('stent-dsh: no --source given and no installed @deepseek-ai/dsh found')
-  console.error('  run from a project with @deepseek-ai/dsh installed, put dsh on PATH, or set DSH_CLI to its package bin')
+  console.error(
+    '  run from a project with @deepseek-ai/dsh installed, put dsh on PATH, or set DSH_CLI to its package bin',
+  )
   console.error('  (to run a source checkout instead, pass --source <deepseek-harness-checkout>)')
   process.exit(1)
 }
 
 /** Resolve either the source checkout entry or the published CLI entry. */
-export function resolveHost(args: LauncherArgs, { cwd = process.cwd(), env = process.env }: ResolveOptions = {}): ResolvedHost {
+export function resolveHost(
+  args: LauncherArgs,
+  { cwd = process.cwd(), env = process.env }: ResolveOptions = {},
+): ResolvedHost {
   const sourceRoot = args.source === undefined ? undefined : resolve(args.source)
   const source = sourceRoot !== undefined
-  const bin = sourceRoot === undefined
-    ? resolveInstalledCli({ cwd, env })
-    : join(sourceRoot, 'apps/cli/src/bin.ts')
+  const bin = sourceRoot === undefined ? resolveInstalledCli({ cwd, env }) : join(sourceRoot, 'apps/cli/src/bin.ts')
   if (sourceRoot !== undefined && !existsSync(bin)) {
     console.error(`stent-dsh: no CLI entry at ${bin} (source: ${args.source})`)
     process.exit(1)

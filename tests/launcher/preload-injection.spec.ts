@@ -13,7 +13,7 @@ import { afterAll, describe, expect, it } from 'vitest'
  * hooks before the entry module imports its targets — the same guarantee the
  * removed host patch (profile-boot installStentBootstrap) used to provide.
  */
-const preload = fileURLToPath(new URL('../../../../src/stent-dsh-preload.ts', import.meta.url))
+const preload = fileURLToPath(new URL('../../src/stent-dsh-preload.ts', import.meta.url))
 const entry = fileURLToPath(new URL('../fixtures/preload-entry.mjs', import.meta.url))
 
 const patch = {
@@ -46,7 +46,7 @@ function run(configEnv: string | undefined, profileEnv?: string): { stdout: stri
   if (profileEnv === undefined) delete childEnv.STENT_PROFILE
   else childEnv.STENT_PROFILE = profileEnv
   const result = spawnSync(process.execPath, ['--import', 'tsx/esm', '--import', preload, entry], {
-    cwd: fileURLToPath(new URL('../../..', import.meta.url)),
+    cwd: fileURLToPath(new URL('../..', import.meta.url)),
     encoding: 'utf8',
     env: childEnv,
   })
@@ -82,21 +82,30 @@ describe('stent preload injection (Stent launcher shape)', () => {
     const stubDir = join(profileDir, 'node_modules', '@oh-my-dsh', 'stent')
     mkdirSync(stubDir, { recursive: true })
     writeFileSync(join(profileDir, 'package.json'), '{}\n')
-    writeFileSync(join(stubDir, 'package.json'), JSON.stringify({
-      name: '@oh-my-dsh/stent', version: '1.0.0', type: 'module', exports: { '.': './index.js' },
-    }))
-    writeFileSync(join(stubDir, 'index.js'), [
-      'export function markStentDshLaunch() {',
-      '  globalThis[Symbol.for(\'oh-my-dsh.stent-dsh.launch\')] = true',
-      '}',
-      'export function isStentDshLaunch() {',
-      '  return globalThis[Symbol.for(\'oh-my-dsh.stent-dsh.launch\')] === true',
-      '}',
-      'export function bootstrapStent(descriptors) {',
-      '  globalThis.__stentProfileMarker = { count: descriptors.length }',
-      '}',
-      '',
-    ].join('\n'))
+    writeFileSync(
+      join(stubDir, 'package.json'),
+      JSON.stringify({
+        name: '@oh-my-dsh/stent',
+        version: '1.0.0',
+        type: 'module',
+        exports: { '.': './index.js' },
+      }),
+    )
+    writeFileSync(
+      join(stubDir, 'index.js'),
+      [
+        'export function markStentDshLaunch() {',
+        "  globalThis[Symbol.for('oh-my-dsh.stent-dsh.launch')] = true",
+        '}',
+        'export function isStentDshLaunch() {',
+        "  return globalThis[Symbol.for('oh-my-dsh.stent-dsh.launch')] === true",
+        '}',
+        'export function bootstrapStent(descriptors) {',
+        '  globalThis.__stentProfileMarker = { count: descriptors.length }',
+        '}',
+        '',
+      ].join('\n'),
+    )
     const out = run(configPath, profileDir)
     expect(out.stdout).toContain('PROFILE-MARKER count=1')
   })

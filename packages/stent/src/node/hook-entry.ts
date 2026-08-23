@@ -80,11 +80,9 @@ function readTransforms(): TransformFn[] {
   }
   const transforms = parsed
     .filter(entry => entry.active === true)
-    .map((entry) => {
+    .map(entry => {
       const instrumentations = (entry.instrumentations ?? []).map(reviveInstrumentation)
-      return instrumentations.length === 0
-        ? undefined
-        : createBrowserTransform(instrumentations, nodePackageResolver())
+      return instrumentations.length === 0 ? undefined : createBrowserTransform(instrumentations, nodePackageResolver())
     })
     .filter((transform): transform is TransformFn => transform !== undefined)
   cached = { config: raw, transforms }
@@ -102,16 +100,21 @@ function readTransforms(): TransformFn[] {
 export async function load(
   url: string,
   context: { format?: string | null },
-  nextLoad: (url: string, context: unknown) =>
-  Promise<{ source?: string | ArrayBuffer | null; format?: string | null; shortCircuit?: boolean }>,
+  nextLoad: (
+    url: string,
+    context: unknown,
+  ) => Promise<{ source?: string | ArrayBuffer | null; format?: string | null; shortCircuit?: boolean }>,
 ): Promise<{ source?: string | ArrayBuffer | null; format?: string | null; shortCircuit?: boolean }> {
   const result = await nextLoad(url, context)
   if (result.format === 'commonjs') return result
   const transforms = readTransforms()
   if (transforms.length === 0) return result
-  let source = typeof result.source === 'string'
-    ? result.source
-    : result.source == null ? '' : Buffer.from(result.source).toString('utf8')
+  let source =
+    typeof result.source === 'string'
+      ? result.source
+      : result.source == null
+        ? ''
+        : Buffer.from(result.source).toString('utf8')
   let transformed = false
   const reports: StentBindingReport[] = []
   for (const transform of transforms) {

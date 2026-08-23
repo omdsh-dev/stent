@@ -24,11 +24,13 @@ describe('runPatchFixture', () => {
   it('bootstraps patches, runs the entry, and reports bindings', () => {
     const outcome = runPatchFixture({
       cwd: repoRoot,
-      patches: [{
-        id: 'testkit/after-add',
-        target: { ...target, functionQuery: { functionName: 'add', kind: 'Sync' } },
-        operation: 'after',
-      }],
+      patches: [
+        {
+          id: 'testkit/after-add',
+          target: { ...target, functionQuery: { functionName: 'add', kind: 'Sync' } },
+          operation: 'after',
+        },
+      ],
       entry,
       args: { a: 2, b: 3 },
     })
@@ -45,11 +47,13 @@ describe('runPatchFixture', () => {
   it('reports a thrown error with its message preserved', () => {
     const outcome = runPatchFixture({
       cwd: repoRoot,
-      patches: [{
-        id: 'testkit/after-add',
-        target: { ...target, functionQuery: { functionName: 'add', kind: 'Sync' } },
-        operation: 'after',
-      }],
+      patches: [
+        {
+          id: 'testkit/after-add',
+          target: { ...target, functionQuery: { functionName: 'add', kind: 'Sync' } },
+          operation: 'after',
+        },
+      ],
       entry,
       args: { throw: 'command aborted\ncompleted step: 1/5\n' },
     })
@@ -63,11 +67,13 @@ describe('runPatchFixture', () => {
   it('reports an unbound patch as an empty binding list', () => {
     const outcome = runPatchFixture({
       cwd: repoRoot,
-      patches: [{
-        id: 'testkit/no-match',
-        target: { ...target, filePath: 'nope.mjs', functionQuery: { functionName: 'add', kind: 'Sync' } },
-        operation: 'before',
-      }],
+      patches: [
+        {
+          id: 'testkit/no-match',
+          target: { ...target, filePath: 'nope.mjs', functionQuery: { functionName: 'add', kind: 'Sync' } },
+          operation: 'before',
+        },
+      ],
       entry,
       args: { a: 1, b: 1 },
     })
@@ -76,14 +82,18 @@ describe('runPatchFixture', () => {
   })
 
   it('throws with the child stderr when the child cannot boot', () => {
-    expect(() => runPatchFixture({
-      cwd: repoRoot,
-      patches: [{
-        id: 'testkit/bad',
-        target: { module: '', versionRange: '*', filePath: 'x.js' },
-        operation: 'before',
-      }],
-      entry,
-    })).toThrow(/child exited/)
+    expect(() =>
+      runPatchFixture({
+        cwd: repoRoot,
+        patches: [
+          {
+            id: 'testkit/bad',
+            target: { module: '', versionRange: '*', filePath: 'x.js' },
+            operation: 'before',
+          },
+        ],
+        entry,
+      }),
+    ).toThrow(/child exited/)
   })
 })

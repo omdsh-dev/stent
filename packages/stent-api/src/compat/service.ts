@@ -18,15 +18,20 @@ import { Service } from '@deepseek-ai/cordis'
 import type { Context, Fiber } from '@deepseek-ai/cordis'
 import { getStent, isStentInstalled, serveBrowserTransform } from '@oh-my-dsh/stent'
 import type { StentService } from '@oh-my-dsh/stent'
-import type {
-  StentCall, StentHandler, StentPatch, PatchId, ServeBrowserTransformOptions,
-} from '@oh-my-dsh/stent'
+import type { StentCall, StentHandler, StentPatch, PatchId, ServeBrowserTransformOptions } from '@oh-my-dsh/stent'
 import type { StentCompatConfig, StentCompatTarget } from './types.ts'
 
 export type { StentCompatConfig, StentCompatPatch, StentCompatTarget } from './types.ts'
 
 export type {
-  StentCall, StentHandler, StentInvoke, StentOperation, StentPatch, StentTarget, PatchId, ServeBrowserTransformOptions,
+  StentCall,
+  StentHandler,
+  StentInvoke,
+  StentOperation,
+  StentPatch,
+  StentTarget,
+  PatchId,
+  ServeBrowserTransformOptions,
 } from '@oh-my-dsh/stent'
 
 declare module '@deepseek-ai/cordis' {
@@ -98,7 +103,9 @@ export class StentCompatService extends Service {
    */
   registerPatch(patch: StentPatch): PatchId {
     if (this.registered.has(patch.id) || this.targetIds.has(patch.id)) {
-      throw new Error(`stent-compat: patch id "${patch.id}" is already claimed (registerPatch or a declared observation target)`)
+      throw new Error(
+        `stent-compat: patch id "${patch.id}" is already claimed (registerPatch or a declared observation target)`,
+      )
     }
     // No bridge check here: binding a handler is harmless when the
     // transforms are absent (the low-level registry has the same posture) —
@@ -169,10 +176,14 @@ export class StentCompatService extends Service {
   observe(name: string, listener: (call: StentCall) => void): () => void {
     const target = this.targets.get(name)
     if (target === undefined) {
-      throw new Error(`stent-compat: unknown target "${name}" (declared targets: ${[...this.targets.keys()].join(', ') || 'none'})`)
+      throw new Error(
+        `stent-compat: unknown target "${name}" (declared targets: ${[...this.targets.keys()].join(', ') || 'none'})`,
+      )
     }
     if (!isStentInstalled()) {
-      throw new Error('stent-compat: the Stent bridge is not installed; install the compat instrumentations (buildCompatInstrumentations) before loading the target module')
+      throw new Error(
+        'stent-compat: the Stent bridge is not installed; install the compat instrumentations (buildCompatInstrumentations) before loading the target module',
+      )
     }
     const listeners = this.observers.get(name) ?? new Set<(call: StentCall) => void>()
     if (listeners.size === 0) {

@@ -12,5 +12,6 @@ export function buildCompatInstrumentations(config: StentCompatConfig): StentIns
       id: target.patch.id,
       target: target.patch.target,
       operation: target.patch.operation,
-    }))
+    }),
+  )
 }

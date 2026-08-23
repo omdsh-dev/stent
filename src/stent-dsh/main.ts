@@ -105,7 +105,11 @@ export function main({
     ],
     // Source mode runs from the source checkout: tsx resolves its tsconfig
     // there. Installed mode needs no pinned cwd: the published bin is plain ESM.
-    { stdio: 'inherit', ...(host.source ? { cwd: host.sourceRoot } : {}), env: { ...env, STENT_CONFIG: config.configPath, STENT_PROFILE: profile.profileDir, DSH_HOME: profile.dshHome } },
+    {
+      stdio: 'inherit',
+      ...(host.source ? { cwd: host.sourceRoot } : {}),
+      env: { ...env, STENT_CONFIG: config.configPath, STENT_PROFILE: profile.profileDir, DSH_HOME: profile.dshHome },
+    },
   )
   config.cleanup()
   if (result.error !== undefined) throw result.error

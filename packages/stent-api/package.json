@@ -36,21 +36,32 @@
     "url": "https://github.com/omdsh-dev/stent.git"
   },
   "scripts": {
-    "build": "tsdown --config-loader unrun --config tsdown.config.ts",
-    "lint": "oxlint --config ../../.oxlintrc.json --type-check --deny-warnings src"
+    "build": "pnpm --filter @oh-my-dsh/stent run build && tsdown --config-loader unrun --config tsdown.config.ts",
+    "fmt": "oxfmt --config ../../.oxfmtrc.json --write src tests",
+    "fmt:check": "oxfmt --config ../../.oxfmtrc.json --check src tests",
+    "lint": "oxlint --config .oxlintrc.json --type-check --deny-warnings src tests",
+    "lint:fix": "oxlint --config .oxlintrc.json --type-check --deny-warnings --fix src tests",
+    "knip": "knip --config knip.json --treat-config-hints-as-errors",
+    "test": "pnpm run build && vitest run --config vitest.config.ts"
   },
   "peerDependencies": {
     "@oh-my-dsh/stent": "^0.1.0",
     "@deepseek-ai/cordis": "^4.0.1-0"
   },
   "devDependencies": {
-    "@types/node": "^22.20.0",
+    "@deepseek-ai/cordis": "^4.0.1-0",
     "@oh-my-dsh/stent": "workspace:^",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "@types/node": "^22.20.0",
+    "eslint-plugin-sonarjs": "^4.1.0",
+    "knip": "^6.16.1",
+    "oxfmt": "0.64.0",
+    "oxlint": "1.76.0",
+    "oxlint-tsgolint": "7.0.2001",
     "tsdown": "^0.22.2",
     "tsx": "^4.23.11",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8",
-    "@deepseek-ai/cordis": "^4.0.1-0"
+    "vitest": "^4.1.8"
   },
   "publishConfig": {
     "access": "public"

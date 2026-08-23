@@ -24,12 +24,19 @@
     "README.md"
   ],
   "scripts": {
-    "build": "pnpm --filter @oh-my-dsh/stent run build && pnpm --filter @oh-my-dsh/stent-api run build && pnpm --filter @oh-my-dsh/stent-dsh run build && pnpm exec tsdown --config-loader unrun --config tsdown.config.ts",
-    "lint": "oxlint --config .oxlintrc.json --type-check --deny-warnings .",
-    "lint:fix": "oxlint --config .oxlintrc.json --type-check --deny-warnings --fix .",
-    "knip": "knip --treat-config-hints-as-errors",
-    "typecheck": "tsc -p tsconfig.vitest.json --noEmit",
-    "test": "vitest run"
+    "build": "tsdown --config-loader unrun --config tsdown.config.ts",
+    "fmt": "oxfmt --config .oxfmtrc.json --write src tests",
+    "fmt:check": "oxfmt --config .oxfmtrc.json --check src tests",
+    "lint": "oxlint --config .oxlintrc.json --type-check --deny-warnings src tests",
+    "lint:fix": "oxlint --config .oxlintrc.json --type-check --deny-warnings --fix src tests",
+    "knip": "knip --config knip.json --treat-config-hints-as-errors",
+    "test": "pnpm run build && vitest run --config vitest.config.ts",
+
+    "pack:build": "pnpm --filter @oh-my-dsh/stent run build && pnpm --filter @oh-my-dsh/stent-api run build && pnpm --filter @oh-my-dsh/stent-dsh run build && pnpm run build",
+    "pack:fmt:check": "pnpm run fmt:check && pnpm --filter @oh-my-dsh/stent run fmt:check && pnpm --filter @oh-my-dsh/stent-api run fmt:check && pnpm --filter @oh-my-dsh/stent-dsh run fmt:check",
+    "pack:lint": "pnpm run lint && pnpm --filter @oh-my-dsh/stent run lint && pnpm --filter @oh-my-dsh/stent-api run lint && pnpm --filter @oh-my-dsh/stent-dsh run lint",
+    "pack:knip": "pnpm run knip && pnpm --filter @oh-my-dsh/stent run knip && pnpm --filter @oh-my-dsh/stent-api run knip && pnpm --filter @oh-my-dsh/stent-dsh run knip",
+    "pack:test": "pnpm run test && pnpm --filter @oh-my-dsh/stent run test && pnpm --filter @oh-my-dsh/stent-api run test && pnpm --filter @oh-my-dsh/stent-dsh run test"
   },
   "dsh": {
     "bundle": {
@@ -43,17 +50,17 @@
   },
   "devDependencies": {
     "@stylistic/eslint-plugin": "^5.10.0",
+    "@tsconfig/node24": "^24.0.5",
     "@types/node": "^22.20.0",
     "eslint-plugin-sonarjs": "^4.1.0",
-    "happy-dom": "^20.0.0",
     "knip": "^6.16.1",
+    "oxfmt": "0.64.0",
     "oxlint": "1.76.0",
     "oxlint-tsgolint": "7.0.2001",
     "tsdown": "^0.22.2",
     "tsx": "^4.23.11",
     "typescript": "^6.0.3",
     "unrun": "^0.3.1",
-    "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^4.1.8"
   },
   "bin": {

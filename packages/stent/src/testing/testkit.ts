@@ -62,12 +62,14 @@ export interface PatchFixtureResult {
  * @throws when the child process fails or answers no parseable envelope.
  */
 export function runPatchFixture(options: RunPatchFixtureOptions): PatchFixtureResult {
-  const runner = fileURLToPath(new URL(
-    existsSync(fileURLToPath(new URL('./testkit-runner.js', import.meta.url)))
-      ? './testkit-runner.js'
-      : './testkit-runner.ts',
-    import.meta.url,
-  ))
+  const runner = fileURLToPath(
+    new URL(
+      existsSync(fileURLToPath(new URL('./testkit-runner.js', import.meta.url)))
+        ? './testkit-runner.js'
+        : './testkit-runner.ts',
+      import.meta.url,
+    ),
+  )
   const result = spawnSync(process.execPath, ['--import', 'tsx/esm', runner], {
     input: JSON.stringify({ patches: options.patches, entry: options.entry, args: options.args }),
     cwd: options.cwd,
@@ -79,11 +81,17 @@ export function runPatchFixture(options: RunPatchFixtureOptions): PatchFixtureRe
       `stent testkit: child exited ${result.status ?? 'non-zero'} (${result.signal ?? 'no signal'})\n${result.stderr}`,
     )
   }
-  let envelope: { bindings?: Record<string, StentBinding[]>; result?: unknown; error?: { name: string; message: string } }
+  let envelope: {
+    bindings?: Record<string, StentBinding[]>
+    result?: unknown
+    error?: { name: string; message: string }
+  }
   try {
     envelope = JSON.parse(result.stdout) as typeof envelope
   } catch {
-    throw new Error(`stent testkit: child answered no parseable envelope\nstdout: ${result.stdout}\nstderr: ${result.stderr}`)
+    throw new Error(
+      `stent testkit: child answered no parseable envelope\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    )
   }
   return {
     bindings: envelope.bindings ?? {},

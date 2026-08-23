@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { serveBrowserTransform, type ServeBrowserTransformOptions } from '@oh-my-dsh/stent'
+import { serveBrowserTransform, type ServeBrowserTransformOptions } from '../../src/index.ts'
 
 type TestRoute = {
   kind: 'exact' | 'prefix'
@@ -72,7 +72,7 @@ async function createTestWebServer(): Promise<TestWebServer> {
   const address = httpServer.address()
   if (address === null || typeof address === 'string') throw new Error('test webserver did not expose a TCP address')
   return {
-    port: (address).port,
+    port: address.port,
     register(route) {
       const routes = route.kind === 'exact' ? exact : prefixes
       if (routes.has(route.path)) throw new Error(`test webserver: duplicate ${route.kind} route "${route.path}"`)
@@ -81,12 +81,13 @@ async function createTestWebServer(): Promise<TestWebServer> {
         if (routes.get(route.path) === route) routes.delete(route.path)
       }
     },
-    close: () => new Promise<void>((resolve, reject) => {
-      httpServer.close((error) => {
-        if (error === undefined) resolve()
-        else reject(error)
-      })
-    }),
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        httpServer.close(error => {
+          if (error === undefined) resolve()
+          else reject(error)
+        })
+      }),
   }
 }
 
@@ -129,7 +130,8 @@ const neutralizer = {
     module: '@oh-my-dsh/stent',
     versionRange: '>=0.0.1-0',
     filePath: 'tests/fixtures/serve-target/browser.js',
-    astQuery: 'VariableDeclarator[id.name="bashToolviewSample"] > ObjectExpression > Property[key.name="apply"] > FunctionExpression',
+    astQuery:
+      'VariableDeclarator[id.name="bashToolviewSample"] > ObjectExpression > Property[key.name="apply"] > FunctionExpression',
   },
   operation: 'around',
 } as const
@@ -153,7 +155,8 @@ const planNeutralizer = {
     module: '@oh-my-dsh/stent',
     versionRange: '>=0.0.1-0',
     filePath: 'tests/fixtures/serve-target/browser.js',
-    astQuery: 'VariableDeclarator[id.name="planToolviewSample"] > ObjectExpression > Property[key.name="apply"] > FunctionExpression',
+    astQuery:
+      'VariableDeclarator[id.name="planToolviewSample"] > ObjectExpression > Property[key.name="apply"] > FunctionExpression',
   },
   operation: 'around',
 } as const
@@ -163,8 +166,9 @@ describe('serveBrowserTransform', () => {
     const ctx = new Context()
     contexts.push(ctx)
     await provideTestWebServer(ctx)
-    expect(() => { serveBrowserTransform(ctx, { route: ROUTE, patch: neutralizer }) })
-      .toThrow(/requires ctx\.baseUrl/)
+    expect(() => {
+      serveBrowserTransform(ctx, { route: ROUTE, patch: neutralizer })
+    }).toThrow(/requires ctx\.baseUrl/)
   })
 
   it('resolves a target package from the composition dependency tree', async () => {
@@ -172,11 +176,14 @@ describe('serveBrowserTransform', () => {
     worlds.push(world)
     const packageDir = join(world, 'node_modules', '@fixture', 'browser-target')
     await mkdir(packageDir, { recursive: true })
-    await writeFile(join(packageDir, 'package.json'), JSON.stringify({
-      name: '@fixture/browser-target',
-      version: '1.0.0',
-      type: 'module',
-    }))
+    await writeFile(
+      join(packageDir, 'package.json'),
+      JSON.stringify({
+        name: '@fixture/browser-target',
+        version: '1.0.0',
+        type: 'module',
+      }),
+    )
     await writeFile(
       join(packageDir, 'browser.js'),
       'const fixtureSample = { apply: function () { return "raw" } };\nexport { fixtureSample };\n',
@@ -189,7 +196,8 @@ describe('serveBrowserTransform', () => {
         module: '@fixture/browser-target',
         versionRange: '>=0.0.1-0',
         filePath: 'browser.js',
-        astQuery: 'VariableDeclarator[id.name="fixtureSample"] > ObjectExpression > Property[key.name="apply"] > FunctionExpression',
+        astQuery:
+          'VariableDeclarator[id.name="fixtureSample"] > ObjectExpression > Property[key.name="apply"] > FunctionExpression',
       },
       operation: 'around',
     } as const
@@ -228,10 +236,14 @@ describe('serveBrowserTransform', () => {
   it('the exact route outranks a later prefix route on the same path space', async () => {
     const { server, port } = await boot({ route: ROUTE, patch: neutralizer })
     // A prefix route registered AFTER the exact one (the module host's shape).
-    server.register({ kind: 'prefix', path: '/plugins', handler: async (_req, res) => {
-      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' })
-      res.end('prefix-owner')
-    } })
+    server.register({
+      kind: 'prefix',
+      path: '/plugins',
+      handler: async (_req, res) => {
+        res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' })
+        res.end('prefix-owner')
+      },
+    })
     const exact = await fetch(`http://127.0.0.1:${port}${ROUTE}`)
     expect(await exact.text()).toContain('__stentBridge')
     const other = await fetch(`http://127.0.0.1:${port}/plugins/@example/client-connection/client.js`)
@@ -307,7 +319,14 @@ describe('serveBrowserTransform', () => {
     expect(() => {
       serveBrowserTransform(ctx, {
         route: ROUTE,
-        patch: [neutralizer, { ...neutralizer, id: 'serve-test/other-file', target: { ...neutralizer.target, filePath: 'tests/fixtures/serve-target/nope.js' } }],
+        patch: [
+          neutralizer,
+          {
+            ...neutralizer,
+            id: 'serve-test/other-file',
+            target: { ...neutralizer.target, filePath: 'tests/fixtures/serve-target/nope.js' },
+          },
+        ],
       })
     }).toThrow(/must all target the same file/)
   })
@@ -319,7 +338,7 @@ describe('serveBrowserTransform', () => {
     const server = await provideTestWebServer(ctx)
     // The route owner lives on its own plugin fiber, so disposing it removes
     // the route while the webserver keeps serving.
-    const routeFiber = await ctx.plugin((c) => {
+    const routeFiber = await ctx.plugin(c => {
       serveBrowserTransform(c, { route: ROUTE, patch: neutralizer })
     })
     const port = server.port

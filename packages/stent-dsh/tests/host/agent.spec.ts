@@ -18,7 +18,9 @@ describe('StentAgentService', () => {
   it('forwards lifecycle events and removes a listener on its disposer', async () => {
     const { ctx } = await setup()
     const seen: AgentStatus[] = []
-    const dispose = ctx.stentAgent.onStatus((_agent, status) => { seen.push(status) })
+    const dispose = ctx.stentAgent.onStatus((_agent, status) => {
+      seen.push(status)
+    })
     ctx.emit('agent/status', { agent: fakeAgent(), status: 'running' })
     expect(seen).toEqual(['running'])
     dispose()
@@ -30,8 +32,12 @@ describe('StentAgentService', () => {
     const { ctx } = await setup()
     const created: Agent[] = []
     const disposed: Agent[] = []
-    ctx.stentAgent.onCreated((agent) => { created.push(agent) })
-    ctx.stentAgent.onDisposed((agent) => { disposed.push(agent) })
+    ctx.stentAgent.onCreated(agent => {
+      created.push(agent)
+    })
+    ctx.stentAgent.onDisposed(agent => {
+      disposed.push(agent)
+    })
     const agent = fakeAgent()
     ctx.emit('agent/created', { agent })
     ctx.emit('agent/disposed', { agent })
@@ -47,7 +53,9 @@ describe('StentAgentService', () => {
       name: 'mod-observer',
       inject: ['stentAgent'],
       apply(modCtx: Context) {
-        modCtx.stentAgent.onStatus((_agent, status) => { seen.push(status) })
+        modCtx.stentAgent.onStatus((_agent, status) => {
+          seen.push(status)
+        })
       },
     })
     ctx.emit('agent/status', { agent: fakeAgent(), status: 'running' })
@@ -56,7 +64,7 @@ describe('StentAgentService', () => {
     expect(seen).toEqual(['running'])
   })
 
-  it('injects through the agent\'s own logged path', async () => {
+  it("injects through the agent's own logged path", async () => {
     const { ctx } = await setup()
     const inject = vi.fn()
     const agent = fakeAgent(inject)

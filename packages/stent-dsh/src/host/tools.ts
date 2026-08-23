@@ -65,7 +65,9 @@ export class StentToolsService extends Service {
    * @param listener - the waterfall listener; call `next()` to delegate, return without it to veto.
    * @returns the exact `ctx.on()` disposer removing this listener.
    */
-  onPreExecute(listener: (exec: ToolExecution, next: () => Promise<PreToolDecision>) => Promise<PreToolDecision>): () => boolean {
+  onPreExecute(
+    listener: (exec: ToolExecution, next: () => Promise<PreToolDecision>) => Promise<PreToolDecision>,
+  ): () => boolean {
     return this.ctx.on('tools/pre-execute', listener)
   }
 

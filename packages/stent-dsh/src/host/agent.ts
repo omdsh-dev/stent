@@ -49,7 +49,9 @@ export class StentAgentService extends Service {
    * @returns the exact `ctx.on()` disposer removing this listener.
    */
   onCreated(listener: (agent: Agent) => void): () => boolean {
-    return this.ctx.on('agent/created', (payload) => { listener(payload.agent) })
+    return this.ctx.on('agent/created', payload => {
+      listener(payload.agent)
+    })
   }
 
   /**
@@ -58,7 +60,9 @@ export class StentAgentService extends Service {
    * @returns the exact `ctx.on()` disposer removing this listener.
    */
   onDisposed(listener: (agent: Agent) => void): () => boolean {
-    return this.ctx.on('agent/disposed', (payload) => { listener(payload.agent) })
+    return this.ctx.on('agent/disposed', payload => {
+      listener(payload.agent)
+    })
   }
 
   /**
@@ -67,7 +71,9 @@ export class StentAgentService extends Service {
    * @returns the exact `ctx.on()` disposer removing this listener.
    */
   onStatus(listener: (agent: Agent, status: AgentStatus) => void): () => boolean {
-    return this.ctx.on('agent/status', (payload) => { listener(payload.agent, payload.status) })
+    return this.ctx.on('agent/status', payload => {
+      listener(payload.agent, payload.status)
+    })
   }
 
   /**

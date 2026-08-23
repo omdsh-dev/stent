@@ -17,7 +17,15 @@
  */
 
 import { subscribeBridge, type StentBridgeCall } from './bridge.ts'
-import type { StentBinding, StentCall, StentHandler, StentOperation, StentPatchInfo, StentTarget, PatchId } from './types.ts'
+import type {
+  StentBinding,
+  StentCall,
+  StentHandler,
+  StentOperation,
+  StentPatchInfo,
+  StentTarget,
+  PatchId,
+} from './types.ts'
 
 /** Runtime state of one registered patch. */
 interface PatchEntry {
@@ -61,7 +69,11 @@ export function validatePatchId(id: PatchId): void {
  * @param patch - the descriptor's static part.
  * @throws when a target field or the operation is malformed.
  */
-export function validatePatchStatic(patch: { target: StentTarget; operation: StentOperation; required?: boolean }): void {
+export function validatePatchStatic(patch: {
+  target: StentTarget
+  operation: StentOperation
+  required?: boolean
+}): void {
   const target = patch.target
   if (typeof target.module !== 'string' || target.module.length === 0) {
     throw new Error('stent: patch target.module must be a non-empty string')
@@ -76,9 +88,12 @@ export function validatePatchStatic(patch: { target: StentTarget; operation: Ste
   if (hasFilePath && target.filePaths !== undefined) {
     throw new Error('stent: patch target must carry filePath or filePaths, not both')
   }
-  if (target.filePaths !== undefined
-    && (!Array.isArray(target.filePaths) || target.filePaths.length === 0
-      || target.filePaths.some(path => typeof path !== 'string' || path.length === 0))) {
+  if (
+    target.filePaths !== undefined &&
+    (!Array.isArray(target.filePaths) ||
+      target.filePaths.length === 0 ||
+      target.filePaths.some(path => typeof path !== 'string' || path.length === 0))
+  ) {
     throw new Error('stent: patch target.filePaths must be a non-empty array of non-empty strings')
   }
   if (patch.required !== undefined && typeof patch.required !== 'boolean') {
@@ -102,8 +117,7 @@ function isValidIndex(index: number | null | undefined): boolean {
 
 /** Whether a value is a thenable (the async-target result shape). */
 function isThenable(value: unknown): value is PromiseLike<unknown> {
-  return typeof value === 'object' && value !== null && 'then' in value
-    && typeof value.then === 'function'
+  return typeof value === 'object' && value !== null && 'then' in value && typeof value.then === 'function'
 }
 
 /**
@@ -135,8 +149,8 @@ class StentRuntime {
     const previous = this.entries.get(info.id)
     if (previous && previous.owner !== owner) {
       throw new Error(
-        `stent: patch ${JSON.stringify(info.id)} is already registered by another owner; `
-        + 'a patch id is exclusive to one plugin (HMR re-registration reuses the same owner)',
+        `stent: patch ${JSON.stringify(info.id)} is already registered by another owner; ` +
+          'a patch id is exclusive to one plugin (HMR re-registration reuses the same owner)',
       )
     }
     if (info.operation === 'replace') {
@@ -152,8 +166,8 @@ class StentRuntime {
           if (id === info.id) continue
           if (existing.info.operation === 'replace' && targetKey(existing.info.target) === key) {
             throw new Error(
-              `stent: replace patch ${JSON.stringify(info.id)} conflicts with existing `
-              + `replace patch ${JSON.stringify(existing.info.id)} on the same target`,
+              `stent: replace patch ${JSON.stringify(info.id)} conflicts with existing ` +
+                `replace patch ${JSON.stringify(existing.info.id)} on the same target`,
             )
           }
         }
@@ -269,7 +283,7 @@ class StentRuntime {
   private subscribe(): void {
     if (this.subscribed) return
     this.subscribed = true
-    subscribeBridge((call) => {
+    subscribeBridge(call => {
       const entry = this.entries.get(call.id)
       if (!entry) return call.traced()
       return dispatch(entry, call)
@@ -320,7 +334,7 @@ function dispatch(entry: PatchEntry, call: StentBridgeCall): unknown {
         // and the caller's await resolves to the final value. A handler that
         // returns `undefined` keeps the (possibly in-place mutated)
         // `record.result`, mirroring the sync branch below.
-        return result.then((value) => {
+        return result.then(value => {
           record.result = value
           const rewritten = observe(record)
           return rewritten === undefined ? record.result : rewritten

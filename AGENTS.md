@@ -11,4 +11,4 @@ This repository is a standalone DeepSeek Harness Stent/Mixin extension workspace
 - Cross-package dependencies inside this workspace use the `workspace:^` protocol; the publishable root bundle declares the three runtime packages as npm semver dependencies and is published alongside them as the `@oh-my-dsh/stent-pack` carrier, not as a fourth implementation package. Do not add source, configuration, documentation, project-reference, `link:`, or `file:` paths that leave this repository.
 - Describe repository files with project-root paths such as `packages/stent/README.md`; never use parent-directory navigation in documentation.
 - Update `README.md`, configuration JSDoc, tests, and `cordis.patch.yml` together when behavior changes.
-- Run `pnpm run lint`, `pnpm test`, and `pnpm run build` before publishing changes.
+- Run `pnpm run pack:fmt:check`, `pnpm run pack:lint`, `pnpm run pack:knip`, `pnpm run pack:test`, and `pnpm run pack:build` before publishing changes.

@@ -47,9 +47,10 @@ export function patchInstrumentation(patch: StentPatchStub): StentInstrumentatio
       filePath,
     },
     astQuery: query,
-    functionQuery: target.functionQuery && !target.astQuery
-      ? { ...target.functionQuery, index: target.functionQuery.index ?? null }
-      : { index: target.index ?? null },
+    functionQuery:
+      target.functionQuery && !target.astQuery
+        ? { ...target.functionQuery, index: target.functionQuery.index ?? null }
+        : { index: target.index ?? null },
     transform: 'stent',
     stentPatchId: patch.id,
     stentOperation: patch.operation,
@@ -100,8 +101,10 @@ function queryFromFunction(patch: StentPatchStub): string {
 export function expandPatchStub(patch: StentPatchStub): StentInstrumentationConfig[] {
   const { filePaths, ...target } = patch.target
   if (filePaths === undefined) return [patchInstrumentation(patch)]
-  return filePaths.map(filePath => patchInstrumentation({
-    ...patch,
-    target: { ...target, filePath },
-  }))
+  return filePaths.map(filePath =>
+    patchInstrumentation({
+      ...patch,
+      target: { ...target, filePath },
+    }),
+  )
 }
