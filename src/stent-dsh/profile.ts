@@ -1,8 +1,8 @@
 import { createRequire } from 'node:module'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { basename, dirname, join, matchesGlob, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { LauncherArgs } from './args.ts'
 
 interface YamlTypeOptions {
@@ -29,16 +29,15 @@ type PatchRow = RecordValue & {
 type IdentifiedPatch = RecordValue & { id: string }
 
 export interface ResolvedProfile {
-  dshHome: string
+  dshHome: URL
   profileName: string
   effectiveProfile: string | undefined
-  profileDir: string
-  installedMatch: RegExpMatchArray | null
+  profileDir: URL
 }
 
 export interface StentConfig {
-  configPath: string
-  enablePath: string
+  configPath: URL
+  enablePath: URL
   enableOverlay: PatchRow[]
   patches: IdentifiedPatch[]
   cleanup: () => void
@@ -56,45 +55,61 @@ function isRecord(value: unknown): value is RecordValue {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
+function childPath(base: URL, ...parts: string[]): URL {
+  return pathToFileURL(join(fileURLToPath(base), ...parts))
+}
+
+function homeUrl(): URL {
+  return pathToFileURL(join(homedir(), '.dsh'))
+}
+
+interface InstalledProfile {
+  home: URL
+  profile: string
+}
+
+function matchInstalledProfile(launcherUrl: URL): InstalledProfile | undefined {
+  const launcher = fileURLToPath(launcherUrl)
+  if (
+    !matchesGlob(launcher, '**/profiles/*/node_modules/@oh-my-dsh/stent-pack/lib/stent-dsh.js') &&
+    !matchesGlob(launcher, '**/profiles/*/node_modules/@oh-my-dsh/stent-pack/lib/stent-dsh.mjs')
+  )
+    return undefined
+
+  const profileDir = dirname(dirname(dirname(dirname(dirname(launcher)))))
+  const profilesDir = dirname(profileDir)
+  const profile = basename(profileDir)
+  return profile === '' ? undefined : { home: pathToFileURL(dirname(profilesDir)), profile }
+}
+
 /**
  * Resolve the profile like dsh does. An installed bundle bin additionally
  * derives both DSH_HOME and the profile name from its own path.
  */
-export function resolveProfile({
-  args,
-  launcherUrl,
-  env = process.env,
-}: {
-  args: LauncherArgs
-  launcherUrl: string | URL
-  env?: NodeJS.ProcessEnv
-}): ResolvedProfile {
-  const installedMatch = fileURLToPath(launcherUrl).match(
-    /^(.*)\/profiles\/([^/]+)\/node_modules\/@oh-my-dsh\/stent-pack\/lib\/stent-dsh\.(?:js|mjs)$/,
-  )
-  const installedHome = installedMatch?.[1]
-  const installedProfile = installedMatch?.[2]
-  const installed = installedHome !== undefined && installedProfile !== undefined
-  const dshHome = installed ? installedHome : (env.DSH_HOME ?? join(homedir(), '.dsh'))
-  const profileName = installed ? (args.profile ?? installedProfile) : (args.profile ?? env.DSH_PROFILE ?? 'default')
+export function resolveProfile({ profile, dshHome: configuredHome, launcherUrl }: LauncherArgs): ResolvedProfile {
+  const installed = matchInstalledProfile(launcherUrl)
+  const dshHome = installed === undefined ? (configuredHome ?? homeUrl()) : installed.home
+  const profileName = installed === undefined ? (profile ?? 'default') : (profile ?? installed.profile)
   // An installed profile bin already identifies the profile. Reuse that name
   // when forwarding to the official CLI, even when the caller omits `web`.
-  const effectiveProfile = args.profile ?? (installed ? installedProfile : undefined)
-  const profileDir = join(dshHome, 'profiles', profileName)
+  const effectiveProfile = profile ?? installed?.profile
+  const profileDir = childPath(dshHome, 'profiles', profileName)
   if (!existsSync(profileDir)) {
-    console.error(`stent-dsh: profile ${profileName} not found at ${profileDir} (DSH_HOME=${dshHome})`)
+    console.error(
+      `stent-dsh: profile ${profileName} not found at ${fileURLToPath(profileDir)} (DSH_HOME=${fileURLToPath(dshHome)})`,
+    )
     console.error(`  install the Stent npm bundle first: dsh plugin --profile ${profileName} add @oh-my-dsh/stent-pack`)
     process.exit(1)
   }
-  return { dshHome, profileName, effectiveProfile, profileDir, installedMatch }
+  return { dshHome, profileName, effectiveProfile, profileDir }
 }
 
 /** Resolve js-yaml from the profile first, then from the CLI package. */
 export function resolveYaml(
-  profileDir: string,
+  profileDir: URL,
   fromCli: NodeJS.Require,
 ): { requireFromProfile: NodeJS.Require; yaml: YamlApi } {
-  const requireFromProfile = createRequire(join(profileDir, 'package.json'))
+  const requireFromProfile = createRequire(childPath(profileDir, 'package.json'))
   let yaml: YamlApi | undefined
   try {
     yaml = requireFromProfile('js-yaml') as YamlApi
@@ -117,7 +132,7 @@ export function resolveYaml(
 }
 
 /** Load one YAML patch layer (empty array when the file is absent). */
-function createPatchLoader(yaml: YamlApi): (path: string) => PatchLayer {
+function createPatchLoader(yaml: YamlApi): (path: URL) => PatchLayer {
   /** js-yaml schema tolerating the Loader's `!!js` expression tag. */
   let yamlSchema: unknown
   try {
@@ -131,7 +146,7 @@ function createPatchLoader(yaml: YamlApi): (path: string) => PatchLayer {
     yamlSchema = undefined
   }
 
-  return (path: string): PatchLayer => {
+  return (path: URL): PatchLayer => {
     if (!existsSync(path)) return []
     const text = readFileSync(path, 'utf8')
     const data = yamlSchema !== undefined ? yaml.load(text, { schema: yamlSchema }) : yaml.load(text)
@@ -164,13 +179,13 @@ export function composeStentConfig({
   yaml,
 }: {
   args: LauncherArgs
-  dshHome: string
-  profileDir: string
+  dshHome: URL
+  profileDir: URL
   requireFromProfile: NodeJS.Require
   yaml: YamlApi
 }): StentConfig {
   const loadPatchLayer = createPatchLoader(yaml)
-  const bundlePatchFile = (manifestPath: string): string | undefined => {
+  const bundlePatchFile = (manifestPath: string): URL | undefined => {
     try {
       const manifestPathname = requireFromProfile.resolve(`${manifestPath}/package.json`)
       const manifest = JSON.parse(readFileSync(manifestPathname, 'utf8')) as RecordValue
@@ -179,13 +194,13 @@ export function composeStentConfig({
           ? manifest.dsh.bundle.patch
           : undefined
       if (typeof patchRel !== 'string') return undefined
-      return resolve(join(manifestPathname, '..', patchRel))
+      return pathToFileURL(resolve(dirname(manifestPathname), patchRel))
     } catch {
       return undefined
     }
   }
 
-  const profilePkgPath = join(profileDir, 'package.json')
+  const profilePkgPath = childPath(profileDir, 'package.json')
   const profilePkg = (
     existsSync(profilePkgPath) ? JSON.parse(readFileSync(profilePkgPath, 'utf8')) : {}
   ) as ProfileManifest
@@ -198,9 +213,9 @@ export function composeStentConfig({
     const patchPath = bundlePatchFile(bundle)
     if (patchPath !== undefined) applyLayer(rows, loadPatchLayer(patchPath))
   }
-  applyLayer(rows, loadPatchLayer(join(profileDir, 'cordis.patch.yml')))
-  applyLayer(rows, loadPatchLayer(join(dshHome, 'cordis.patch.yml')))
-  for (const patchFile of args.patchFiles) applyLayer(rows, loadPatchLayer(resolve(patchFile)))
+  applyLayer(rows, loadPatchLayer(childPath(profileDir, 'cordis.patch.yml')))
+  applyLayer(rows, loadPatchLayer(childPath(dshHome, 'cordis.patch.yml')))
+  for (const patchFile of args.patchFiles) applyLayer(rows, loadPatchLayer(patchFile))
 
   // A row whose config declares config.stent.patches (the stent
   // carrier row aside) hard-depends on Stent. Such rows ship disabled; the
@@ -217,12 +232,29 @@ export function composeStentConfig({
     }
     if (id !== 'stent' && row.disabled !== false) enableOverlay.push({ id, disabled: false })
   }
+  // A Stent launcher invocation is the explicit opt-in for the DSH integration
+  // row. Keep it disabled for plain `dsh`, but mount it for profile boots so
+  // its post-boot required-patch check and hook summary can run. Plugin
+  // management commands cannot receive generated profile overlays.
+  const mode = args.passthrough[0]
+  const isConfigDump = args.passthrough.includes('--dump-config') || args.passthrough.includes('--dump-default-config')
+  if (mode !== 'plugin' && !isConfigDump) {
+    const integration = rows.get('stent-dsh')
+    if (
+      integration !== undefined &&
+      integration.disabled !== false &&
+      !enableOverlay.some(row => row.id === 'stent-dsh')
+    ) {
+      enableOverlay.push({ id: 'stent-dsh', disabled: false })
+    }
+  }
+
   const patches = [...byId.values()]
 
-  const temp = mkdtempSync(join(tmpdir(), 'stent-config-'))
-  const configPath = join(temp, 'config.json')
+  const temp = pathToFileURL(mkdtempSync(join(tmpdir(), 'stent-config-')))
+  const configPath = childPath(temp, 'config.json')
   writeFileSync(configPath, JSON.stringify(patches))
-  const enablePath = join(temp, 'enable.yaml')
+  const enablePath = childPath(temp, 'enable.yaml')
   writeFileSync(enablePath, enableOverlay.length > 0 ? yaml.dump(enableOverlay) : '[]\n')
   return {
     configPath,

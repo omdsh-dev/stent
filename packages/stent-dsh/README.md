@@ -48,7 +48,9 @@ namespace preserves the named exports `name`, `inject`, and `apply`.
 The pure `stent` row is the descriptor carrier. Keep that row disabled:
 the package root is a service library, not a Loader plugin. The Stent launcher
 reads its `config.stent.patches` and installs the hooks through its preload.
-Enable the DSH integration row separately:
+A profile boot through the Stent launcher automatically enables the
+`stent-dsh` integration row; plain `dsh` keeps it disabled. Enable the row
+manually only when composing a profile without the Stent launcher:
 
 ```yaml
 - id: stent
@@ -119,5 +121,6 @@ this repository uses the workspace protocol; published peers remain registry
 semver ranges.
 
 The package is opt-in. The default DSH composition does not mount these
-facades, and the browser roster rows remain disabled until the Stent launch
-path enables them.
+facades, and the browser roster rows remain disabled. A host profile launched
+through `stent-dsh` enables the host integration row automatically; the pure
+`stent` descriptor carrier remains disabled.

@@ -24,7 +24,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { join } from 'node:path'
+import { sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 type StentPatchStub = Record<string, unknown>
@@ -44,11 +44,13 @@ async function loadStentModule(specifier: string): Promise<StentModule> {
 
 const configPath = process.env.STENT_CONFIG
 if (configPath !== undefined && configPath !== '') {
+  const configUrl = pathToFileURL(configPath)
   let bootstrapStent: BootstrapStent
   let markStentDshLaunch: MarkStentDshLaunch
   const profileDir = process.env.STENT_PROFILE
   if (profileDir !== undefined && profileDir !== '') {
-    const resolveFrom = createRequire(pathToFileURL(join(profileDir, 'package.json')))
+    const profileUrl = pathToFileURL(profileDir + sep)
+    const resolveFrom = createRequire(new URL('package.json', profileUrl))
     const stentModule = await loadStentModule(pathToFileURL(resolveFrom.resolve('@oh-my-dsh/stent')).href)
     bootstrapStent = stentModule.bootstrapStent
     markStentDshLaunch = stentModule.markStentDshLaunch
@@ -58,7 +60,7 @@ if (configPath !== undefined && configPath !== '') {
     markStentDshLaunch = stentModule.markStentDshLaunch
   }
   markStentDshLaunch()
-  const descriptors = JSON.parse(readFileSync(configPath, 'utf8')) as StentPatchStub[]
+  const descriptors = JSON.parse(readFileSync(configUrl, 'utf8')) as StentPatchStub[]
   bootstrapStent(descriptors)
   // The launch marker: only a Stent launcher reaches this line, so the
   // boot output always tells the user whether this is a Stent-enabled launch

@@ -38,7 +38,7 @@ patch 可以设置 `required: true`：一旦应用启动完成、所有目标模
 
 ```yaml
 # User overlay:纯 service row 作为 descriptor carrier 保持 disabled。
-# 它的 package root 没有 Loader `apply`;单独启用宿主 integration row。
+# 它的 package root 没有 Loader `apply`;Stent launcher 在 profile boot 时自动启用宿主 integration row。
 - id: stent
   disabled: true
   config:

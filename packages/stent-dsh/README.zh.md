@@ -34,7 +34,11 @@ await ctx.plugin(StentDsh)
 
 ## Profile bootstrap
 
-纯 `stent` row 是 descriptor carrier,应保持 disabled:package root 是 service library,不是 Loader plugin。Stent launcher 会读取它的 `config.stent.patches`,并通过 preload 安装 hooks。DSH integration row 需要单独启用:
+纯 `stent` row 是 descriptor carrier,应保持 disabled:package root 是 service
+library,不是 Loader plugin。Stent launcher 会读取它的 `config.stent.patches`,并
+通过 preload 安装 hooks。通过 Stent launcher 启动 profile 时,launcher 会自动
+启用 `stent-dsh` integration row;普通 `dsh` 会保持它 disabled。只有在不使用
+Stent launcher、自己组合 profile 时,才需要手动启用该行:
 
 ```yaml
 - id: stent
@@ -84,4 +88,6 @@ Browser facade 提供两个 package contract:
 
 `stent-dsh` 将可从 registry 安装的 DSH host package 声明为 peer contract。消费侧 DSH profile 必须提供权威 service 以及匹配的 `stent` 安装。本仓库的跨包开发使用 workspace protocol;发布后的 peer 仍使用 registry semver range。
 
-本包是 opt-in 的。默认 DSH composition 不会挂载这些 facade,browser roster row 也会保持 disabled,直到 Stent launch path 启用它们。
+本包是 opt-in 的。默认 DSH composition 不会挂载这些 facade,browser roster row
+也会保持 disabled。通过 `stent-dsh` 启动 host profile 时,launcher 会自动启用
+host integration row;纯 `stent` descriptor carrier 仍保持 disabled。

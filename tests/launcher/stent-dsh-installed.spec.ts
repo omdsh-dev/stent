@@ -6,12 +6,12 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 
 /**
- * Installed-mode launcher resolution: without --source, stent-dsh runs a
+ * Installed-mode launcher resolution: without --dsh-path, stent-dsh runs a
  * registry-installed @deepseek-ai/dsh — the published lib/bin.js and bundled
  * preload are plain ESM, so the installed path needs neither tsx nor a
- * checkout. The CLI resolves from DSH_CLI, the
- * caller's project dependencies, or a PATH shim (symlink shims and pnpm's
- * cmd-shim script form alike). These offline fixtures stand in for each
+ * checkout. The CLI resolves from the caller's project dependencies or a PATH
+ * shim (symlink shims and pnpm's cmd-shim script form alike). These offline
+ * fixtures stand in for each
  * resolution path; the stub `stent` in the profile records what the
  * preload delivered, and the stub `@deepseek-ai/dsh-app-boot` records the
  * pre-boot module-fallback heals.
@@ -22,6 +22,7 @@ if (!existsSync(compiledLauncher) || !existsSync(compiledPreload))
   throw new Error('compiled launcher artifacts are missing; run pnpm run build before the launcher test')
 const launcher = compiledLauncher
 const sourceBundlePackageJson = fileURLToPath(new URL('../../package.json', import.meta.url))
+const commanderPackage = fileURLToPath(new URL('../../node_modules/commander', import.meta.url))
 
 const tempDir = mkdtempSync(join(tmpdir(), 'stent-installed-'))
 const home = join(tempDir, 'home')
@@ -118,6 +119,7 @@ writeFileSync(
 // this profile real (not a symlink), so the launcher exercises that path
 // inference rather than only the generic installed mode.
 mkdirSync(join(webProfileDir, 'node_modules', '@oh-my-dsh'), { recursive: true })
+symlinkSync(commanderPackage, join(webProfileDir, 'node_modules', 'commander'), 'dir')
 writeFileSync(join(webProfileDir, 'package.json'), '{}\n')
 symlinkSync(stubStent, join(webProfileDir, 'node_modules', '@oh-my-dsh', 'stent'))
 const installedBundle = join(webProfileDir, 'node_modules', '@oh-my-dsh/stent-pack')
@@ -165,14 +167,11 @@ afterAll(() => {
 
 function run(
   argv: string[],
-  options: { cwd?: string; path?: string; launcher?: string; dsh?: string } = {},
+  options: { cwd?: string; path?: string; launcher?: string } = {},
 ): { status: number; stdout: string; stderr: string } {
   const env: NodeJS.ProcessEnv = { ...process.env, DSH_HOME: home }
-  delete env.DSH_SOURCE
-  delete env.DSH_CLI
   delete env.STENT_CONFIG
   delete env.STENT_PROFILE
-  if (options.dsh !== undefined) env.DSH_CLI = options.dsh
   if (options.path !== undefined) env.PATH = options.path
   const selectedLauncher = options.launcher ?? launcher
   const result = spawnSync(process.execPath, [selectedLauncher, ...argv], {
@@ -210,11 +209,11 @@ function expectInstalledWeb(out: { status: number; stdout: string; stderr: strin
 }
 
 describe('stent-dsh installed mode (registry-installed dsh)', () => {
-  it('uses --source as the source-checkout selector', () => {
+  it('uses --dsh-path as the DSH path selector', () => {
     const source = join(tempDir, 'missing-source')
-    const out = run(['--source', source, '--profile', 't1', '--dump-config'], { path: '/usr/bin:/bin' })
+    const out = run(['--dsh-path', source, '--profile', 't1', '--dump-config'], { path: '/usr/bin:/bin' })
     expect(out.status).toBe(1)
-    expect(out.stderr).toContain(`no CLI entry at ${join(source, 'apps/cli/src/bin.ts')}`)
+    expect(out.stderr).toContain(`DSH path does not exist: ${source}`)
   })
 
   it('infers web and forwards it when invoked from the installed profile bin', () => {
@@ -227,8 +226,8 @@ describe('stent-dsh installed mode (registry-installed dsh)', () => {
     )
   })
 
-  it('resolves an explicit DSH_CLI override', () => {
-    expectBoot(run(['--profile', 't1', '--dump-config'], { dsh: binFile }))
+  it('resolves an explicit dsh path', () => {
+    expectBoot(run(['--dsh-path', binFile, '--profile', 't1', '--dump-config']))
   })
 
   it("resolves the CLI from the caller's project dependencies", () => {
@@ -246,7 +245,6 @@ describe('stent-dsh installed mode (registry-installed dsh)', () => {
   it('fails with guidance when no CLI is resolvable', () => {
     const out = run(['--profile', 't1', '--dump-config'], { path: '/usr/bin:/bin' })
     expect(out.status).toBe(1)
-    expect(out.stderr).toContain('no installed @deepseek-ai/dsh found')
-    expect(out.stderr).toContain('DSH_CLI')
+    expect(out.stderr).toContain('no DSH path was supplied')
   })
 })

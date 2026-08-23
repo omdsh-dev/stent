@@ -5,16 +5,12 @@
  *
  * Usage:
  *   node lib/stent-dsh.js [dsh args...]                  (installed bundle)
- *   node --import tsx/esm src/stent-dsh.ts --source <checkout> [...]
+ *   node --import tsx/esm src/stent-dsh.ts --dsh-path <checkout> [...]
  *
- * Installed mode (default) runs a registry-installed @deepseek-ai/dsh: the
- * published lib/bin.js and bundled preload are plain ESM, so no tsx or
- * checkout is needed.
- * The CLI resolves from DSH_CLI, the caller's project dependencies, or a
- * `dsh` on PATH. Source mode (DSH_SOURCE) runs the checkout's
- * apps/cli/src/bin.ts through tsx instead. Profile resolution follows dsh:
- * DSH_HOME/profiles/<name>.
- *
+ * The CLI resolves an explicit DSH path as a source checkout, an installed
+ * package, or a bin file. With no path it searches the caller's dependency
+ * and `dsh` on PATH. A source TypeScript entry runs through tsx; an installed
+ * JavaScript entry runs directly. *
  * Installed bundle form — no bundle checkout required: the bundle ships this
  * launcher (bin `stent-dsh`) after installation through the release plugin
  * channel:
@@ -29,36 +25,26 @@
  * merges them with the Loader's id-targeted semantics, aggregates the
  * `config.stent.patches` descriptors every row declares (the stent
  * row is the canonical carrier), writes them to a temp JSON, and launches
- * the official CLI with the preload reading that file. A row that declares
- * stent patches is Stent-required: it ships disabled, and this command
- * enables it through a generated --patch overlay (after every user layer),
- * so a plain `dsh` boot skips such rows entirely while this launch loads
- * them with the hooks already installed.
+ * the official CLI with the preload reading that file. A `stent-dsh` profile
+ * launch also enables its own integration row through a generated overlay;
+ * this makes the post-boot required-patch check and hook summary run. Rows
+ * that declare stent patches are Stent-required: they ship disabled, and this
+ * command enables them through the same generated overlay (after every user
+ * layer), so a plain `dsh` boot skips such rows entirely while this launch
+ * loads them with the hooks already installed.
  */
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { buildCliArgs, parseArgs } from './args.ts'
+import { buildCliArgs } from './args.ts'
+import type { LauncherArgs } from './args.ts'
 import { resolveHost, type ResolvedHost } from './cli.ts'
 import { composeStentConfig, resolveProfile, resolveYaml, type StentConfig } from './profile.ts'
-import type { LauncherArgs } from './args.ts'
-
-export interface LauncherOptions {
-  argv?: string[]
-  env?: NodeJS.ProcessEnv
-  launcherUrl?: string | URL
-}
 
 /**
  * Run the Stent launcher. The entry module passes its own URL so installed
  * bundle invocations can derive DSH_HOME/profile from the bin's real path.
  */
-export function main({
-  argv = process.argv.slice(2),
-  env = process.env,
-  launcherUrl = import.meta.url,
-}: LauncherOptions = {}): never {
-  const args: LauncherArgs = parseArgs(argv, env)
-
+export async function main(opt: LauncherArgs): Promise<never> {
   // A bare spawnSync parent never returns once its child dies of SIGINT: the
   // sync wait loop swallows the signal and the shell hangs until a second ^C.
   // The child still receives every signal directly and owns its own graceful
@@ -66,49 +52,45 @@ export function main({
   process.on('SIGINT', () => {})
   process.on('SIGTERM', () => {})
 
-  const host: ResolvedHost = resolveHost(args, { cwd: process.cwd(), env })
-  const profile = resolveProfile({ args, launcherUrl, env })
+  const host: ResolvedHost = resolveHost(opt)
+  const profile = resolveProfile(opt)
   const { requireFromProfile, yaml } = resolveYaml(profile.profileDir, host.fromCli)
   const config: StentConfig = composeStentConfig({
-    args,
+    args: opt,
     dshHome: profile.dshHome,
     profileDir: profile.profileDir,
     requireFromProfile,
     yaml,
   })
-  const cliArgs = buildCliArgs(args, profile.effectiveProfile, config.enablePath, config.enableOverlay)
+  const cliArgs = buildCliArgs(opt, profile.effectiveProfile, config.enablePath, config.enableOverlay)
 
   // Heal both dependency closures before the preload imports the profile's
   // trio: the DSH installation provides host packages, while the root
   // bundle's declared npm dependencies provide the Stent packages. The healer
   // creates the profile-level names from the installed package locations.
-  const bundlePackageJson = fileURLToPath(new URL('../package.json', launcherUrl))
-  const healEval = host.source
-    ? `const { healProfilesModuleFallback } = await import('@deepseek-ai/dsh-app-boot'); healProfilesModuleFallback(${JSON.stringify(bundlePackageJson)}); healProfilesModuleFallback(${JSON.stringify(host.cliPkgJson)})`
-    : `const { createRequire } = await import('node:module'); const { healProfilesModuleFallback } = await import(createRequire(${JSON.stringify(pathToFileURL(host.realBin).href)}).resolve('@deepseek-ai/dsh-app-boot')); healProfilesModuleFallback(${JSON.stringify(bundlePackageJson)}); healProfilesModuleFallback(${JSON.stringify(host.cliPkgJson)})`
-  const heal = spawnSync(
-    process.execPath,
-    [...(host.source ? ['--import', 'tsx/esm'] : []), '--input-type=module', '--eval', healEval],
-    { stdio: 'inherit', ...(host.source ? { cwd: host.sourceRoot } : {}), env: { ...env, DSH_HOME: profile.dshHome } },
-  )
-  if (heal.error !== undefined) throw heal.error
-  if (heal.status !== 0) process.exit(heal.status ?? 1)
+  const bundlePackageJson = new URL('../package.json', opt.launcherUrl)
+  await healProfiles(host, bundlePackageJson, profile.dshHome)
 
   const result = spawnSync(
     process.execPath,
     [
-      ...(host.source ? ['--import', 'tsx/esm'] : []),
+      ...host.nodeArgs,
       '--import',
-      bundledPreloadPath(launcherUrl),
-      host.bin,
+      fileURLToPath(bundledPreloadPath(opt.launcherUrl)),
+      fileURLToPath(host.dshPath),
       ...cliArgs,
     ],
     // Source mode runs from the source checkout: tsx resolves its tsconfig
     // there. Installed mode needs no pinned cwd: the published bin is plain ESM.
     {
       stdio: 'inherit',
-      ...(host.source ? { cwd: host.sourceRoot } : {}),
-      env: { ...env, STENT_CONFIG: config.configPath, STENT_PROFILE: profile.profileDir, DSH_HOME: profile.dshHome },
+      ...(host.cwd === undefined ? {} : { cwd: fileURLToPath(host.cwd) }),
+      env: {
+        ...opt.env,
+        STENT_CONFIG: fileURLToPath(config.configPath),
+        STENT_PROFILE: fileURLToPath(profile.profileDir),
+        DSH_HOME: fileURLToPath(profile.dshHome),
+      },
     },
   )
   config.cleanup()
@@ -116,6 +98,15 @@ export function main({
   process.exit(result.status ?? 0)
 }
 
-function bundledPreloadPath(launcherUrl: string | URL): string {
-  return fileURLToPath(new URL('../lib/stent-dsh-preload.js', launcherUrl))
+async function healProfiles(host: ResolvedHost, bundlePackageJson: URL, dshHome: URL): Promise<void> {
+  const modulePath = host.fromCli.resolve('@deepseek-ai/dsh-app-boot')
+  const { healProfilesModuleFallback } = (await import(pathToFileURL(modulePath).href)) as {
+    healProfilesModuleFallback: (packageJson: string, dshHome: string) => void
+  }
+  healProfilesModuleFallback(fileURLToPath(bundlePackageJson), fileURLToPath(dshHome))
+  healProfilesModuleFallback(fileURLToPath(host.cliPkgJson), fileURLToPath(dshHome))
+}
+
+function bundledPreloadPath(launcherUrl: URL): URL {
+  return new URL('../lib/stent-dsh-preload.js', launcherUrl)
 }

@@ -38,7 +38,8 @@ A patch may set `required: true`: once the application boots and every target mo
 
 ```yaml
 # User overlay: keep the pure service row as the descriptor carrier. Its
-# package root has no Loader `apply`; enable the host integration row separately.
+# package root has no Loader `apply`; the Stent launcher enables the host
+# integration row automatically for profile boots.
 - id: stent
   disabled: true
   config:

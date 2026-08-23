@@ -59,11 +59,14 @@ the official `tool-cordis` package, their tests, and the pnpm-policy seams.
 
 ### 2.1 The disabled opt-in rows
 
-The web-app bundle layer inserts `stent` / `stent-dsh` rows as
-**disabled opt-ins**: the pure `stent` package is a library with no
-plugin `apply`, so an enabled row fails every boot ("invalid plugin"). A
-profile opts in by enabling the rows; the bundle layer applies on every boot,
-so pre-existing profiles are covered without edits.
+The web-app bundle layer inserts the `stent` / `stent-dsh` rows as
+**disabled opt-ins**. The pure `stent` package remains disabled because its
+root row is a descriptor carrier rather than a Loader plugin. A profile boot
+through the explicit `stent-dsh` launcher automatically enables the
+`stent-dsh` integration row through a generated overlay, so its post-boot
+required-patch check and hook summary run. Plain `dsh` leaves the rows disabled;
+the bundle layer still applies on every boot, so pre-existing profiles need no
+manual edit.
 
 ### 2.2 The TSX dead end (recorded and reverted)
 
@@ -101,8 +104,8 @@ At installation, pnpm resolves those npm semver dependencies. At launch, `stent-
 - Host source installs declare the bundle in `apps/cli/package.json`; run the
   harness workspace's `pnpm install` and `pnpm run pack:build`, then install the
   published npm bundle through the plugin channel (joining `@oh-my-dsh/stent-pack` to
-  `dsh.profile.bundles`) and enable the `stent-dsh` row. Launches go
-  through the compiled `lib/stent-dsh.js`.
+  `dsh.profile.bundles`). A profile boot through the compiled `lib/stent-dsh.js`
+  enables the integration row through its generated overlay.
 - Consumer-side builds use the explicit root `pack:build` script. The trio and the
   launcher are built with their package-owned tsdown commands before packing; no
   install-time prepare build is required.

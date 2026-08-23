@@ -40,7 +40,12 @@ Stent 依赖插件仍不可用。`getStent(ctx)` 也使用同一能力门控：�
 
 ### 2.1 disabled opt-in 行
 
-web-app bundle 层把 `stent` / `stent-dsh` 行插入为 **disabled opt-in**:纯 `stent` 包是没有插件 `apply` 的库,enabled 的行每次 boot 都失败("invalid plugin")。profile 通过启用这些行 opt-in;bundle 层每次 boot 都应用,因此既有的 profile 无需编辑即被覆盖。
+web-app bundle 层把 `stent` / `stent-dsh` 行插入为 **disabled opt-in**。纯
+`stent` 包的根行仍保持 disabled,因为它目前是 descriptor carrier 而不是
+Loader plugin。通过显式的 `stent-dsh` launcher 启动 profile 时,launcher
+会通过生成的 overlay 自动启用 `stent-dsh` integration row,因此 boot 后的
+required-patch 检查和 hook summary 会执行。普通 `dsh` 仍保持这些行 disabled;
+bundle 层每次 boot 都应用,所以既有 profile 不需要手动编辑。
 
 ### 2.2 TSX 死胡同(已记录并撤销)
 
@@ -66,7 +71,7 @@ dsh plugin --profile web add @oh-my-dsh/stent-pack
 
 安装时由 pnpm 解析这些 npm semver 依赖;启动时 `stent-dsh` 调用 DSH 的 module-fallback healer,把 bundle 的依赖闭包映射到 `$DSH_HOME/profiles/node_modules`,使 Profile 和 preload 解析到同一套 trio 副本。
 
-- host 源码安装在 `apps/cli/package.json` 中声明 bundle;先执行 harness workspace 的 `pnpm install` 和 `pnpm run pack:build`,再通过插件通道安装已发布的 npm bundle(把 `@oh-my-dsh/stent-pack` 并入 `dsh.profile.bundles`)、启用 `stent-dsh` 行——启动一律走编译后的 `lib/stent-dsh.js`。
+- host 源码安装在 `apps/cli/package.json` 中声明 bundle;先执行 harness workspace 的 `pnpm install` 和 `pnpm run pack:build`,再通过插件通道安装已发布的 npm bundle(把 `@oh-my-dsh/stent-pack` 并入 `dsh.profile.bundles`)。通过编译后的 `lib/stent-dsh.js` 启动 profile 时,launcher 会通过生成的 overlay 自动启用 integration row。
 - 消费侧构建使用根目录显式的 `pack:build` 脚本;trio 与 launcher 在打包前分别由各包自己的 tsdown 命令构建,不需要安装期 `prepare`。
 
 ### 3.1 pnpm 11 供应链接缝

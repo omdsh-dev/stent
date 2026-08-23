@@ -31,7 +31,6 @@
     "lint:fix": "oxlint --config .oxlintrc.json --type-check --deny-warnings --fix src tests",
     "knip": "knip --config knip.json --treat-config-hints-as-errors",
     "test": "pnpm run build && vitest run --config vitest.config.ts",
-
     "pack:build": "pnpm --filter @oh-my-dsh/stent run build && pnpm --filter @oh-my-dsh/stent-api run build && pnpm --filter @oh-my-dsh/stent-dsh run build && pnpm run build",
     "pack:fmt:check": "pnpm run fmt:check && pnpm --filter @oh-my-dsh/stent run fmt:check && pnpm --filter @oh-my-dsh/stent-api run fmt:check && pnpm --filter @oh-my-dsh/stent-dsh run fmt:check",
     "pack:lint": "pnpm run lint && pnpm --filter @oh-my-dsh/stent run lint && pnpm --filter @oh-my-dsh/stent-api run lint && pnpm --filter @oh-my-dsh/stent-dsh run lint",
@@ -46,7 +45,8 @@
   "dependencies": {
     "@oh-my-dsh/stent": "^0.1.1",
     "@oh-my-dsh/stent-api": "^0.1.1",
-    "@oh-my-dsh/stent-dsh": "^0.1.1"
+    "@oh-my-dsh/stent-dsh": "^0.1.1",
+    "commander": "^14.0.3"
   },
   "devDependencies": {
     "@stylistic/eslint-plugin": "^5.10.0",
