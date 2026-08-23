@@ -14,7 +14,7 @@ Three layers make up the Stent-style extension architecture. The first two alrea
 | Mixin subsystem | `stent` | Transforms target code and dispatches trusted low-level patches. |
 | Cooperative Mod API | `stent-api` + `stent-dsh` | Stable, domain-level registrations and events backed by existing host owners. |
 
-A Mod remains an ordinary Cordis plugin that declares injection of only the Stent module services it consumes. Each facade delegates to the authoritative service — `ctx.tools`, `ctx.systemPrompt`, `ctx.commands`, the `agent/*` events, and the browser `ctx.command`/`ctx.slots` — and returns the exact disposer of the underlying effect. No facade stores a parallel copy of domain state, and none can bypass policy, approval, timeout, logging, cancellation, or the authoritative executor.
+A Mod remains an ordinary Cordis plugin that declares injection of only the Stent module services it consumes. Each facade delegates to the authoritative service — `ctx.tools`, `ctx.systemPrompt`, `ctx.commands`, the `agent/*` events, and the browser `ctx.command`/`ctx.slots` — and returns the exact disposer of the underlying effect. No facade stores a parallel copy of domain state, and none can bypass policy, approval, timeout, logging, cancellation, or the authoritative executor. The low-level `getStent(ctx)` accessor is launch-gated as well: if an un-declared dependency reaches it under plain `dsh`, it fails loudly instead of mounting the registry.
 
 ## Packages and modules
 

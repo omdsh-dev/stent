@@ -14,7 +14,7 @@ Stent 风格扩展架构由三层组成。前两层已存在;这两个包是第�
 | Mixin 子系统 | `stent` | 变换目标代码并分发受信任的底层 patch。 |
 | 协作式 Mod API | `stent-api` + `stent-dsh` | 由现有宿主所有者支撑的稳定 domain-level registration 和 event。 |
 
-Mod 仍然是普通 Cordis 插件,只声明它所消费的 Stent 模块 service 的注入。每个 facade 委托给权威 service——`ctx.tools`、`ctx.systemPrompt`、`ctx.commands`、`agent/*` 事件以及浏览器侧的 `ctx.command`/`ctx.slots`——并返回底层 effect 的精确 disposer。Facade 不保存 domain state 的平行副本,也不能绕过 policy、approval、timeout、日志、取消或权威 executor。
+Mod 仍然是普通 Cordis 插件,只声明它所消费的 Stent 模块 service 的注入。每个 facade 委托给权威 service——`ctx.tools`、`ctx.systemPrompt`、`ctx.commands`、`agent/*` 事件以及浏览器侧的 `ctx.command`/`ctx.slots`——并返回底层 effect 的精确 disposer。Facade 不保存 domain state 的平行副本,也不能绕过 policy、approval、timeout、日志、取消或权威 executor。底层 `getStent(ctx)` accessor 同样受启动能力门控:未声明依赖的代码在普通 `dsh` 下调用它会 loud failure,而不会挂载 registry。
 
 ## 包与模块
 

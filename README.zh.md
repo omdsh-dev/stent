@@ -30,7 +30,11 @@ profile bootstrap)。根包 `@oh-my-dsh/stent-pack` 是单独发布的 carrier,�
 三个包通过编译后的 launcher 安装 hooks 并挂载 facade。`src/stent-dsh.ts`
 编译为 `lib/stent-dsh.js`，`src/stent-dsh-preload.ts` 编译为
 `lib/stent-dsh-preload.js`；launcher 在官方 CLI 加载前注入这个编译后的
-preload，不需要 host patch checkout。
+preload，不需要 host patch checkout。preload 还会记录进程内的
+`stent-dsh` 启动能力，因此即使其他路径安装了底层 hooks，普通 `dsh` 下
+Stent 依赖插件仍不可用。`getStent(ctx)` 也使用同一能力门控：漏写
+`inject: ['stent']` 的插件在普通 `dsh` 下无法通过 accessor 挂载 registry，
+而会 loud failure。
 
 官方通道已经覆盖的内容被刻意排除:安装 trio(`dsh plugin add`)、bundle 行名册与依赖、catalog 生成、trio-in-workspace 的 invariant/gate 豁免、以及全部文档(`README*`、`docs/`、`.agents/`)。剩下的是任何通道都提供不了的:launcher bootstrap(`apps/cli/src/profile-boot.ts` 在任何目标导入之前调用 `installStentBootstrap`、boot 后调用 `checkStentRequiredPatches`)、`clientBundle` 源码 transform 构建接缝(`packages/client/tsdown.client.ts`)、编译进官方 `tool-cordis` 包的 catalog 条目、它们的测试、以及 pnpm 策略接缝。
 

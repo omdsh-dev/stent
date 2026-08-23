@@ -11,7 +11,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { add } from './node_modules/stent-target-fixture/index.mjs'
-import { checkRequiredPatches, flushBindingReports, runtime } from '@oh-my-dsh/stent'
+import { checkRequiredPatches, flushBindingReports, isStentDshLaunch, runtime } from '@oh-my-dsh/stent'
 
 const configPath = process.env.STENT_CONFIG
 
@@ -31,8 +31,8 @@ if (configPath === undefined || configPath === '') {
   // change.
   const bound = runtime.bindingsOf('preload/multiply-add').length
   const result = add(2, 3)
-  console.log(`NO-CONFIG bindings=${bound} add(2,3)=${result}`)
-  process.exit(bound === 0 && result === 5 ? 0 : 1)
+  console.log(`NO-CONFIG launch=${isStentDshLaunch()} bindings=${bound} add(2,3)=${result}`)
+  process.exit(!isStentDshLaunch() && bound === 0 && result === 5 ? 0 : 1)
 }
 
 const [patch] = JSON.parse(readFileSync(configPath, 'utf8'))
@@ -54,5 +54,5 @@ runtime.enable(patch.id, (call) => {
 })
 const after = add(2, 3)
 
-console.log(`BEFORE add(2,3)=${before} AFTER add(2,3)=${after}`)
-process.exit(before === 5 && after === 23 ? 0 : 1)
+console.log(`LAUNCH=${isStentDshLaunch()} BEFORE add(2,3)=${before} AFTER add(2,3)=${after}`)
+process.exit(isStentDshLaunch() && before === 5 && after === 23 ? 0 : 1)

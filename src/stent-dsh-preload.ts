@@ -9,7 +9,9 @@
  * launcher. The source uses only erasable TypeScript syntax so tsx can load it
  * directly. bootstrapStent registers the loader hooks exactly where the
  * patched profile-boot used to call installStentBootstrap (boot prepare,
- * before any target import) — except no host source change is involved.
+ * before any target import) — except no host source change is involved. It
+ * also records the process-local stent-dsh launch capability before Host
+ * plugins can resolve their Stent dependency.
  *
  * The trio resolves from the profile when STENT_PROFILE is set: the
  * profile's installed copy is authoritative at runtime — the Host plugin and
@@ -27,17 +29,20 @@ import { pathToFileURL } from 'node:url'
 import type { StentPatchStub } from '@oh-my-dsh/stent'
 
 type BootstrapStent = (descriptors: StentPatchStub[]) => unknown
+type MarkStentDshLaunch = () => void
 
 const configPath = process.env.STENT_CONFIG
 if (configPath !== undefined && configPath !== '') {
   let bootstrapStent: BootstrapStent
+  let markStentDshLaunch: MarkStentDshLaunch
   const profileDir = process.env.STENT_PROFILE
   if (profileDir !== undefined && profileDir !== '') {
     const resolveFrom = createRequire(pathToFileURL(join(profileDir, 'package.json')))
-    ;({ bootstrapStent } = await import(pathToFileURL(resolveFrom.resolve('@oh-my-dsh/stent')).href))
+    ;({ bootstrapStent, markStentDshLaunch } = await import(pathToFileURL(resolveFrom.resolve('@oh-my-dsh/stent')).href))
   } else {
-    ;({ bootstrapStent } = await import('@oh-my-dsh/stent'))
+    ;({ bootstrapStent, markStentDshLaunch } = await import('@oh-my-dsh/stent'))
   }
+  markStentDshLaunch()
   const descriptors = JSON.parse(readFileSync(configPath, 'utf8')) as StentPatchStub[]
   bootstrapStent(descriptors)
   // The launch marker: only a Stent launcher reaches this line, so the

@@ -40,7 +40,12 @@ The three packages install hooks and mount facades through the compiled launcher
 `src/stent-dsh.ts` compiles to `lib/stent-dsh.js`, while
 `src/stent-dsh-preload.ts` compiles to `lib/stent-dsh-preload.js`; the launcher
 injects that compiled preload before the official CLI loads. No host patch
-checkout is required.
+checkout is required. The preload also records a process-local `stent-dsh`
+launch capability, so Stent-dependent plugins stay unavailable under plain
+`dsh` even if low-level hooks were installed by another path. The same
+capability gate is enforced by `getStent(ctx)`: a plugin that omitted
+`inject: ['stent']` cannot mount the registry through the accessor under plain
+`dsh` and fails loudly instead.
 
 Everything the official channels already cover is deliberately excluded:
 installing the trio (`dsh plugin add`), bundle roster rows and dependencies,

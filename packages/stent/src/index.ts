@@ -6,10 +6,16 @@
  * attaches and detaches the handlers in the shared runtime.
  *
  * The service is opt-in: nothing in the default host composition mounts it,
- * and a plugin only receives `ctx.stent` when it declares the service.
+ * and a plugin only receives `ctx.stent` when it declares the service and the
+ * runtime entered through the Stent DSH launch path.
  * @module @oh-my-dsh/stent
  */
 
+export {
+  STENT_DSH_LAUNCH_KEY,
+  isStentDshLaunch,
+  markStentDshLaunch,
+} from './activation.ts'
 export {
   GLOBAL_BRIDGE_KEY,
   installBridge,

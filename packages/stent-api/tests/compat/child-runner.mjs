@@ -7,9 +7,13 @@
  */
 
 import { Context } from '@deepseek-ai/cordis'
-import { installStentHooks, StentService, getStent } from '@oh-my-dsh/stent'
+import { installStentHooks, StentService, getStent, markStentDshLaunch } from '@oh-my-dsh/stent'
 import { StentCompatService } from '../../src/compat/service.ts'
 import { buildCompatInstrumentations } from '../../src/compat/instrumentation.ts'
+
+// The child harness models the approved stent-dsh launch path. The dedicated
+// runtime tests cover the plain-dsh rejection path.
+markStentDshLaunch()
 
 const fixtureUrl = new URL('../fixtures/node_modules/stent-compat-target/index.mjs', import.meta.url)
 

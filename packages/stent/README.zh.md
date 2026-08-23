@@ -32,6 +32,8 @@ disposeHooks()
 
 `bootstrapStent` 校验 patches、构建它们的 Orchestrion instrumentation 并安装变换 hooks。在宿主中，`stent` composition 行在 `config.stent.patches` 下携带静态描述（id/target/operation——handler 是注册时绑定的受信任代码）时，会在 `boot()` 准备阶段自动 bootstrap，早于任何 config-tree entry 挂载。当 instrumentation 已经构建好时，`installStentHooks` 是更底层的形态。
 
+启动路径和 hooks 安装是两个不同的概念。`stent-dsh` preload 会在 bootstrap hooks 前写入启动标记；普通 `dsh` 启动不会获得该标记。`StentService` 将它作为 Cordis 的可用性检查，因此声明 `inject: ['stent']` 的插件即使通过其他路径安装了底层 bridge，在普通 `dsh` 下也会保持 pending。browser client entry 会写入等价的 Stent 客户端激活标记。`getStent(ctx)` 在复用或挂载 registry 前也会检查同一启动能力；漏写 `inject: ['stent']` 的 DSH 插件不能通过该 accessor 静默绕过门控，而会 loud failure。明确管理独立生命周期的底层调用方仍可直接构造 `new StentService(ctx)`。
+
 patch 可以设置 `required: true`：一旦应用启动完成、所有目标模块都已导入，`checkRequiredPatches(patches)` 会在某个 required patch 的变换从未重写过任何东西时 loud 失败，并点名该 patch id 与其目标——`filePath` 可能是错误的启动形态（`src/index.ts` 对 `lib/index.js`），或函数已移动。宿主会在 `boot()` 完成后自动运行此检查。一个 patch id 覆盖多种启动形态，既可用 RegExp `filePath`（如 `/^(src\/index\.ts|lib\/index\.js)$/`），也可用 `filePaths` 数组便捷项（每项展开为同 id 下的一份 instrumentation，每个命中的文件一条绑定记录）。检查所依赖的加载期绑定按被变换的文件逐条记录，可通过 `ctx.stent.bindings(id?)` 和每条 `list()` 条目查看。
 
 ```yaml
@@ -84,7 +86,7 @@ export function apply(ctx: Context & { stent: StentService }): void {
 }
 ```
 
-注册是注册插件拥有的 fiber effect：销毁插件会禁用并移除 patch，且一个 patch id 只属于一个属主——其他插件注册已占用的 id 会失败即显式，而不是静默覆盖在位者的 hook。每次注册都会在注册 fiber 上挂载独立的销毁 effect，disposer 只在 entry 仍归该 fiber 所有时才移除它：热重载的新一代以相同属主收回其插件的 patch（所有权移交），因此旧一代的卸载变成 no-op，不会把新一代的 hook 一起注销。`ctx.stent.list()` 返回有序诊断快照，条目携带该 patch 记录的加载期绑定；`ctx.stent.bindings(id?)` 直接返回绑定记录；`ctx.stent.disable(id)` / `ctx.stent.enable(id, handler)` 可切换 patch 而不移除它，`ctx.stent.remove(id)` 则彻底移除。无法声明可选服务的插件可通过 `getStent(ctx)` 挂载它——挂载感知：复用既有注册并返回该 context 视角下的 registry。
+注册是注册插件拥有的 fiber effect：销毁插件会禁用并移除 patch，且一个 patch id 只属于一个属主——其他插件注册已占用的 id 会失败即显式，而不是静默覆盖在位者的 hook。每次注册都会在注册 fiber 上挂载独立的销毁 effect，disposer 只在 entry 仍归该 fiber 所有时才移除它：热重载的新一代以相同属主收回其插件的 patch（所有权移交），因此旧一代的卸载变成 no-op，不会把新一代的 hook 一起注销。`ctx.stent.list()` 返回有序诊断快照，条目携带该 patch 记录的加载期绑定；`ctx.stent.bindings(id?)` 直接返回绑定记录；`ctx.stent.disable(id)` / `ctx.stent.enable(id, handler)` 可切换 patch 而不移除它，`ctx.stent.remove(id)` 则彻底移除。无法声明可选服务的插件可以调用 `getStent(ctx)`，但 accessor 仍受 `stent-dsh` 启动能力门控，普通 `dsh` 下会 loud failure；普通 DSH 插件应声明 `inject: ['stent']`。明确绕过 DSH launcher 的独立调用方应直接构造 `new StentService(ctx)`。
 
 ## 安全与信任模型
 

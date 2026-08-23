@@ -55,12 +55,13 @@ function run(configEnv: string | undefined, profileEnv?: string): { stdout: stri
 describe('stent preload injection (Stent launcher shape)', () => {
   it('bootstraps the hooks before the entry imports its targets', () => {
     const out = run(configPath)
+    expect(out.stdout).toContain('LAUNCH=true')
     expect(out.stdout).toContain('BEFORE add(2,3)=5 AFTER add(2,3)=23')
   })
 
   it('stays inert without STENT_CONFIG (host runs unmodified)', () => {
     const out = run(undefined)
-    expect(out.stdout).toContain('NO-CONFIG bindings=0 add(2,3)=5')
+    expect(out.stdout).toContain('NO-CONFIG launch=false bindings=0 add(2,3)=5')
   })
 
   it('prints the stent-enabled launch marker only when the hooks install', () => {
@@ -83,7 +84,13 @@ describe('stent preload injection (Stent launcher shape)', () => {
       name: '@oh-my-dsh/stent', version: '1.0.0', type: 'module', exports: { '.': './index.js' },
     }))
     writeFileSync(join(stubDir, 'index.js'), [
-      'export function bootstrapStent(descriptors) {',
+      'export function markStentDshLaunch() {',
+       '  globalThis[Symbol.for(\'oh-my-dsh.stent-dsh.launch\')] = true',
+       '}',
+       'export function isStentDshLaunch() {',
+       '  return globalThis[Symbol.for(\'oh-my-dsh.stent-dsh.launch\')] === true',
+       '}',
+       'export function bootstrapStent(descriptors) {',
       '  globalThis.__stentProfileMarker = { count: descriptors.length }',
       '}',
       '',

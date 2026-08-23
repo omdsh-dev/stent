@@ -8,12 +8,14 @@
  * The service is platform-free (no `node:*` imports) so the same class
  * serves the Node host and the browser Cordis tree. It is opt-in: nothing in
  * the default host composition mounts it, and a plugin only receives
- * `ctx.stent` when it declares the service.
+ * `ctx.stent` when it declares the service and the runtime entered through the
+ * Stent DSH launch path.
  * @module @oh-my-dsh/stent/service
  */
 
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
+import { isStentDshLaunch } from './activation.ts'
 import { runtime, validatePatchId, validatePatchStatic } from './runtime.ts'
 import { registrationOwner } from './hmr/ownership.ts'
 import type { StentBinding, StentPatch, StentPatchInfo, StentHandler, PatchId } from './types.ts'
@@ -32,7 +34,16 @@ declare module '@deepseek-ai/cordis' {
  */
 export class StentService extends Service {
   /** Service key under which this class registers on `ctx`. */
-  static provide = 'stent'
+  static provide = 'stent';
+
+  /**
+   * Stent-dependent plugins only activate in the DSH Stent launch path.
+   * Low-level callers can still construct this service explicitly for
+   * standalone Stent usage; Cordis injection observes this availability check.
+   */
+  [Service.check]() {
+    return isStentDshLaunch()
+  }
 
   /**
    * Create and install the Stent registry.
@@ -152,10 +163,24 @@ export class StentService extends Service {
  * preferred route: this is the documented fallback for plugins that cannot
  * declare the optional service, and it reads the global store strictly, per
  * the optional-service convention.
+ *
+ * In a DSH process this accessor is launch-gated before it looks up or
+ * mounts the service. A plugin that calls `getStent(ctx)` must declare
+ * `inject: ['stent']`; otherwise it cannot silently bypass Cordis's pending
+ * service gate under plain `dsh` — the call fails loudly instead. Explicit
+ * `new StentService(ctx)` remains available to standalone low-level callers
+ * that intentionally manage the Stent lifecycle themselves.
+ *
  * @param ctx - the Cordis context to read from or mount on.
  * @returns the mounted Stent registry (the context's view).
+ * @throws when the process did not enter through the `stent-dsh` launch path.
  */
 export function getStent(ctx: Context): StentService {
+  if (!isStentDshLaunch()) {
+    throw new Error(
+      'stent: getStent(ctx) requires the stent-dsh launch path; declare inject: ["stent"] for a DSH plugin so Cordis can keep it pending under plain dsh',
+    )
+  }
   const existing = ctx.get('stent')
   if (existing !== undefined) return existing
   return new StentService(ctx)

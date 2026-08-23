@@ -56,7 +56,7 @@ await ctx.plugin(StentDsh)
 
 `installStentBootstrap(rows)` 是面向同一组组合 descriptors 的 profile-bootstrap API;在当前 launcher 路径中,preload 会在目标 CLI 导入模块前完成安装。Handler 仍然是 plugin 在 runtime 注册的受信任代码。Patch descriptor 必须声明在 `config.stent.patches` 下。
 
-`checkStentRequiredPatches(rows)` 在 boot 后运行;当 `required: true` 的 patch 没有绑定时会 loud failure。Launcher 会为组合后的 profile 调度该检查;普通 `dsh` 启动不会自动启用 Stent launch path。
+`checkStentRequiredPatches(rows)` 在 boot 后运行;当 `required: true` 的 patch 没有绑定时会 loud failure。Launcher 会为组合后的 profile 调度该检查;普通 `dsh` 启动不会自动启用 Stent launch path。preload 写入的进程内启动能力和 hooks 安装相互独立;仅安装 bridge 不能激活 Stent 依赖插件。底层 `getStent(ctx)` fallback 在挂载 registry 前也检查同一能力，因此漏写 `inject: ['stent']` 的插件会 loud failure，而不会绕过启动门控。
 
 ## Browser entry
 

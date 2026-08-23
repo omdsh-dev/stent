@@ -77,7 +77,11 @@ runtime code registered by plugins. Patch descriptors must be declared under
 `checkStentRequiredPatches(rows)` runs after boot and fails loudly when a
 `required: true` patch did not bind. The launcher schedules this check for the
 composed profile; a plain `dsh` launch remains inert unless the Stent launch
-path is enabled.
+path is enabled. The preload's process-local launch capability is separate
+from hook installation, so merely installing the bridge cannot activate a
+Stent-dependent plugin. The low-level `getStent(ctx)` fallback checks the same
+capability before mounting a registry, so plugins that omitted
+`inject: ['stent']` fail loudly rather than bypassing the launch gate.
 
 ## Browser entry
 

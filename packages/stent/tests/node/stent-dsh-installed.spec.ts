@@ -73,7 +73,8 @@ writeFileSync(join(stubStent, 'package.json'), JSON.stringify({
   name: '@oh-my-dsh/stent', version: '1.0.0', type: 'module', exports: { '.': './index.js' },
 }))
 writeFileSync(join(stubStent, 'index.js'),
-  'export function bootstrapStent(descriptors) { console.log(`PROFILE-BOOT count=${descriptors.length}`) }\n')
+  'export function markStentDshLaunch() { globalThis[Symbol.for(\'oh-my-dsh.stent-dsh.launch\')] = true }\n'
+  + 'export function bootstrapStent(descriptors) { console.log(`PROFILE-BOOT count=${descriptors.length}`) }\n')
 
 // An installed bundle bin derives `web` from this exact profile path. Keep
 // this profile real (not a symlink), so the launcher exercises that path

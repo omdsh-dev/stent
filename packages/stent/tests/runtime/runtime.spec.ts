@@ -1,4 +1,4 @@
-import { runtime, validatePatchId, validatePatchStatic, StentService, getStent } from '../../src/index.ts'
+import { runtime, validatePatchId, validatePatchStatic, StentService, getStent, STENT_DSH_LAUNCH_KEY, markStentDshLaunch, GLOBAL_BRIDGE_KEY, installBridge, isStentInstalled } from '../../src/index.ts'
 import { publish, subscribeBridge } from '../../src/bridge.ts'
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -13,6 +13,8 @@ const baseInfo = (id: string, enabled = false) => ({
 
 describe('stent runtime registry', () => {
   beforeEach(() => {
+    Reflect.deleteProperty(globalThis, STENT_DSH_LAUNCH_KEY)
+    Reflect.deleteProperty(globalThis, GLOBAL_BRIDGE_KEY)
     for (const info of runtime.list()) runtime.remove(info.id)
   })
 
@@ -160,6 +162,53 @@ describe('stent runtime registry', () => {
 })
 
 describe('StentService', () => {
+  it('keeps Stent-dependent plugins pending before the stent-dsh launch marker', async () => {
+    installBridge()
+    expect(isStentInstalled()).toBe(true)
+    const ctx = new Context()
+    await ctx.plugin(StentService)
+    let applied = false
+    const fiber = ctx.plugin({
+      name: 'stent-gated-fixture',
+      inject: ['stent'],
+      apply: () => { applied = true },
+    })
+    await Promise.resolve()
+    expect(applied).toBe(false)
+    await fiber.dispose()
+    await ctx.fiber.dispose()
+  })
+
+  it('fails loudly when a plugin omits inject and calls getStent before the stent-dsh launch marker', async () => {
+    installBridge()
+    const ctx = new Context()
+    let applied = false
+    await expect(ctx.plugin({
+      name: 'legacy-stent-fixture',
+      apply: (app: Context) => {
+        applied = true
+        getStent(app)
+      },
+    })).rejects.toThrow(/getStent\(ctx\) requires the stent-dsh launch path/)
+    expect(applied).toBe(true)
+    expect(ctx.get('stent')).toBeUndefined()
+    await ctx.fiber.dispose()
+  })
+
+  it('activates Stent-dependent plugins after the stent-dsh launch marker', async () => {
+    markStentDshLaunch()
+    const ctx = new Context()
+    await ctx.plugin(StentService)
+    let applied = false
+    await ctx.plugin({
+      name: 'stent-gated-fixture',
+      inject: ['stent'],
+      apply: () => { applied = true },
+    })
+    expect(applied).toBe(true)
+    await ctx.fiber.dispose()
+  })
+
   it('registers a patch tied to the fiber effect', () => {
     const ctx = new Context()
     const service = new StentService(ctx)
@@ -232,6 +281,7 @@ describe('StentService', () => {
   })
 
   it('getStent mounts once and reuses the mounted service', () => {
+    markStentDshLaunch()
     const ctx = new Context()
     const first = getStent(ctx)
     expect(first).toBeInstanceOf(StentService)
@@ -243,6 +293,7 @@ describe('StentService', () => {
   })
 
   it('getStent returns an already-mounted service untouched', async () => {
+    markStentDshLaunch()
     const ctx = new Context()
     await ctx.plugin(StentService)
     expect(getStent(ctx)).toBeInstanceOf(StentService)
@@ -250,6 +301,7 @@ describe('StentService', () => {
   })
 
   it('a same-plugin re-registration takes over; the stale disposer does not unregister it', async () => {
+    markStentDshLaunch()
     const ctx = new Context()
     const patch = {
       id: 'service/hmr',
@@ -273,6 +325,7 @@ describe('StentService', () => {
   })
 
   it('rejects the same patch id from a different plugin', async () => {
+    markStentDshLaunch()
     const ctx = new Context()
     const patch = {
       id: 'service/x',
@@ -298,6 +351,7 @@ describe('StentService', () => {
   })
 
   it('resolves the registration owner from the loader entry when present', async () => {
+    markStentDshLaunch()
     const ctx = new Context()
     const patch = {
       id: 'service/entry-owned',
@@ -319,6 +373,7 @@ describe('StentService', () => {
   })
 
   it('remove() frees the entry and owns() reflects the owning fiber', async () => {
+    markStentDshLaunch()
     const ctx = new Context()
     const patch = {
       id: 'service/removable',

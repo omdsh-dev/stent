@@ -76,8 +76,9 @@ describe('StentCompatService (unit)', () => {
     // The conflict check runs before the bridge check, so a claimed id fails
     // loud in any process; the bridge check only guards actual registration.
     const { Context } = await import('@deepseek-ai/cordis')
-    const { StentService } = await import('@oh-my-dsh/stent')
+    const { StentService, markStentDshLaunch } = await import('@oh-my-dsh/stent')
     const { StentCompatService } = await import('../../src/compat/service.ts')
+    markStentDshLaunch()
     const ctx = new Context()
     await ctx.plugin(StentService)
     await ctx.plugin(StentCompatService, {
@@ -99,8 +100,9 @@ describe('StentCompatService (unit)', () => {
 
   it('unregisterPatch removes the entry so a re-registration starts a fresh ownership cycle', async () => {
     const { Context } = await import('@deepseek-ai/cordis')
-    const { StentService } = await import('@oh-my-dsh/stent')
+    const { StentService, markStentDshLaunch } = await import('@oh-my-dsh/stent')
     const { StentCompatService } = await import('../../src/compat/service.ts')
+    markStentDshLaunch()
     const ctx = new Context()
     await ctx.plugin(StentService)
     await ctx.plugin(StentCompatService, {})

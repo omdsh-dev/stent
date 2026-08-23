@@ -33,7 +33,11 @@ import Hmr from '@deepseek-ai/cordis-plugin-hmr'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
-import { StentService, installStentHooks, patchInstrumentation } from '../../src/index.ts'
+import { StentService, installStentHooks, markStentDshLaunch, patchInstrumentation } from '../../src/index.ts'
+
+// This child intentionally models the approved stent-dsh launch path. The
+// production preload sets the same process-local capability before Host boot.
+markStentDshLaunch()
 
 const mode = process.argv[2]
 if (mode !== 'config' && mode !== 'module') {

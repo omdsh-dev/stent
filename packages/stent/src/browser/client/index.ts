@@ -16,6 +16,7 @@
  */
 
 import { installBridge } from '../../bridge.ts'
+import { markStentDshLaunch } from '../../activation.ts'
 import { StentService } from '../../service.ts'
 import { runtime } from '../../runtime.ts'
 import type { Context } from '@deepseek-ai/cordis'
@@ -28,10 +29,14 @@ export type { StentPatch, StentPatchInfo }
 export const name = 'stent'
 
 /**
- * Install the Stent runtime for the browser Cordis tree.
+ * Install the Stent runtime from the approved browser client entry.
+ *
+ * The marker is written before mounting `StentService`: dependent client
+ * plugins use the same Cordis availability gate as Node plugins.
  * @param ctx - Cordis context that owns the service.
  */
 export async function apply(ctx: Context): Promise<void> {
+  markStentDshLaunch()
   installBridge()
   await ctx.plugin(StentService)
 }

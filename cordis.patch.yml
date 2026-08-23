@@ -4,6 +4,10 @@
 # them opts a profile into the Stent/Mixin extension layer. Browser code is
 # supplied by each package's own dshClient face. The DSH integration row also
 # owns the host catalog adapter; the pure service remains host-independent.
+# Plain `dsh` does not receive the launch capability; the stent-dsh launcher
+# enables these rows and its preload activates Stent-dependent plugins. The
+# low-level getStent(ctx) fallback is gated by the same capability, so a plugin
+# that omitted inject: ['stent'] cannot mount the registry under plain dsh.
 # The pure `stent-api` package is peer-only: Mods mount its compat
 # facade themselves.
 #
