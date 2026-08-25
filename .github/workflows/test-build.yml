@@ -45,48 +45,50 @@ jobs:
           TEST_VERSION: 0.1.2-test.${{ github.run_id }}.${{ github.run_attempt }}
         run: |
           set -euo pipefail
-          node --input-type=module -e '
-            import { readFileSync, writeFileSync } from "node:fs"
-            const version = process.env.TEST_VERSION
-            const trio = [
-              "@oh-my-dsh/stent",
-              "@oh-my-dsh/stent-api",
-              "@oh-my-dsh/stent-dsh",
-            ]
-            for (const file of [
-              "package.json",
-              "packages/stent/package.json",
-              "packages/stent-api/package.json",
-              "packages/stent-dsh/package.json",
-            ]) {
-              const pkg = JSON.parse(readFileSync(file, "utf8"))
-              pkg.version = version
-              writeFileSync(file, JSON.stringify(pkg, null, 2) + "\n")
+          # Heredoc with a quoted delimiter: bash passes the body through
+          # verbatim, so single quotes, backticks and $ in the JS are safe.
+          node --input-type=module <<'EOF'
+          import { readFileSync, writeFileSync } from "node:fs"
+          const version = process.env.TEST_VERSION
+          const trio = [
+            "@oh-my-dsh/stent",
+            "@oh-my-dsh/stent-api",
+            "@oh-my-dsh/stent-dsh",
+          ]
+          for (const file of [
+            "package.json",
+            "packages/stent/package.json",
+            "packages/stent-api/package.json",
+            "packages/stent-dsh/package.json",
+          ]) {
+            const pkg = JSON.parse(readFileSync(file, "utf8"))
+            pkg.version = version
+            writeFileSync(file, JSON.stringify(pkg, null, 2) + "\n")
+          }
+          // The root carrier depends on the trio by npm semver ranges: pin
+          // them to the exact test version so consumers install the trio
+          // from the same test build.
+          const root = JSON.parse(readFileSync("package.json", "utf8"))
+          for (const name of trio) {
+            if (root.dependencies?.[name]) {
+              root.dependencies[name] = version
             }
-            // The root carrier depends on the trio by npm semver ranges: pin
-            // them to the exact test version so consumers install the trio
-            // from the same test build.
-            const root = JSON.parse(readFileSync("package.json", "utf8"))
-            for (const name of trio) {
-              if (root.dependencies?.[name]) {
-                root.dependencies[name] = version
-              }
+          }
+          writeFileSync("package.json", JSON.stringify(root, null, 2) + "\n")
+          // Peer ranges do not match prereleases, so the trio's peers must
+          // point at the exact test version too.
+          for (const file of [
+            "packages/stent-api/package.json",
+            "packages/stent-dsh/package.json",
+          ]) {
+            const pkg = JSON.parse(readFileSync(file, "utf8"))
+            if (pkg.peerDependencies?.["@oh-my-dsh/stent"]) {
+              pkg.peerDependencies["@oh-my-dsh/stent"] = version
             }
-            writeFileSync("package.json", JSON.stringify(root, null, 2) + "\n")
-            // Peer ranges do not match prereleases, so the trio's peers must
-            // point at the exact test version too.
-            for (const file of [
-              "packages/stent-api/package.json",
-              "packages/stent-dsh/package.json",
-            ]) {
-              const pkg = JSON.parse(readFileSync(file, "utf8"))
-              if (pkg.peerDependencies?.["@oh-my-dsh/stent"]) {
-                pkg.peerDependencies["@oh-my-dsh/stent"] = version
-              }
-              writeFileSync(file, JSON.stringify(pkg, null, 2) + "\n")
-            }
-            console.log(`rewritten to ${version}`)
-          '
+            writeFileSync(file, JSON.stringify(pkg, null, 2) + "\n")
+          }
+          console.log(`rewritten to ${version}`)
+          EOF
           # Re-resolve so the lockfile stays consistent with the rewritten
           # manifests (workspace overrides keep resolving to local packages).
           pnpm install
@@ -110,36 +112,36 @@ jobs:
           PACK_DIR: ${{ runner.temp }}/stent-packages
         run: |
           set -euo pipefail
-          node --input-type=module -e '
-            import { createHash } from "node:crypto"
-            import { existsSync, readFileSync, writeFileSync } from "node:fs"
-            const version = process.env.TEST_VERSION
-            // Publish order: implementation packages first, root carrier last.
-            const order = [
-              ["@oh-my-dsh/stent", "oh-my-dsh-stent"],
-              ["@oh-my-dsh/stent-api", "oh-my-dsh-stent-api"],
-              ["@oh-my-dsh/stent-dsh", "oh-my-dsh-stent-dsh"],
-              ["@oh-my-dsh/stent-pack", "oh-my-dsh-stent-pack"],
-            ]
-            const packages = []
-            for (const [name, base] of order) {
-              const file = `${base}-${version}.tgz`
-              const path = `${process.env.PACK_DIR}/${file}`
-              if (!existsSync(path)) {
-                throw new Error(`missing tarball: ${path}`)
-              }
-              const sha256 = createHash("sha256")
-                .update(readFileSync(path))
-                .digest("hex")
-              packages.push({ name, file, sha256 })
+          node --input-type=module <<'EOF'
+          import { createHash } from "node:crypto"
+          import { existsSync, readFileSync, writeFileSync } from "node:fs"
+          const version = process.env.TEST_VERSION
+          // Publish order: implementation packages first, root carrier last.
+          const order = [
+            ["@oh-my-dsh/stent", "oh-my-dsh-stent"],
+            ["@oh-my-dsh/stent-api", "oh-my-dsh-stent-api"],
+            ["@oh-my-dsh/stent-dsh", "oh-my-dsh-stent-dsh"],
+            ["@oh-my-dsh/stent-pack", "oh-my-dsh-stent-pack"],
+          ]
+          const packages = []
+          for (const [name, base] of order) {
+            const file = `${base}-${version}.tgz`
+            const path = `${process.env.PACK_DIR}/${file}`
+            if (!existsSync(path)) {
+              throw new Error(`missing tarball: ${path}`)
             }
-            const manifest = { mode: "test", version, packages }
-            writeFileSync(
-              `${process.env.PACK_DIR}/manifest.json`,
-              JSON.stringify(manifest, null, 2) + "\n"
-            )
-            console.log(`manifest: ${packages.length} packages @ ${version}`)
-          '
+            const sha256 = createHash("sha256")
+              .update(readFileSync(path))
+              .digest("hex")
+            packages.push({ name, file, sha256 })
+          }
+          const manifest = { mode: "test", version, packages }
+          writeFileSync(
+            `${process.env.PACK_DIR}/manifest.json`,
+            JSON.stringify(manifest, null, 2) + "\n"
+          )
+          console.log(`manifest: ${packages.length} packages @ ${version}`)
+          EOF
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

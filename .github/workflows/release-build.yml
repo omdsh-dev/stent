@@ -92,36 +92,36 @@ jobs:
           PACK_DIR: ${{ runner.temp }}/stent-packages
         run: |
           set -euo pipefail
-          node --input-type=module -e '
-            import { createHash } from "node:crypto"
-            import { existsSync, readFileSync, writeFileSync } from "node:fs"
-            const version = process.env.PACK_VERSION
-            // Publish order: implementation packages first, root carrier last.
-            const order = [
-              ["@oh-my-dsh/stent", "oh-my-dsh-stent"],
-              ["@oh-my-dsh/stent-api", "oh-my-dsh-stent-api"],
-              ["@oh-my-dsh/stent-dsh", "oh-my-dsh-stent-dsh"],
-              ["@oh-my-dsh/stent-pack", "oh-my-dsh-stent-pack"],
-            ]
-            const packages = []
-            for (const [name, base] of order) {
-              const file = `${base}-${version}.tgz`
-              const path = `${process.env.PACK_DIR}/${file}`
-              if (!existsSync(path)) {
-                throw new Error(`missing tarball: ${path}`)
-              }
-              const sha256 = createHash("sha256")
-                .update(readFileSync(path))
-                .digest("hex")
-              packages.push({ name, file, sha256 })
+          node --input-type=module <<'EOF'
+          import { createHash } from "node:crypto"
+          import { existsSync, readFileSync, writeFileSync } from "node:fs"
+          const version = process.env.PACK_VERSION
+          // Publish order: implementation packages first, root carrier last.
+          const order = [
+            ["@oh-my-dsh/stent", "oh-my-dsh-stent"],
+            ["@oh-my-dsh/stent-api", "oh-my-dsh-stent-api"],
+            ["@oh-my-dsh/stent-dsh", "oh-my-dsh-stent-dsh"],
+            ["@oh-my-dsh/stent-pack", "oh-my-dsh-stent-pack"],
+          ]
+          const packages = []
+          for (const [name, base] of order) {
+            const file = `${base}-${version}.tgz`
+            const path = `${process.env.PACK_DIR}/${file}`
+            if (!existsSync(path)) {
+              throw new Error(`missing tarball: ${path}`)
             }
-            const manifest = { mode: "release", version, packages }
-            writeFileSync(
-              `${process.env.PACK_DIR}/manifest.json`,
-              JSON.stringify(manifest, null, 2) + "\n"
-            )
-            console.log(`manifest: ${packages.length} packages @ ${version}`)
-          '
+            const sha256 = createHash("sha256")
+              .update(readFileSync(path))
+              .digest("hex")
+            packages.push({ name, file, sha256 })
+          }
+          const manifest = { mode: "release", version, packages }
+          writeFileSync(
+            `${process.env.PACK_DIR}/manifest.json`,
+            JSON.stringify(manifest, null, 2) + "\n"
+          )
+          console.log(`manifest: ${packages.length} packages @ ${version}`)
+          EOF
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

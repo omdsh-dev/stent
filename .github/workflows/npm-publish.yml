@@ -47,38 +47,38 @@ jobs:
       - name: Verify SHA256 and publish tarballs
         run: |
           set -euo pipefail
-          node --input-type=module -e '
-            import { execFileSync } from "node:child_process"
-            import { createHash } from "node:crypto"
-            import { readFileSync } from "node:fs"
-            const manifest = JSON.parse(readFileSync("packages/manifest.json", "utf8"))
-            const isTest = process.env.RUN_MODE === "test-build"
-            for (const p of manifest.packages) {
-              const path = `packages/${p.file}`
-              const sha256 = createHash("sha256")
-                .update(readFileSync(path))
-                .digest("hex")
-              if (sha256 !== p.sha256) {
-                console.error(
-                  `SHA256 mismatch for ${p.file}: expected ${p.sha256}, got ${sha256}`
-                )
-                process.exit(1)
-              }
-              console.log(`verified ${p.file}`)
+          node --input-type=module <<'EOF'
+          import { execFileSync } from "node:child_process"
+          import { createHash } from "node:crypto"
+          import { readFileSync } from "node:fs"
+          const manifest = JSON.parse(readFileSync("packages/manifest.json", "utf8"))
+          const isTest = process.env.RUN_MODE === "test-build"
+          for (const p of manifest.packages) {
+            const path = `packages/${p.file}`
+            const sha256 = createHash("sha256")
+              .update(readFileSync(path))
+              .digest("hex")
+            if (sha256 !== p.sha256) {
+              console.error(
+                `SHA256 mismatch for ${p.file}: expected ${p.sha256}, got ${sha256}`
+              )
+              process.exit(1)
             }
-            for (const p of manifest.packages) {
-              const args = [
-                "publish", `packages/${p.file}`,
-                "--access", "public",
-                "--provenance",
-                "--registry", "https://registry.npmjs.org/",
-              ]
-              if (isTest) {
-                // npm requires prerelease versions to carry an explicit dist-tag.
-                args.push("--tag", "test")
-              }
-              console.log(`publishing ${p.name}@${manifest.version} (${p.file})`)
-              execFileSync("npm", args, { stdio: "inherit" })
+            console.log(`verified ${p.file}`)
+          }
+          for (const p of manifest.packages) {
+            const args = [
+              "publish", `packages/${p.file}`,
+              "--access", "public",
+              "--provenance",
+              "--registry", "https://registry.npmjs.org/",
+            ]
+            if (isTest) {
+              // npm requires prerelease versions to carry an explicit dist-tag.
+              args.push("--tag", "test")
             }
-            console.log(`all packages published: ${manifest.mode} ${manifest.version}`)
-          '
+            console.log(`publishing ${p.name}@${manifest.version} (${p.file})`)
+            execFileSync("npm", args, { stdio: "inherit" })
+          }
+          console.log(`all packages published: ${manifest.mode} ${manifest.version}`)
+          EOF
