@@ -15,16 +15,6 @@ import { checkRequiredPatches, flushBindingReports, isStentDshLaunch, runtime } 
 
 const configPath = process.env.STENT_CONFIG
 
-if (process.env.STENT_PROFILE !== undefined && process.env.STENT_PROFILE !== '') {
-  // Profile-authoritative resolution case: the stub package installed under
-  // the profile dir records how many descriptors its bootstrapStent
-  // received. The real hooks never install, so the fixture import above ran
-  // unmodified.
-  const marker = globalThis.__stentProfileMarker
-  console.log(`PROFILE-MARKER count=${marker?.count}`)
-  process.exit(marker?.count === 1 ? 0 : 1)
-}
-
 if (configPath === undefined || configPath === '') {
   // No config: the preload must be inert — the host runs unmodified. The
   // fixture import above must have produced no bindings and no behavior

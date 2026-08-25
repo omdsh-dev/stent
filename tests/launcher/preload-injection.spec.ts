@@ -73,11 +73,8 @@ describe('stent preload injection (Stent launcher shape)', () => {
     expect(inert.stderr).not.toContain('stent:')
   })
 
-  it('resolves the trio from the profile when STENT_PROFILE is set', () => {
-    // A stub "stent" under the profile dir records the descriptor
-    // count its bootstrapStent received; the preload must import THIS copy
-    // (the profile's installed copy is authoritative at runtime) rather
-    // than the one beside the preload.
+  it('uses the static Stent import even when STENT_PROFILE is set', () => {
+    // 写入一个会在导入时失败的 profile 替代包，验证正常 import 不会解析到这里。
     const profileDir = join(tempDir, 'profile')
     const stubDir = join(profileDir, 'node_modules', '@oh-my-dsh', 'stent')
     mkdirSync(stubDir, { recursive: true })
@@ -91,22 +88,10 @@ describe('stent preload injection (Stent launcher shape)', () => {
         exports: { '.': './index.js' },
       }),
     )
-    writeFileSync(
-      join(stubDir, 'index.js'),
-      [
-        'export function markStentDshLaunch() {',
-        "  globalThis[Symbol.for('oh-my-dsh.stent-dsh.launch')] = true",
-        '}',
-        'export function isStentDshLaunch() {',
-        "  return globalThis[Symbol.for('oh-my-dsh.stent-dsh.launch')] === true",
-        '}',
-        'export function bootstrapStent(descriptors) {',
-        '  globalThis.__stentProfileMarker = { count: descriptors.length }',
-        '}',
-        '',
-      ].join('\n'),
-    )
+    writeFileSync(join(stubDir, 'index.js'), "throw new Error('profile Stent package must not be imported')\n")
+
     const out = run(configPath, profileDir)
-    expect(out.stdout).toContain('PROFILE-MARKER count=1')
+    expect(out.stdout).toContain('LAUNCH=true')
+    expect(out.stdout).toContain('BEFORE add(2,3)=5 AFTER add(2,3)=23')
   })
 })

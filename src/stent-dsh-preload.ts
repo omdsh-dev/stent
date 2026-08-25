@@ -13,52 +13,17 @@
  * also records the process-local stent-dsh launch capability before Host
  * plugins can resolve their Stent dependency.
  *
- * The trio resolves from the profile when STENT_PROFILE is set: the
- * profile's installed copy is authoritative at runtime — the Host plugin and
- * every consumer plugin import that same copy, so hooks, binding reports,
- * and handlers share one module instance. (A static import cannot express
- * this: when this file ships inside the installed bundle, Node's package
- * self-reference would bind it to an inner copy instead of the profile's.)
- * Without the env the preload resolves from its own location (dev/sandbox
- * layout, tsx source mapping).
+ * preload 使用普通的静态 import 引入 `@oh-my-dsh/stent`，包会从 launcher
+ * 的依赖图中解析。在 installed 模式下，launcher 会在此模块加载前将 bundle
+ * 的依赖闭包修复到 profile 中，因此 preload 和 Host plugin 仍然使用同一份包。
  */
 import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
-
-type StentPatchStub = Record<string, unknown>
-
-type BootstrapStent = (descriptors: StentPatchStub[]) => unknown
-type MarkStentDshLaunch = () => void
-
-interface StentModule {
-  bootstrapStent: BootstrapStent
-  markStentDshLaunch: MarkStentDshLaunch
-}
-
-async function loadStentModule(specifier: string): Promise<StentModule> {
-  const module = (await import(specifier)) as unknown as StentModule
-  return module
-}
+import { bootstrapStent, markStentDshLaunch, type StentPatchStub } from '@oh-my-dsh/stent'
 
 const configPath = process.env.STENT_CONFIG
 if (configPath !== undefined && configPath !== '') {
   const configUrl = pathToFileURL(configPath)
-  let bootstrapStent: BootstrapStent
-  let markStentDshLaunch: MarkStentDshLaunch
-  const profileDir = process.env.STENT_PROFILE
-  if (profileDir !== undefined && profileDir !== '') {
-    const profileUrl = pathToFileURL(profileDir + sep)
-    const resolveFrom = createRequire(new URL('package.json', profileUrl))
-    const stentModule = await loadStentModule(pathToFileURL(resolveFrom.resolve('@oh-my-dsh/stent')).href)
-    bootstrapStent = stentModule.bootstrapStent
-    markStentDshLaunch = stentModule.markStentDshLaunch
-  } else {
-    const stentModule = await loadStentModule('@oh-my-dsh/stent')
-    bootstrapStent = stentModule.bootstrapStent
-    markStentDshLaunch = stentModule.markStentDshLaunch
-  }
   markStentDshLaunch()
   const descriptors = JSON.parse(readFileSync(configUrl, 'utf8')) as StentPatchStub[]
   bootstrapStent(descriptors)

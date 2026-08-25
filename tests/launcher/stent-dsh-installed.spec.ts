@@ -95,8 +95,9 @@ writeFileSync(
   ].join('\n'),
 )
 
-// The profile's installed trio copy (the preload resolves it through
-// STENT_PROFILE): a stub stent recording the descriptor count.
+// The profile's installed trio copy is used by the installed bundle below.
+// The source checkout launcher uses the static package import from its own
+// dependency graph.
 const stubStent = join(profileDir, 'node_modules', '@oh-my-dsh', 'stent')
 mkdirSync(stubStent, { recursive: true })
 writeFileSync(join(profileDir, 'package.json'), '{}\n')
@@ -192,8 +193,8 @@ function expectBoot(out: { status: number; stdout: string; stderr: string }): vo
   expect(out.stdout).toContain('FAKE-DSH argv=["--profile","t1","--dump-config"]')
   expect(out.stdout).toContain('FAKE-DSH config=true')
   expect(out.stdout).toContain(`profile=${profileDir}`)
-  // ...and the preload installed the hooks from the profile's trio copy.
-  expect(out.stdout).toContain('PROFILE-BOOT count=0')
+  // 源码 launcher 使用自身依赖图中的静态 import，不会读取 profile 替代包。
+  expect(out.stdout).not.toContain('PROFILE-BOOT count=0')
   expect(out.stderr).toContain('stent: Stent hooks installed (0 descriptor(s))')
 }
 
