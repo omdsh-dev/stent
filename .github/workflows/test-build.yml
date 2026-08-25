@@ -1,0 +1,149 @@
+name: test-build
+
+# Manual-only entry: rewrite all four packages to a unique test version
+# (0.1.2-test.<run_id>.<run_attempt>), build, pack tarballs and upload them
+# together with a SHA256 manifest. Publishing never happens here: npm Trusted
+# Publishing only allows one CI workflow per package, so the actual publish is
+# done solely by npm-publish.yml through workflow_run.
+"on":
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    uses: ./.github/workflows/check.yml
+
+  build:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Rewrite workspace to the test version
+        env:
+          TEST_VERSION: 0.1.2-test.${{ github.run_id }}.${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          node --input-type=module -e '
+            import { readFileSync, writeFileSync } from "node:fs"
+            const version = process.env.TEST_VERSION
+            const trio = [
+              "@oh-my-dsh/stent",
+              "@oh-my-dsh/stent-api",
+              "@oh-my-dsh/stent-dsh",
+            ]
+            for (const file of [
+              "package.json",
+              "packages/stent/package.json",
+              "packages/stent-api/package.json",
+              "packages/stent-dsh/package.json",
+            ]) {
+              const pkg = JSON.parse(readFileSync(file, "utf8"))
+              pkg.version = version
+              writeFileSync(file, JSON.stringify(pkg, null, 2) + "\n")
+            }
+            // The root carrier depends on the trio by npm semver ranges: pin
+            // them to the exact test version so consumers install the trio
+            // from the same test build.
+            const root = JSON.parse(readFileSync("package.json", "utf8"))
+            for (const name of trio) {
+              if (root.dependencies?.[name]) {
+                root.dependencies[name] = version
+              }
+            }
+            writeFileSync("package.json", JSON.stringify(root, null, 2) + "\n")
+            // Peer ranges do not match prereleases, so the trio's peers must
+            // point at the exact test version too.
+            for (const file of [
+              "packages/stent-api/package.json",
+              "packages/stent-dsh/package.json",
+            ]) {
+              const pkg = JSON.parse(readFileSync(file, "utf8"))
+              if (pkg.peerDependencies?.["@oh-my-dsh/stent"]) {
+                pkg.peerDependencies["@oh-my-dsh/stent"] = version
+              }
+              writeFileSync(file, JSON.stringify(pkg, null, 2) + "\n")
+            }
+            console.log(`rewritten to ${version}`)
+          '
+          # Re-resolve so the lockfile stays consistent with the rewritten
+          # manifests (workspace overrides keep resolving to local packages).
+          pnpm install
+
+      - name: Build
+        run: pnpm run pack:build
+
+      - name: Pack tarballs
+        env:
+          TEST_VERSION: 0.1.2-test.${{ github.run_id }}.${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/stent-packages"
+          for dir in packages/stent packages/stent-api packages/stent-dsh .; do
+            (cd "${dir}" && pnpm pack --pack-destination "$RUNNER_TEMP/stent-packages")
+          done
+
+      - name: Write manifest
+        env:
+          TEST_VERSION: 0.1.2-test.${{ github.run_id }}.${{ github.run_attempt }}
+          PACK_DIR: ${{ runner.temp }}/stent-packages
+        run: |
+          set -euo pipefail
+          node --input-type=module -e '
+            import { createHash } from "node:crypto"
+            import { existsSync, readFileSync, writeFileSync } from "node:fs"
+            const version = process.env.TEST_VERSION
+            // Publish order: implementation packages first, root carrier last.
+            const order = [
+              ["@oh-my-dsh/stent", "oh-my-dsh-stent"],
+              ["@oh-my-dsh/stent-api", "oh-my-dsh-stent-api"],
+              ["@oh-my-dsh/stent-dsh", "oh-my-dsh-stent-dsh"],
+              ["@oh-my-dsh/stent-pack", "oh-my-dsh-stent-pack"],
+            ]
+            const packages = []
+            for (const [name, base] of order) {
+              const file = `${base}-${version}.tgz`
+              const path = `${process.env.PACK_DIR}/${file}`
+              if (!existsSync(path)) {
+                throw new Error(`missing tarball: ${path}`)
+              }
+              const sha256 = createHash("sha256")
+                .update(readFileSync(path))
+                .digest("hex")
+              packages.push({ name, file, sha256 })
+            }
+            const manifest = { mode: "test", version, packages }
+            writeFileSync(
+              `${process.env.PACK_DIR}/manifest.json`,
+              JSON.stringify(manifest, null, 2) + "\n"
+            )
+            console.log(`manifest: ${packages.length} packages @ ${version}`)
+          '
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: stent-packages
+          path: ${{ runner.temp }}/stent-packages
+          retention-days: 14
