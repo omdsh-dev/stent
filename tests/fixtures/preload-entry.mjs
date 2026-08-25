@@ -2,7 +2,7 @@
  * Entry module for the Stent launcher. It runs the host CLI as
  * `node --import tsx/esm --import <Stent preload> bin.ts`
  * with STENT_CONFIG set, so by the time this file's imports evaluate,
- * bootstrapStent must already have installed the transformation hooks.
+ * the Stent loader hooks must already be installed.
  *
  * The static import below proves that ordering: it goes through the hook,
  * the binding report must be observable from this same process, and a handler

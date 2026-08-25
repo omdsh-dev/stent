@@ -9,7 +9,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { StentPatchStub } from '@oh-my-dsh/stent'
+import type { StentPatchStub } from '@oh-my-dsh/stent/types'
 
 /** One composed profile row's config surface (the loader row shape). */
 export interface StentProfileRow {
@@ -56,8 +56,8 @@ export async function installStentBootstrap(rows: StentProfileRows): Promise<voi
   const stentRow = [...rows].find(([id]) => id === 'stent')?.[1]
   const descriptors = stentDescriptors(stentRow?.config as StentRowConfig | undefined)
   if (!Array.isArray(descriptors) || descriptors.length === 0) return
-  const { bootstrapStent } = await import('@oh-my-dsh/stent')
-  bootstrapStent(descriptors as StentPatchStub[])
+  const { expandPatchStub, installStentHooks } = await import('@oh-my-dsh/stent/node/loader')
+  installStentHooks((descriptors as StentPatchStub[]).flatMap(expandPatchStub))
 }
 
 /**

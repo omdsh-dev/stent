@@ -14,7 +14,6 @@
 export { STENT_DSH_LAUNCH_KEY, isStentDshLaunch, markStentDshLaunch } from './activation.ts'
 export { GLOBAL_BRIDGE_KEY, installBridge, isStentInstalled, publish, type StentBridgeCall } from './bridge.ts'
 export {
-  bootstrapStent,
   checkRequiredPatches,
   expandPatchStub,
   flushBindingReports,

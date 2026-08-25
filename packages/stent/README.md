@@ -21,16 +21,19 @@ The source is layered inside the three packages rather than adding another packa
 ## Installation and bootstrap
 
 ```ts
-import { bootstrapStent, StentService } from '@oh-my-dsh/stent'
+import { expandPatchStub, installStentHooks } from '@oh-my-dsh/stent/node/loader'
+import { StentService } from '@oh-my-dsh/stent'
+import type { StentPatchStub } from '@oh-my-dsh/stent/types'
 import type { Context } from 'cordis'
 
 declare const ctx: Context
-const disposeHooks = bootstrapStent([])
+const patches: StentPatchStub[] = []
+const disposeHooks = installStentHooks(patches.flatMap(expandPatchStub))
 await ctx.plugin(StentService)
 disposeHooks()
 ```
 
-`bootstrapStent` validates the patches, builds their Orchestrion instrumentations, and installs the transformation hooks. In the host, a `stent` composition row carrying static descriptors under `config.stent.patches` (id/target/operation — handlers are trusted code bound at registration) is bootstrapped automatically during `boot()` preparation, before any config-tree entry mounts. `installStentHooks` is the lower-level form when instrumentations are already built.
+`installStentHooks` installs the transformation hooks from expanded instrumentations. When starting from static patch descriptors, expand them with `patches.flatMap(expandPatchStub)` first. In the host, a `stent` composition row carrying static descriptors under `config.stent.patches` (id/target/operation — handlers are trusted code bound at registration) is installed automatically during `boot()` preparation, before any config-tree entry mounts.
 
 The launcher boundary is separate from hook installation. The `stent-dsh` preload marks the launch before bootstrapping hooks; a plain `dsh` launch never receives that marker. `StentService` uses it as Cordis's availability check, so plugins declaring `inject: ['stent']` remain pending under plain `dsh` even if another path installed the low-level bridge. The browser client entry marks the equivalent Stent client activation. The same gate is enforced by `getStent(ctx)` before it reuses or mounts a registry: a DSH plugin that omitted `inject: ['stent']` cannot silently activate through the accessor and instead fails loudly. Explicit `new StentService(ctx)` remains the low-level escape hatch for standalone callers that intentionally manage activation themselves.
 

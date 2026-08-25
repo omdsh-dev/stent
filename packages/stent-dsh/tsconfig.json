@@ -2,7 +2,8 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "paths": {
-      "@oh-my-dsh/stent": ["../stent/src"]
+      "@oh-my-dsh/stent": ["../stent/src"],
+      "@oh-my-dsh/stent/*": ["../stent/src/*"]
     }
   },
   "include": ["src", "tests"]

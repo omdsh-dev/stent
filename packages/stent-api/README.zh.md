@@ -99,7 +99,7 @@ Public surface 不导出 AST selector、模块文件路径、`StentPatch`、raw 
 
 ## Profile bootstrap
 
-`installStentBootstrap(rows)` 读取组合后 profile 的 `stent` 行,从 `config.stent.patches` 取得静态 patch 描述符,并在 boot `prepare` 阶段(任何目标插件模块导入之前)通过 `bootstrapStent` 安装。`checkStentRequiredPatches(rows)` 在 boot 完成后运行,当 `required` patch 未绑定任何内容时失败即显式。二者都从 `stent-dsh` 重新导出。
+`installStentBootstrap(rows)` 读取组合后 profile 的 `stent` 行,从 `config.stent.patches` 取得静态 patch 描述符,通过 `expandPatchStub` 展开后交给 `installStentHooks`,并在 boot `prepare` 阶段(任何目标插件模块导入之前)安装。`checkStentRequiredPatches(rows)` 在 boot 完成后运行,当 `required` patch 未绑定任何内容时失败即显式。二者都从 `stent-dsh` 重新导出。
 
 ## 安全与信任模型
 

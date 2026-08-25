@@ -1,7 +1,7 @@
 /**
- * Child side of the Stent test kit: reads the fixture payload from stdin,
- * bootstraps the patches, imports the entry module, runs its default export,
- * and writes one JSON envelope to stdout.
+ * Child side of the Stent test kit: reads the fixture payload, installs the
+ * patch hooks, imports the entry module, runs its default export, and writes
+ * one JSON envelope to stdout.
  *
  * Runs under `node --import tsx/esm` (see {@link runPatchFixture}); the
  * envelope is the ONLY stdout output, so the parent can parse it verbatim.
@@ -11,7 +11,8 @@
  * @module @oh-my-dsh/stent/test/testkit-runner
  */
 
-import { bootstrapStent, flushBindingReports, runtime } from '../index.ts'
+import { expandPatchStub, flushBindingReports, installStentHooks } from '../node/loader.ts'
+import { runtime } from '../runtime.ts'
 import type { StentPatchStub } from '../types.ts'
 
 /** Read the whole stdin stream. */
@@ -50,7 +51,7 @@ if (!Array.isArray(payload.patches) || typeof payload.entry !== 'string') {
 }
 
 try {
-  bootstrapStent(payload.patches)
+  installStentHooks(payload.patches.flatMap(expandPatchStub))
   // The entry is a runtime-provided module specifier; its shape is the
   // documented default-export function contract.
   const mod = (await import(payload.entry)) as { default?: unknown }

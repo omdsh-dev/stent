@@ -6,7 +6,8 @@
  * `./src/*` export and is launched with tsx from the repository root.
  */
 
-import { bootstrapStent, checkRequiredPatches, installStentHooks, patchInstrumentation, retransformCommonJs, retransformEsm, runtime, GLOBAL_BRIDGE_KEY } from '../../src/index.ts'
+import { checkRequiredPatches, patchInstrumentation, retransformCommonJs, retransformEsm, runtime, GLOBAL_BRIDGE_KEY } from '../../src/index.ts'
+import { expandPatchStub, installStentHooks } from '../../src/node/loader.ts'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 
@@ -676,7 +677,7 @@ switch (caseName) {
         },
         operation: 'before',
       }
-      bootstrapStent([stub])
+      installStentHooks(expandPatchStub(stub))
       const indexMod = await import(fixtureUrl)
       const libUrl = new URL('../fixtures/node_modules/stent-target-fixture/lib.js', import.meta.url)
       const libMod = await import(libUrl)

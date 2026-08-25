@@ -30,7 +30,7 @@ import { nodePackageIdentity, type PackageIdentity } from './identity.ts'
 import { runtime } from '../runtime.ts'
 import { retransformCommonJs as reloadCommonJs, retransformEsm as reloadEsm } from '../hmr/reload.ts'
 import { registerStentTransform } from '../transform/transform.ts'
-import { expandPatchStub, orderInstrumentations, type StentInstrumentationConfig } from '../transform/config.ts'
+import { orderInstrumentations, type StentInstrumentationConfig } from '../transform/config.ts'
 import { serializeInstrumentation, reviveInstrumentation } from './wire.ts'
 import type { StentBindingReport, StentPatchStub, PatchId } from '../types.ts'
 
@@ -43,20 +43,6 @@ export type { StentWireInstrumentation } from './wire.ts'
 type CompileFn = (this: Module, content: string, filename: string) => unknown
 
 /**
- * Convenience bootstrap for application preparation: validate patches, build
- * their instrumentations, and install the transformation hooks. Call this in
- * the host's `boot()` `prepare` hook (or any point before the target plugin's
- * first import); then mount `StentService` and let patch plugins register
- * handlers through `ctx.stent.register`.
- * @param patches - validated patch descriptors; each target must carry a
- * `functionQuery` or `astQuery`.
- * @returns a disposer that deactivates the installation.
- */
-export function bootstrapStent(patches: StentPatchStub[]): () => void {
-  return installStentHooks(patches.flatMap(expandPatchStub))
-}
-
-/**
  * Verify that every `required` patch recorded at least one load-time
  * binding, and fail loud naming the offenders when any did not. Call after
  * the application boots (the target modules have been imported), so the
@@ -64,7 +50,7 @@ export function bootstrapStent(patches: StentPatchStub[]): () => void {
  * patch whose target never matched is a misconfiguration — wrong launch
  * form (src vs lib), moved function, or renamed module — that would
  * otherwise ship as an inert transform.
- * @param patches - the patch descriptors the bootstrap was installed with.
+ * @param patches - the patch descriptors the hooks were installed with.
  * @throws listing every required patch that bound nothing.
  */
 export function checkRequiredPatches(patches: readonly StentPatchStub[]): void {

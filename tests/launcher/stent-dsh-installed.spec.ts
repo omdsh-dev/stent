@@ -116,10 +116,16 @@ writeFileSync(
 )
 writeFileSync(
   join(stubStent, 'index.js'),
-  "export function markStentDshLaunch() { globalThis[Symbol.for('oh-my-dsh.stent-dsh.launch')] = true }\n" +
-    'export function bootstrapStent(descriptors) { console.log(`PROFILE-BOOT count=${descriptors.length}`) }\n',
+  "export function markStentDshLaunch() { globalThis[Symbol.for('oh-my-dsh.stent-dsh.launch')] = true }\n",
 )
-writeFileSync(join(stubStent, 'node', 'loader.js'), "export { bootstrapStent } from '../index.js'\n")
+writeFileSync(
+  join(stubStent, 'node', 'loader.js'),
+  [
+    'export function expandPatchStub(patch) { return [patch] }',
+    'export function installStentHooks(descriptors) { console.log(`PROFILE-BOOT count=${descriptors.length}`) }',
+    '',
+  ].join('\n'),
+)
 writeFileSync(join(stubStent, 'activation.js'), "export { markStentDshLaunch } from './index.js'\n")
 
 // An installed bundle bin derives `web` from this exact profile path. Keep

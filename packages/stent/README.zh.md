@@ -21,16 +21,19 @@
 ## 安装和 bootstrap
 
 ```ts
-import { bootstrapStent, StentService } from '@oh-my-dsh/stent'
+import { expandPatchStub, installStentHooks } from '@oh-my-dsh/stent/node/loader'
+import { StentService } from '@oh-my-dsh/stent'
+import type { StentPatchStub } from '@oh-my-dsh/stent/types'
 import type { Context } from 'cordis'
 
 declare const ctx: Context
-const disposeHooks = bootstrapStent([])
+const patches: StentPatchStub[] = []
+const disposeHooks = installStentHooks(patches.flatMap(expandPatchStub))
 await ctx.plugin(StentService)
 disposeHooks()
 ```
 
-`bootstrapStent` 校验 patches、构建它们的 Orchestrion instrumentation 并安装变换 hooks。在宿主中，`stent` composition 行在 `config.stent.patches` 下携带静态描述（id/target/operation——handler 是注册时绑定的受信任代码）时，会在 `boot()` 准备阶段自动 bootstrap，早于任何 config-tree entry 挂载。当 instrumentation 已经构建好时，`installStentHooks` 是更底层的形态。
+`installStentHooks` 从已经展开的 instrumentation 安装变换 hooks。若输入的是静态 patch 描述符，应先使用 `patches.flatMap(expandPatchStub)` 展开。在宿主中，`stent` composition 行在 `config.stent.patches` 下携带静态描述（id/target/operation——handler 是注册时绑定的受信任代码）时，会在 `boot()` 准备阶段自动安装，早于任何 config-tree entry 挂载。
 
 启动路径和 hooks 安装是两个不同的概念。`stent-dsh` preload 会在 bootstrap hooks 前写入启动标记；普通 `dsh` 启动不会获得该标记。`StentService` 将它作为 Cordis 的可用性检查，因此声明 `inject: ['stent']` 的插件即使通过其他路径安装了底层 bridge，在普通 `dsh` 下也会保持 pending。browser client entry 会写入等价的 Stent 客户端激活标记。`getStent(ctx)` 在复用或挂载 registry 前也会检查同一启动能力；漏写 `inject: ['stent']` 的 DSH 插件不能通过该 accessor 静默绕过门控，而会 loud failure。明确管理独立生命周期的底层调用方仍可直接构造 `new StentService(ctx)`。
 

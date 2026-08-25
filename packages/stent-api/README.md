@@ -99,7 +99,7 @@ The public surface exports no AST selector, module file path, `StentPatch`, raw 
 
 ## Profile bootstrap
 
-`installStentBootstrap(rows)` reads the composed profile's `stent` row and installs its static patch descriptors from `config.stent.patches` through `bootstrapStent` during the boot `prepare` phase — before any target plugin module imports. `checkStentRequiredPatches(rows)` runs after boot completes and fails loud when a `required` patch bound nothing. Both are re-exported from `stent-dsh`.
+`installStentBootstrap(rows)` reads the composed profile's `stent` row and installs its static patch descriptors from `config.stent.patches` by expanding them with `expandPatchStub` and passing them to `installStentHooks` during the boot `prepare` phase — before any target plugin module imports. `checkStentRequiredPatches(rows)` runs after boot completes and fails loud when a `required` patch bound nothing. Both are re-exported from `stent-dsh`.
 
 ## Security and trust model
 
