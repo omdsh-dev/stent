@@ -73,8 +73,8 @@ describe('stent preload injection (Stent launcher shape)', () => {
     expect(inert.stderr).not.toContain('stent:')
   })
 
-  it('uses the static Stent import even when STENT_PROFILE is set', () => {
-    // 写入一个会在导入时失败的 profile 替代包，验证正常 import 不会解析到这里。
+  it('uses the Cordis-free loader subpath even when STENT_PROFILE is set', () => {
+    // 写入一个会在导入时失败的 profile 替代包，验证 source launcher 不会解析到这里。
     const profileDir = join(tempDir, 'profile')
     const stubDir = join(profileDir, 'node_modules', '@oh-my-dsh', 'stent')
     mkdirSync(stubDir, { recursive: true })

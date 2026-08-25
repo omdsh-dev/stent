@@ -9,7 +9,9 @@ import { defineConfig } from 'tsdown'
 export default [
   defineConfig({
     entry: {
-      index: 'src/index.ts',
+      'index': 'src/index.ts',
+      'types': 'src/types.ts',
+      'activation': 'src/activation.ts',
       'node/loader': 'src/node/loader.ts',
       'node/hook-entry': 'src/node/hook-entry.ts',
       'node/identity': 'src/node/identity.ts',
@@ -34,7 +36,7 @@ export default [
   }),
   defineConfig({
     entry: {
-      client: 'src/browser/client/index.ts',
+      'client': 'src/browser/client/index.ts',
     },
     outDir: 'lib',
     // Browser half ships in the host closure-factory artifact: the web shell

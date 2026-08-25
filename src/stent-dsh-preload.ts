@@ -13,13 +13,15 @@
  * also records the process-local stent-dsh launch capability before Host
  * plugins can resolve their Stent dependency.
  *
- * preload 使用普通的静态 import 引入 `@oh-my-dsh/stent`，包会从 launcher
- * 的依赖图中解析。在 installed 模式下，launcher 会在此模块加载前将 bundle
- * 的依赖闭包修复到 profile 中，因此 preload 和 Host plugin 仍然使用同一份包。
+ * preload 使用 Stent 的 Cordis-free loader 和 activation 子路径。它们可以静态解析,
+ * 不会提前加载依赖 Cordis 的 StentService;只有存在 STENT_CONFIG 时才执行
+ * launch marker 和 bootstrap。
  */
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
-import { bootstrapStent, markStentDshLaunch, type StentPatchStub } from '@oh-my-dsh/stent'
+import { bootstrapStent } from '@oh-my-dsh/stent/node/loader'
+import { markStentDshLaunch } from '@oh-my-dsh/stent/activation'
+import type { StentPatchStub } from '@oh-my-dsh/stent/types'
 
 const configPath = process.env.STENT_CONFIG
 if (configPath !== undefined && configPath !== '') {

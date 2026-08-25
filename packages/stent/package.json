@@ -14,6 +14,14 @@
       "types": "./lib/node/loader.d.ts",
       "default": "./lib/node/loader.js"
     },
+    "./activation": {
+      "types": "./lib/activation.d.ts",
+      "default": "./lib/activation.js"
+    },
+    "./types": {
+      "types": "./lib/types.d.ts",
+      "default": "./lib/types.js"
+    },
     "./node/hook-entry": {
       "types": "./lib/node/hook-entry.d.ts",
       "default": "./lib/node/hook-entry.js"

@@ -96,10 +96,10 @@ writeFileSync(
 )
 
 // The profile's installed trio copy is used by the installed bundle below.
-// The source checkout launcher uses the static package import from its own
-// dependency graph.
+// The source checkout launcher uses the Cordis-free loader subpath from its
+// own dependency graph.
 const stubStent = join(profileDir, 'node_modules', '@oh-my-dsh', 'stent')
-mkdirSync(stubStent, { recursive: true })
+mkdirSync(join(stubStent, 'node'), { recursive: true })
 writeFileSync(join(profileDir, 'package.json'), '{}\n')
 writeFileSync(
   join(stubStent, 'package.json'),
@@ -107,7 +107,11 @@ writeFileSync(
     name: '@oh-my-dsh/stent',
     version: '1.0.0',
     type: 'module',
-    exports: { '.': './index.js' },
+    exports: {
+      '.': './index.js',
+      './activation': './activation.js',
+      './node/loader': './node/loader.js',
+    },
   }),
 )
 writeFileSync(
@@ -115,6 +119,8 @@ writeFileSync(
   "export function markStentDshLaunch() { globalThis[Symbol.for('oh-my-dsh.stent-dsh.launch')] = true }\n" +
     'export function bootstrapStent(descriptors) { console.log(`PROFILE-BOOT count=${descriptors.length}`) }\n',
 )
+writeFileSync(join(stubStent, 'node', 'loader.js'), "export { bootstrapStent } from '../index.js'\n")
+writeFileSync(join(stubStent, 'activation.js'), "export { markStentDshLaunch } from './index.js'\n")
 
 // An installed bundle bin derives `web` from this exact profile path. Keep
 // this profile real (not a symlink), so the launcher exercises that path
