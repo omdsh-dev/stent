@@ -54,7 +54,7 @@ jobs:
           const manifest = JSON.parse(readFileSync("packages/manifest.json", "utf8"))
           const isTest = process.env.RUN_MODE === "test-build"
           for (const p of manifest.packages) {
-            const path = `packages/${p.file}`
+            const path = `./packages/${p.file}`
             const sha256 = createHash("sha256")
               .update(readFileSync(path))
               .digest("hex")
@@ -68,7 +68,7 @@ jobs:
           }
           for (const p of manifest.packages) {
             const args = [
-              "publish", `packages/${p.file}`,
+              "publish", `./packages/${p.file}`,
               "--access", "public",
               "--provenance",
               "--registry", "https://registry.npmjs.org/",
