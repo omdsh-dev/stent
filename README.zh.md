@@ -29,8 +29,10 @@ profile bootstrap)。根包 `@oh-my-dsh/stent-pack` 是单独发布的 carrier,�
 
 三个包通过编译后的 launcher 安装 hooks 并挂载 facade。`src/stent-dsh.ts`
 编译为 `lib/stent-dsh.js`，`src/stent-dsh-preload.ts` 编译为
-`lib/stent-dsh-preload.js`；launcher 在官方 CLI 加载前注入这个编译后的
-preload，不需要 host patch checkout。preload 还会记录进程内的
+`lib/stent-dsh-preload.js`。bin 只解析 DSH 路径并转发其他参数，通过
+`NODE_OPTIONS=--import ...` 在官方 CLI 加载前注入编译后的 preload。profile
+组合、依赖修复、argv 规范化、环境设置和 hook 注册全部由 preload 负责，
+不需要 host patch checkout。preload 还会记录进程内的
 `stent-dsh` 启动能力，因此即使其他路径安装了底层 hooks，普通 `dsh` 下
 Stent 依赖插件仍不可用。`getStent(ctx)` 也使用同一能力门控：漏写
 `inject: ['stent']` 的插件在普通 `dsh` 下无法通过 accessor 挂载 registry，

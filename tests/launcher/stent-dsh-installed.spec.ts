@@ -53,6 +53,7 @@ writeFileSync(
   [
     'console.log(`FAKE-DSH argv=${JSON.stringify(process.argv.slice(2))}`)',
     'console.log(`FAKE-DSH config=${process.env.STENT_CONFIG !== undefined} profile=${process.env.STENT_PROFILE}`)',
+    'console.log(`FAKE-DSH node-options=${process.env.NODE_OPTIONS}`)',
     '',
   ].join('\n'),
 )
@@ -204,6 +205,8 @@ function expectBoot(out: { status: number; stdout: string; stderr: string }): vo
   // ...the CLI received the profile's argv untouched...
   expect(out.stdout).toContain('FAKE-DSH argv=["--profile","t1","--dump-config"]')
   expect(out.stdout).toContain('FAKE-DSH config=true')
+  expect(out.stdout).toContain('FAKE-DSH node-options=')
+  expect(out.stdout).toContain('stent-dsh-preload.js')
   expect(out.stdout).toContain(`profile=${profileDir}`)
   // 源码 launcher 使用自身依赖图中的静态 import，不会读取 profile 替代包。
   expect(out.stdout).not.toContain('PROFILE-BOOT count=0')
@@ -217,6 +220,8 @@ function expectInstalledWeb(out: { status: number; stdout: string; stderr: strin
   expect(out.stdout).toContain(`HEAL-MARK ${installedBundlePackageJson}`)
   expect(out.stdout).toContain('FAKE-DSH argv=["--profile","web","--port","8000"]')
   expect(out.stdout).toContain('FAKE-DSH config=true')
+  expect(out.stdout).toContain('FAKE-DSH node-options=')
+  expect(out.stdout).toContain('stent-dsh-preload.js')
   expect(out.stdout).toContain(`profile=${webProfileDir}`)
   expect(out.stdout).toContain('PROFILE-BOOT count=0')
   expect(out.stderr).toContain('stent-dsh: exec ')

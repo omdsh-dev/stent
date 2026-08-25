@@ -1,5 +1,4 @@
-import { existsSync } from 'node:fs'
-import { delimiter, join, resolve, sep } from 'node:path'
+import { resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Command } from 'commander'
 
@@ -15,11 +14,16 @@ export interface LauncherArgs {
   cwd: URL
 }
 
-export function parseOpt(argv: readonly string[], env: NodeJS.ProcessEnv, launcherUrl: URL, cwd: URL): LauncherArgs {
+export function parseOpt(
+  argv: readonly string[],
+  env: NodeJS.ProcessEnv,
+  launcherUrl: URL,
+  cwd: URL,
+  dshPath: URL,
+): LauncherArgs {
   const command = new Command()
     .allowUnknownOption()
     .allowExcessArguments()
-    .option('--dsh-path <path>')
     .option('--profile <name>')
     .option('--patch <path>', 'extra patch overlay', collect)
 
@@ -27,9 +31,9 @@ export function parseOpt(argv: readonly string[], env: NodeJS.ProcessEnv, launch
   const passthrough = [...operands, ...unknown]
   const cwdPath = fileURLToPath(cwd)
   const cwdUrl = pathToFileURL(cwdPath + sep)
-  const options = command.opts<{ dshPath?: string; profile?: string; patch?: string[] }>()
+  const options = command.opts<{ profile?: string; patch?: string[] }>()
   return {
-    dshPath: resolveDshInput(options.dshPath, env.PATH, cwd),
+    dshPath,
     profile: options.profile ?? (passthrough[0] === 'web' ? 'web' : undefined),
     dshHome: env.DSH_HOME === undefined ? undefined : pathToFileURL(resolve(env.DSH_HOME)),
     pathEnv: env.PATH,
@@ -39,28 +43,6 @@ export function parseOpt(argv: readonly string[], env: NodeJS.ProcessEnv, launch
     launcherUrl,
     cwd: cwdUrl,
   }
-}
-
-function resolveDshInput(input: string | undefined, pathEnv: string | undefined, cwd: URL): URL | undefined {
-  if (input === undefined || input === '') return undefined
-  if (!input.includes('/') && !input.includes('\\')) {
-    const command = which(input, pathEnv)
-    if (command !== undefined) return command
-  }
-  return pathToFileURL(resolve(fileURLToPath(cwd), input))
-}
-
-function which(cmd: string, pathEnv: string | undefined): URL | undefined {
-  if (pathEnv === undefined || pathEnv === '') return undefined
-  const names = process.platform === 'win32' ? [`${cmd}.cmd`, `${cmd}.exe`, cmd] : [cmd]
-  for (const dir of pathEnv.split(delimiter)) {
-    if (dir === '') continue
-    for (const name of names) {
-      const candidate = pathToFileURL(join(dir, name))
-      if (existsSync(candidate)) return candidate
-    }
-  }
-  return undefined
 }
 
 function collect(value: string, previous: string[]): string[] {

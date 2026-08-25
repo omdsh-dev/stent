@@ -38,9 +38,12 @@ an upstream dependency and is not republished here.
 
 The three packages install hooks and mount facades through the compiled launcher.
 `src/stent-dsh.ts` compiles to `lib/stent-dsh.js`, while
-`src/stent-dsh-preload.ts` compiles to `lib/stent-dsh-preload.js`; the launcher
-injects that compiled preload before the official CLI loads. No host patch
-checkout is required. The preload also records a process-local `stent-dsh`
+`src/stent-dsh-preload.ts` compiles to `lib/stent-dsh-preload.js`. The bin only
+resolves the DSH path and forwards its arguments; it injects the compiled
+preload through `NODE_OPTIONS=--import ...` before the official CLI loads. The
+preload owns profile composition, dependency healing, argv normalization,
+environment setup, and hook registration. No host patch checkout is required.
+The preload also records a process-local `stent-dsh`
 launch capability, so Stent-dependent plugins stay unavailable under plain
 `dsh` even if low-level hooks were installed by another path. The same
 capability gate is enforced by `getStent(ctx)`: a plugin that omitted

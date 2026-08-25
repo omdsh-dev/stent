@@ -119,7 +119,7 @@ function resolveInstalledCli(cwd: URL, pathEnv: string | undefined): URL {
 }
 
 /** Resolve a source checkout, package directory, bin file, or PATH command. */
-function resolveDshPath(input: URL | undefined, cwd: URL, pathEnv: string | undefined): URL {
+export function resolveDshPath(input: URL | undefined, cwd: URL, pathEnv: string | undefined): URL {
   if (input === undefined) return resolveInstalledCli(cwd, pathEnv)
   const candidate = input
   if (!existsSync(candidate)) {
@@ -140,7 +140,7 @@ function resolveDshPath(input: URL | undefined, cwd: URL, pathEnv: string | unde
   process.exit(1)
 }
 
-function sourceRootFor(bin: URL): URL | undefined {
+export function sourceRootFor(bin: URL): URL | undefined {
   const binPath = fileURLToPath(bin)
   if (!binPath.endsWith('.ts')) return undefined
   let dir = dirname(binPath)

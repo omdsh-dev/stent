@@ -6,12 +6,12 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 
 /**
- * Preload injection equivalence: the Stent launcher runs the host CLI as
- * `node --import tsx/esm --import <Stent preload> bin.ts` with
- * `STENT_CONFIG` pointing at the composed descriptors. These cases spawn
- * that exact launcher shape and verify the preload bootstraps the Stent
- * hooks before the entry module imports its targets — the same guarantee the
- * removed host patch (profile-boot installStentBootstrap) used to provide.
+ * Preload injection equivalence: the Stent bin injects the preload through
+ * `NODE_OPTIONS=--import <Stent preload>` before the official CLI entry
+ * evaluates. These cases spawn the preload directly with a prepared
+ * `STENT_CONFIG` to verify the same hook ordering before the entry imports its
+ * targets — the guarantee the removed host patch (profile-boot
+ * installStentBootstrap) used to provide.
  */
 const preload = fileURLToPath(new URL('../../src/stent-dsh-preload.ts', import.meta.url))
 const entry = fileURLToPath(new URL('../fixtures/preload-entry.mjs', import.meta.url))
