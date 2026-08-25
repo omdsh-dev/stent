@@ -71,15 +71,20 @@ export async function main(opt: LauncherArgs): Promise<never> {
   const bundlePackageJson = new URL('../package.json', opt.launcherUrl)
   await healProfiles(host, bundlePackageJson, profile.dshHome)
 
+  const childArgs = [
+    ...host.nodeArgs,
+    '--import',
+    fileURLToPath(bundledPreloadPath(opt.launcherUrl)),
+    fileURLToPath(host.dshPath),
+    ...cliArgs,
+  ]
+  process.stderr.write(
+    `stent-dsh: exec ${[process.execPath, ...childArgs].map(value => JSON.stringify(value)).join(' ')}\n`,
+  )
+
   const result = spawnSync(
     process.execPath,
-    [
-      ...host.nodeArgs,
-      '--import',
-      fileURLToPath(bundledPreloadPath(opt.launcherUrl)),
-      fileURLToPath(host.dshPath),
-      ...cliArgs,
-    ],
+    childArgs,
     // Source mode runs from the source checkout: tsx resolves its tsconfig
     // there. Installed mode needs no pinned cwd: the published bin is plain ESM.
     {

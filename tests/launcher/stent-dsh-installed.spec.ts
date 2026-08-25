@@ -207,6 +207,7 @@ function expectBoot(out: { status: number; stdout: string; stderr: string }): vo
   expect(out.stdout).toContain(`profile=${profileDir}`)
   // 源码 launcher 使用自身依赖图中的静态 import，不会读取 profile 替代包。
   expect(out.stdout).not.toContain('PROFILE-BOOT count=0')
+  expect(out.stderr).toContain('stent-dsh: exec ')
   expect(out.stderr).toContain('stent: Stent hooks installed (0 descriptor(s))')
 }
 
@@ -218,6 +219,7 @@ function expectInstalledWeb(out: { status: number; stdout: string; stderr: strin
   expect(out.stdout).toContain('FAKE-DSH config=true')
   expect(out.stdout).toContain(`profile=${webProfileDir}`)
   expect(out.stdout).toContain('PROFILE-BOOT count=0')
+  expect(out.stderr).toContain('stent-dsh: exec ')
   expect(out.stderr).toContain('stent: Stent hooks installed (0 descriptor(s))')
 }
 
