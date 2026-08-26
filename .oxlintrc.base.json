@@ -155,10 +155,23 @@
           {
             "considerDefaultExhaustiveForUnions": true
           }
+        ],
+        "stent/min-function-lines": [
+          "error",
+          {
+            "minLines": 3,
+            "includeAnonymous": false,
+            "includeExpressionBodies": true,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
         ]
       },
       "plugins": [
         "typescript"
+      ],
+      "jsPlugins": [
+        "./tools/oxlint/stent-plugin.ts"
       ]
     },
     {

@@ -23,6 +23,7 @@ export const inject = ['invariants']
  * Facade conformance tests and the launcher bootstrap spec pin the
  * delegation instead.
  */
+// oxlint-disable-next-line stent/min-function-lines -- invariant package intentionally installs no runtime invariant.
 const install: InvariantInstaller = () => {}
 
 /**
@@ -30,6 +31,7 @@ const install: InvariantInstaller = () => {}
  * @param ctx - Cordis context carrying the invariant service.
  * @returns the installed registration's disposer after setup succeeds.
  */
+// oxlint-disable-next-line stent/min-function-lines -- exported plugin entry delegates directly to the invariant registry.
 export const apply = (ctx: Context): Promise<() => void> =>
   Promise.resolve(ctx.invariants.register(PACKAGE_NAME, install))
 /* jscpd:ignore-end */

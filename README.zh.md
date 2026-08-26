@@ -139,9 +139,11 @@ window.__ModuleLoader__.load({ id: "@oh-my-dsh/stent", factory: (require) => { .
 
 每个包从自己的包根目录运行 Oxlint，使用固定的 DSH 工具链（`oxlint` 与 `oxlint-tsgolint`）和选定的 TypeScript 类型感知规则；根包与子包配置共享一份纳入版本控制的基线。warning 视为失败。生成的 `lib/` 产物、JavaScript fixture launcher 和构建配置不属于本 TypeScript lint 面。
 
+共享的源码 override 还会加载 `tools/oxlint/stent-plugin.ts` 并启用 `stent/min-function-lines`。具名函数（函数声明、绑定到变量的函数和 class 方法）至少需要三行有效源码；空行和仅包含注释的行不计入。匿名 callback 与对象字面量 callback 有意排除，但具名的简写箭头函数会检查。确实需要保留的短适配函数必须使用 `// oxlint-disable-next-line stent/min-function-lines -- reason` 并说明原因。
+
 Oxfmt 是本 workspace 的统一格式化器，共享策略写在 `.oxfmtrc.json`：两空格缩进、单引号、无分号、尾随逗号和 120 列宽。每个包分别拥有自己的 `fmt` 与 `fmt:check` 命令；根 carrier 的 `pack:fmt:check` 负责编排根包和全部实现包的检查。生成的 `lib/` 产物、fixture 目录、JavaScript launcher fixture 和构建配置不属于格式化范围。
 
-根 carrier 只负责自身的 `src/` launcher 和 `tests/` 根集成测试。根包的 `lint`、`lint:fix`、`test`、`build` 与 `knip` 命令不会扫描实现包文件，也不提供 `pack:lint:fix`。三个实现包分别声明自己的工具链，并提供只作用于本包的独立 `lint`、`lint:fix`、`test`、`build` 与 `knip` 命令；类型检查由各包带类型感知的 lint 命令提供，不再单独提供 `typecheck` 脚本。根目录的 `pack:*` 脚本只负责编排：保持根包检查与各包命令分开，并通过 `pnpm --filter` 调用后者。
+根 carrier 负责自身 `src/` 下的 launcher、`tests/` 下的根集成测试，以及 `tools/` 下的仓库自有 lint 插件。根包的 `lint`、`lint:fix`、`test`、`build` 与 `knip` 命令不会扫描实现包文件，也不提供 `pack:lint:fix`。三个实现包分别声明自己的工具链，并提供只作用于本包的独立 `lint`、`lint:fix`、`test`、`build` 与 `knip` 命令；类型检查由各包带类型感知的 lint 命令提供，不再单独提供 `typecheck` 脚本。根目录的 `pack:*` 脚本只负责编排：保持根包检查与各包命令分开，并通过 `pnpm --filter` 调用后者。
 
 ## 8. 时间线(节选)
 

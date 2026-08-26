@@ -10,11 +10,7 @@
 
 export { serveBrowserTransform } from './serve.ts'
 export type { ServeBrowserTransformOptions } from './serve.ts'
-export {
-  createBrowserTransform,
-  createWatchedBrowserTransform,
-  repoSourceResolver,
-} from '../transform/browser.ts'
+export { createBrowserTransform, createWatchedBrowserTransform, repoSourceResolver } from '../transform/browser.ts'
 export { resolvePackageIdentity } from '../transform/identity.ts'
 export type {
   BrowserTransform,

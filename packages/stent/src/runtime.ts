@@ -357,6 +357,7 @@ function dispatch(entry: PatchEntry, call: StentBridgeCall): unknown {
     arguments: call.arguments,
     self: call.self,
   }
+  // oxlint-disable-next-line stent/min-function-lines -- direct adapter for the active traced call.
   const invoke = (): unknown => call.traced()
 
   switch (entry.info.operation) {
