@@ -1,11 +1,10 @@
 /**
- * Multi-install regression harness: concurrent `installStentHooks` calls must
- * transform through their own matchers, and disposing an installation must
- * not tear down later ones.
+ * Dynamic-only regression harness: one live matcher follows runtime
+ * registrations, and the registry's priority/disable semantics remain stable.
  */
 
 import { createRequire } from 'node:module'
-import { installStentHooks, patchInstrumentation, runtime } from '../../src/index.ts'
+import { installStentHooks, runtime } from '../../src/index.ts'
 
 const require = createRequire(import.meta.url)
 
@@ -63,55 +62,44 @@ function check(label, actual, expected) {
   if (!ok) process.exitCode = 1
 }
 function reg(p) {
-  runtime.register({ id: p.id, target: p.target, operation: p.operation, priority: 0, enabled: false })
+  runtime.register({ id: p.id, target: p.target, operation: p.operation, priority: p.priority ?? 0, enabled: false })
   runtime.enable(p.id, p.handler)
 }
 
 const scenario = process.argv[2]
 
-if (scenario === 'concurrent') {
-  // Two live installations transform through their own matchers.
-  installStentHooks([patchInstrumentation(patchA)])
-  installStentHooks([patchInstrumentation(patchB)])
-  const mod = await import(fixture.href)
+if (scenario === 'registered') {
+  // Multiple plugin registrations share the one dynamic matcher.
+  installStentHooks()
   reg(patchA)
   reg(patchB)
-  check('concurrent add(2,3)', mod.add(2, 3), 23)
-  check('concurrent greet(world)', mod.greet('world'), 'hello WORLD')
-} else if (scenario === 'disposeFirst') {
-  // Disposing the first installation leaves the second fully functional and
-  // the first's hooks inert: the module loads transformed only by B.
-  const disposeA = installStentHooks([patchInstrumentation(patchA)])
-  disposeA()
-  installStentHooks([patchInstrumentation(patchB)])
   const mod = await import(fixture.href)
+  check('registered add(2,3)', mod.add(2, 3), 23)
+  check('registered greet(world)', mod.greet('world'), 'hello WORLD')
+} else if (scenario === 'disposeFirst') {
+  // A patch omitted from the live registry is absent from the first load.
+  installStentHooks()
   reg(patchB)
+  const mod = await import(fixture.href)
   check('after disposeA add(2,3)', mod.add(2, 3), 5)
   check('after disposeA greet(world)', mod.greet('world'), 'hello WORLD')
-} else if (scenario === 'concurrentCjs') {
-  // Two live installations both transform plain-require CommonJS through the
-  // shared `_compile` chain: patch A (installed first) must stay effective
-  // after patch B's installation lands.
-  installStentHooks([patchInstrumentation(cjsPatchA)])
-  installStentHooks([patchInstrumentation(cjsPatchB)])
-  const mod = require(cjsFixture.pathname)
+} else if (scenario === 'registeredCjs') {
+  // The same single matcher handles plain-require CommonJS modules.
+  installStentHooks()
   reg(cjsPatchA)
   reg(cjsPatchB)
-  check('concurrent cjs add(2,3)', mod.add(2, 3), 23)
-  check('concurrent cjs greet(world)', mod.greet('world'), 'hello WORLD')
-} else if (scenario === 'disposeFirstCjs') {
-  // The disposed installation drops out of the CJS chain; the surviving one
-  // still transforms.
-  const disposeA = installStentHooks([patchInstrumentation(cjsPatchA)])
-  disposeA()
-  installStentHooks([patchInstrumentation(cjsPatchB)])
   const mod = require(cjsFixture.pathname)
+  check('registered cjs add(2,3)', mod.add(2, 3), 23)
+  check('registered cjs greet(world)', mod.greet('world'), 'hello WORLD')
+} else if (scenario === 'disposeFirstCjs') {
+  installStentHooks()
   reg(cjsPatchB)
+  const mod = require(cjsFixture.pathname)
   check('after disposeA cjs add(2,3)', mod.add(2, 3), 5)
   check('after disposeA cjs greet(world)', mod.greet('world'), 'hello WORLD')
 } else if (scenario === 'stackedGreet') {
-  // Cross-installation stacking on one function: the later installation wraps
-  // outermost regardless of priority, so its before handler runs first.
+  // One dynamic matcher orders patches by priority, so the higher-priority
+  // handler runs first.
   const greetA = {
     id: 'multi/greet-a',
     target: { ...target, functionQuery: { functionName: 'greet', kind: 'Sync' } },
@@ -130,12 +118,11 @@ if (scenario === 'concurrent') {
       call.arguments[0] = `${call.arguments[0]}B`
     },
   }
-  installStentHooks([patchInstrumentation(greetA)])
-  installStentHooks([patchInstrumentation(greetB)])
-  const mod = await import(fixture.href)
+  installStentHooks()
   reg(greetA)
   reg(greetB)
-  check('stacked greet(world)', mod.greet('world'), 'hello worldBA')
+  const mod = await import(fixture.href)
+  check('stacked greet(world)', mod.greet('world'), 'hello worldAB')
 } else {
   throw new Error(`unknown scenario ${scenario}`)
 }

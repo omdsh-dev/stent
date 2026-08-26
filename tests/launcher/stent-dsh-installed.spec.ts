@@ -121,11 +121,7 @@ writeFileSync(
 )
 writeFileSync(
   join(stubStent, 'node', 'loader.js'),
-  [
-    'export function expandPatchStub(patch) { return [patch] }',
-    'export function installStentHooks(descriptors) { console.log(`PROFILE-BOOT count=${descriptors.length}`) }',
-    '',
-  ].join('\n'),
+  ['export function installStentHooks() { console.log(`PROFILE-BOOT dynamic=true`) }', ''].join('\n'),
 )
 writeFileSync(join(stubStent, 'activation.js'), "export { markStentDshLaunch } from './index.js'\n")
 
@@ -204,14 +200,14 @@ function expectBoot(out: { status: number; stdout: string; stderr: string }): vo
   expect(out.stdout).toContain(`HEAL-MARK ${sourceBundlePackageJson}`)
   // ...the CLI received the profile's argv untouched...
   expect(out.stdout).toContain('FAKE-DSH argv=["--profile","t1","--dump-config"]')
-  expect(out.stdout).toContain('FAKE-DSH config=true')
+  expect(out.stdout).toContain('FAKE-DSH config=false')
   expect(out.stdout).toContain('FAKE-DSH node-options=')
   expect(out.stdout).toContain('stent-dsh-preload.js')
   expect(out.stdout).toContain(`profile=${profileDir}`)
   // 源码 launcher 使用自身依赖图中的静态 import，不会读取 profile 替代包。
   expect(out.stdout).not.toContain('PROFILE-BOOT count=0')
   expect(out.stderr).toContain('stent-dsh: exec ')
-  expect(out.stderr).toContain('stent: Stent hooks installed (0 descriptor(s))')
+  expect(out.stderr).toContain('stent: dynamic hooks installed — plugin patch registrations are live')
 }
 
 function expectInstalledWeb(out: { status: number; stdout: string; stderr: string }): void {
@@ -219,13 +215,13 @@ function expectInstalledWeb(out: { status: number; stdout: string; stderr: strin
   expect(out.stdout).toContain(`HEAL-MARK ${join(dshPkg, 'package.json')}`)
   expect(out.stdout).toContain(`HEAL-MARK ${installedBundlePackageJson}`)
   expect(out.stdout).toContain('FAKE-DSH argv=["--profile","web","--port","8000"]')
-  expect(out.stdout).toContain('FAKE-DSH config=true')
+  expect(out.stdout).toContain('FAKE-DSH config=false')
   expect(out.stdout).toContain('FAKE-DSH node-options=')
   expect(out.stdout).toContain('stent-dsh-preload.js')
   expect(out.stdout).toContain(`profile=${webProfileDir}`)
-  expect(out.stdout).toContain('PROFILE-BOOT count=0')
+  expect(out.stdout).toContain('PROFILE-BOOT dynamic=true')
   expect(out.stderr).toContain('stent-dsh: exec ')
-  expect(out.stderr).toContain('stent: Stent hooks installed (0 descriptor(s))')
+  expect(out.stderr).toContain('stent: dynamic hooks installed — plugin patch registrations are live')
 }
 
 describe('stent-dsh installed mode (registry-installed dsh)', () => {

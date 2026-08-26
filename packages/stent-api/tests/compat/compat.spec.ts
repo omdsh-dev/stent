@@ -87,7 +87,12 @@ describe('StentCompatService (unit)', () => {
           name: 'greet',
           patch: {
             id: 'compat/greet-observe',
-            target: { module: 'stent-compat-target', versionRange: '*', filePath: 'index.mjs' },
+            target: {
+              module: 'stent-compat-target',
+              versionRange: '*',
+              filePath: 'index.mjs',
+              functionQuery: { functionName: 'greet', kind: 'Sync' },
+            },
             operation: 'after',
           },
         },
@@ -96,7 +101,12 @@ describe('StentCompatService (unit)', () => {
     expect(() => {
       ctx.stentCompat.registerPatch({
         id: 'compat/greet-observe',
-        target: { module: 'stent-compat-target', versionRange: '*', filePath: 'index.mjs' },
+        target: {
+          module: 'stent-compat-target',
+          versionRange: '*',
+          filePath: 'index.mjs',
+          functionQuery: { functionName: 'greet', kind: 'Sync' },
+        },
         operation: 'after',
         handler: () => {},
       })

@@ -33,7 +33,7 @@ import Hmr from '@deepseek-ai/cordis-plugin-hmr'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
-import { StentService, installStentHooks, markStentDshLaunch, patchInstrumentation } from '../../src/index.ts'
+import { StentService, installStentHooks, markStentDshLaunch } from '../../src/index.ts'
 
 // This child intentionally models the approved stent-dsh launch path. The
 // production preload sets the same process-local capability before Host boot.
@@ -43,18 +43,6 @@ const mode = process.argv[2]
 if (mode !== 'config' && mode !== 'module') {
   console.error(`unknown HMR e2e mode: ${mode}`)
   process.exit(2)
-}
-
-/** The one patch under test: multiply the first argument before `add` runs. */
-const PATCH = {
-  id: 'hmr-e2e/multiply',
-  target: {
-    module: 'stent-target-fixture',
-    versionRange: '^1.0.0',
-    filePath: 'index.mjs',
-    functionQuery: { functionName: 'add', kind: 'Sync' },
-  },
-  operation: 'before',
 }
 
 const fixtureUrl = new URL('../fixtures/node_modules/stent-target-fixture/index.mjs', import.meta.url)
@@ -155,9 +143,9 @@ async function bootTree(dir, hmrRoot, configPath) {
   return { ctx, entry, configRefreshes: () => configRefreshes }
 }
 
-// The load-time transformation hooks precede every target module import; the
-// runtime handler is registered later by the consumer plugin's apply.
-installStentHooks([patchInstrumentation(PATCH)])
+// The dynamic loader precedes every target module import; the runtime handler
+// is registered by the consumer plugin's apply.
+installStentHooks()
 
 async function main() {
   const dir = mkdtempSync(join(tmpdir(), `stent-hmr-${mode}-`))

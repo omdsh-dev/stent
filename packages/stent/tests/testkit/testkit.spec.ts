@@ -1,7 +1,8 @@
-// The test kit: runPatchFixture spawns a fresh child that bootstraps the
-// patches, imports the entry, runs its default export, and reports the
-// result (or thrown error) plus the load-time binding records — the shape a
-// hand-rolled child runner produces, without the per-package boilerplate.
+// The test kit: runPatchFixture spawns a fresh child that registers patch
+// metadata through the dynamic hooks, imports the entry, runs its default
+// export, and reports the result (or thrown error) plus the load-time binding
+// records — the shape a hand-rolled child runner produces, without the
+// per-package boilerplate.
 
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -21,7 +22,7 @@ const target = {
 }
 
 describe('runPatchFixture', () => {
-  it('bootstraps patches, runs the entry, and reports bindings', () => {
+  it('registers patch metadata, runs the entry, and reports bindings', () => {
     const outcome = runPatchFixture({
       cwd: repoRoot,
       patches: [

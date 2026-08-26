@@ -42,6 +42,16 @@ describe('stent runtime registry', () => {
     expect(runtime.list()).toHaveLength(0)
   })
 
+  it('notifies loader subscribers when static metadata changes', () => {
+    const changes: string[] = []
+    const unsubscribe = runtime.onPatchChange(change => changes.push(`${change.type}:${change.id}`))
+    runtime.register(baseInfo('watch/a'))
+    runtime.register({ ...baseInfo('watch/a'), operation: 'after' })
+    runtime.remove('watch/a')
+    unsubscribe()
+    expect(changes).toEqual(['register:watch/a', 'register:watch/a', 'remove:watch/a'])
+  })
+
   it('re-registering an id keeps metadata but reports not-first', () => {
     runtime.register(baseInfo('a'))
     expect(runtime.register(baseInfo('a'))).toBe(false)

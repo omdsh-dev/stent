@@ -19,6 +19,32 @@ function runCase(name: string): string {
 }
 
 describe('stent load-time transformation (child processes)', () => {
+  it('rejects calls with legacy installation arguments and accepts installStentHooks()', () => {
+    const out = runCase('installGuard')
+    expect(out).toContain('PASS installGuard rejects every call with arguments: 3')
+    expect(out).toContain('PASS installGuard explains the no-argument form: true')
+    expect(out).toContain('PASS installGuard accepts installStentHooks: "function"')
+    expect(out).toContain('PASS installGuard rejects duplicate active installation: true')
+  })
+
+  it('adds plugin-registered metadata before a target module is loaded', () => {
+    const out = runCase('dynamicBefore')
+    expect(out).toContain('PASS dynamicBefore add(2,3): 23')
+  })
+
+  it('retransforms an already-loaded target after dynamic registration', () => {
+    const out = runCase('dynamicLoaded')
+    expect(out).toContain('PASS dynamicLoaded original add(2,3): 5')
+    expect(out).toContain('PASS dynamicLoaded patched add(2,3): 23')
+    expect(out).toContain('PASS dynamicLoaded bindings: 1')
+  })
+
+  it('coalesces rapid runtime registration and removal changes', () => {
+    const out = runCase('dynamicBurst')
+    expect(out).toContain('PASS dynamicBurst final patch after register/remove burst: 203')
+    expect(out).toContain('PASS dynamicBurst original after removal burst: 5')
+  })
+
   it('transforms a workspace package reached at its real path (no node_modules boundary)', () => {
     const out = runCase('workspaceIdentity')
     expect(out).toContain('PASS workspaceIdentity add(2,3): 23')
@@ -122,6 +148,22 @@ describe('stent load-time transformation (child processes)', () => {
     expect(out).toContain('PASS noBridge add(2,3) falls back: 5')
   })
 
+  it('removes dynamic instrumentation from an already-loaded target', () => {
+    const out = runCase('dynamicRemove')
+    expect(out).toContain('PASS dynamicRemove patched add(2,3): 23')
+    expect(out).toContain('PASS dynamicRemove original add(2,3): 5')
+  })
+  it('checks required flags from the dynamic runtime registry', () => {
+    const out = runCase('dynamicRequired')
+    expect(out).toContain('PASS dynamicRequired no throw: ""')
+    expect(out).toContain('PASS dynamicRequired bindings: 1')
+  })
+  it('retransforms an already-loaded CommonJS target after dynamic registration', () => {
+    const out = runCase('dynamicCjs')
+    expect(out).toContain('PASS dynamicCjs original add(2,3): 5')
+    expect(out).toContain('PASS dynamicCjs patched add(2,3): 23')
+  })
+
   it('transforms CommonJS modules reached through require()', () => {
     const out = runCase('cjs')
     expect(out).toContain('PASS cjs baseline add(2,3): 5')
@@ -131,14 +173,14 @@ describe('stent load-time transformation (child processes)', () => {
   it('re-transforms an already-evaluated CommonJS module (HMR invalidation)', () => {
     const out = runCase('retransform')
     expect(out).toContain('PASS retransform v1 add(2,3): 23')
-    expect(out).toContain('PASS retransform cached add(2,3): 23')
+    expect(out).toContain('PASS retransform cached add(2,3): 5')
     expect(out).toContain('PASS retransform reloaded add(2,3): 203')
   })
 
   it('re-transforms an already-evaluated ESM module (HMR invalidation)', () => {
     const out = runCase('retransformEsm')
     expect(out).toContain('PASS retransformEsm v1 add(2,3): 23')
-    expect(out).toContain('PASS retransformEsm cached add(2,3): 23')
+    expect(out).toContain('PASS retransformEsm cached add(2,3): 5')
     expect(out).toContain('PASS retransformEsm reloaded add(2,3): 203')
   })
 

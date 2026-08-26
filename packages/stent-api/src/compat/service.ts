@@ -3,13 +3,15 @@
  * low-level Stent transformation into a cooperative observation API.
  *
  * The adapter exists for target domains with no cooperative extension point
- * (no event, no registry): its targets are declared statically in the module
- * config and their instrumentations are installed by
- * {@link buildCompatInstrumentations} before the target module is loaded.
+ * (no event, no registry): their target metadata is declared in the compat
+ * configuration and registered dynamically by this service. The runtime
+ * loader must be installed before the target module is imported. The
+ * constructor claims each declared target's metadata with a disabled
+ * placeholder; `observe()` only swaps in the live listener handler.
  * The public contract stays cooperative — `observe(name, listener)` — and
  * never exposes `StentPatch`, AST selectors, file paths, or `invoke()`.
  * Target version drift leaves the adapter unavailable rather than pretending
- * compatibility: the installed instrumentation simply never matches, and the
+ * compatibility: the registered metadata simply never matches, and the
  * service's diagnostics surface the declared target.
  * @module @oh-my-dsh/stent-api/compat/service
  */
@@ -82,8 +84,21 @@ export class StentCompatService extends Service {
       if (this.targets.has(target.name)) {
         throw new Error(`stent-compat: target "${target.name}" is declared more than once`)
       }
+      if (this.targetIds.has(target.patch.id)) {
+        throw new Error(`stent-compat: patch id "${target.patch.id}" is declared more than once`)
+      }
       this.targets.set(target.name, target)
       this.targetIds.add(target.patch.id)
+      // Claim the metadata while the facade mounts, before target modules are
+      // evaluated. The placeholder stays disabled until the first observer
+      // subscribes; this keeps observation lazy without a static installer.
+      this.stent.register({
+        id: target.patch.id,
+        target: target.patch.target,
+        operation: target.patch.operation,
+        handler: () => undefined,
+      })
+      this.stent.disable(target.patch.id)
     }
   }
 
@@ -182,21 +197,16 @@ export class StentCompatService extends Service {
     }
     if (!isStentInstalled()) {
       throw new Error(
-        'stent-compat: the Stent bridge is not installed; install the compat instrumentations (buildCompatInstrumentations) before loading the target module',
+        'stent-compat: the Stent bridge is not installed; install the dynamic Stent hooks before loading the target module',
       )
     }
     const listeners = this.observers.get(name) ?? new Set<(call: StentCall) => void>()
     if (listeners.size === 0) {
-      // First listener for this name: claim the low-level patch. The claim
-      // fails loud BEFORE the listener joins (a cross-owner claim would
-      // otherwise leave a stale listener behind).
-      this.stent.register({
-        id: target.patch.id,
-        target: target.patch.target,
-        operation: target.patch.operation,
-        handler: (call: StentCall) => {
-          for (const current of [...listeners]) current(call)
-        },
+      // First listener for this name: enable the metadata claimed during
+      // construction. The listener joins only after the claim/enable step so
+      // a cross-owner failure cannot leave stale listener state behind.
+      this.stent.enable(target.patch.id, (call: StentCall) => {
+        for (const current of [...listeners]) current(call)
       })
     }
     listeners.add(listener)

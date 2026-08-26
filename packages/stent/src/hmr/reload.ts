@@ -37,6 +37,13 @@ function internalLoader(): InternalLoader | undefined {
   return loader
 }
 
+/** Return file-backed ESM module URLs currently held by Node's loader cache. */
+export function loadedEsmUrls(): string[] {
+  const cache = internalLoader()?.loadCache
+  if (cache === undefined) return []
+  return [...cache.keys()].filter(url => url.startsWith('file:'))
+}
+
 /**
  * Re-evaluate a CommonJS module after clearing both Node caches and the
  * loader's per-installation seen marks.

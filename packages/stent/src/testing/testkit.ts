@@ -4,8 +4,8 @@
  *
  * The transformation hooks cannot be unregistered and transformed modules
  * stay cached, so every scenario needs a clean process. This kit makes that
- * mechanical: `runPatchFixture` spawns a child that bootstraps the given
- * patches, imports the entry module, runs its default export with the given
+ * mechanical: `runPatchFixture` spawns a child that registers the given
+ * patch metadata, imports the entry module, runs its default export with the given
  * args, and returns the resolved result (or the thrown error's shape) with
  * the per-patch binding records — the same shape a hand-rolled child runner
  * would produce, without the per-package boilerplate.
@@ -23,7 +23,7 @@ import type { StentBinding, StentPatchStub } from '../types.ts'
 
 /** Options for {@link runPatchFixture}. */
 export interface RunPatchFixtureOptions {
-  /** Static patch descriptors the child bootstraps before any import. */
+  /** Patch metadata the child registers dynamically before importing the entry. */
   patches: StentPatchStub[]
   /**
    * Module specifier (path or URL) the child imports after bootstrapping;

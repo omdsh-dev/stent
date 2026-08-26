@@ -26,7 +26,6 @@ type PatchRow = RecordValue & {
   config?: RecordValue
   insert?: unknown
 }
-type IdentifiedPatch = RecordValue & { id: string }
 
 export interface ResolvedProfile {
   dshHome: URL
@@ -36,10 +35,8 @@ export interface ResolvedProfile {
 }
 
 export interface StentConfig {
-  configPath: URL
   enablePath: URL
   enableOverlay: PatchRow[]
-  patches: IdentifiedPatch[]
   cleanup: () => void
 }
 
@@ -170,7 +167,7 @@ function applyLayer(rows: Map<string, PatchRow>, layer: PatchLayer): void {
   }
 }
 
-/** Compose profile rows and create the temporary Stent handoff files. */
+/** Compose profile rows and create the temporary activation overlay. */
 export function composeStentConfig({
   args,
   dshHome,
@@ -217,28 +214,32 @@ export function composeStentConfig({
   applyLayer(rows, loadPatchLayer(childPath(dshHome, 'cordis.patch.yml')))
   for (const patchFile of args.patchFiles) applyLayer(rows, loadPatchLayer(patchFile))
 
-  // A row whose config declares config.stent.patches (the stent
-  // carrier row aside) hard-depends on Stent. Such rows ship disabled; the
-  // launcher enables them through a generated overlay after every user layer.
+  // A row whose config declares a Stent dependency is a dynamic patch plugin.
+  // Such rows may ship disabled; the launcher enables them through a generated
+  // overlay after every user layer. The patch metadata and handlers themselves
+  // are registered by plugin code at runtime, never extracted from YAML.
   const enableOverlay: PatchRow[] = []
-  const byId = new Map<string, IdentifiedPatch>()
+  const mode = args.passthrough[0]
+  const isConfigDump = args.passthrough.includes('--dump-config') || args.passthrough.includes('--dump-default-config')
+  const canEnableDynamicRows = mode !== 'plugin' && !isConfigDump
   for (const [id, row] of rows) {
     const config = isRecord(row.config) ? row.config : undefined
-    const stent = config !== undefined && isRecord(config.stent) ? config.stent : undefined
-    const declared = stent?.patches
-    if (!Array.isArray(declared)) continue
-    for (const patch of declared) {
-      if (isRecord(patch) && typeof patch.id === 'string') byId.set(patch.id, patch as IdentifiedPatch)
+    const stentConfig = config?.stent
+    if (isRecord(stentConfig) && Object.prototype.hasOwnProperty.call(stentConfig, 'patches')) {
+      throw new Error(
+        `stent-dsh: profile row ${JSON.stringify(id)} uses config.stent.patches; register patch metadata in plugin code instead`,
+      )
     }
-    if (id !== 'stent' && row.disabled !== false) enableOverlay.push({ id, disabled: false })
+    const requiresStent = config !== undefined && (config.stent === true || isRecord(config.stent))
+    if (canEnableDynamicRows && id !== 'stent' && requiresStent && row.disabled !== false) {
+      enableOverlay.push({ id, disabled: false })
+    }
   }
   // A Stent launcher invocation is the explicit opt-in for the DSH integration
   // row. Keep it disabled for plain `dsh`, but mount it for profile boots so
-  // its post-boot required-patch check and hook summary can run. Plugin
+  // its post-boot dynamic check and hook summary can run. Plugin
   // management commands cannot receive generated profile overlays.
-  const mode = args.passthrough[0]
-  const isConfigDump = args.passthrough.includes('--dump-config') || args.passthrough.includes('--dump-default-config')
-  if (mode !== 'plugin' && !isConfigDump) {
+  if (canEnableDynamicRows) {
     const integration = rows.get('stent-dsh')
     if (
       integration !== undefined &&
@@ -249,22 +250,16 @@ export function composeStentConfig({
     }
   }
 
-  const patches = [...byId.values()]
-
-  const temp = pathToFileURL(mkdtempSync(join(tmpdir(), 'stent-config-')))
-  const configPath = childPath(temp, 'config.json')
-  writeFileSync(configPath, JSON.stringify(patches))
+  const temp = pathToFileURL(mkdtempSync(join(tmpdir(), 'stent-overlay-')))
   const enablePath = childPath(temp, 'enable.yaml')
   writeFileSync(enablePath, enableOverlay.length > 0 ? yaml.dump(enableOverlay) : '[]\n')
   return {
-    configPath,
     enablePath,
     enableOverlay,
-    patches,
     cleanup: () => {
       rmSync(temp, { recursive: true, force: true })
     },
   }
 }
 
-export type { YamlApi, PatchRow, IdentifiedPatch }
+export type { YamlApi, PatchRow }

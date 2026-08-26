@@ -21,40 +21,43 @@ The source is layered inside the three packages rather than adding another packa
 ## Installation and bootstrap
 
 ```ts
-import { expandPatchStub, installStentHooks } from '@oh-my-dsh/stent/node/loader'
+import { installStentHooks } from '@oh-my-dsh/stent/node/loader'
 import { StentService } from '@oh-my-dsh/stent'
-import type { StentPatchStub } from '@oh-my-dsh/stent/types'
 import type { Context } from 'cordis'
 
 declare const ctx: Context
-const patches: StentPatchStub[] = []
-const disposeHooks = installStentHooks(patches.flatMap(expandPatchStub))
+// The DSH launcher calls installStentHooks(). Plugin code supplies patch metadata
+// and handlers later through ctx.stent.register().
+const disposeHooks = installStentHooks()
 await ctx.plugin(StentService)
 disposeHooks()
 ```
 
-`installStentHooks` installs the transformation hooks from expanded instrumentations. When starting from static patch descriptors, expand them with `patches.flatMap(expandPatchStub)` first. In the host, a `stent` composition row carrying static descriptors under `config.stent.patches` (id/target/operation — handlers are trusted code bound at registration) is installed automatically during `boot()` preparation, before any config-tree entry mounts.
-
+`installStentHooks` has one Node installation path: `installStentHooks()`. It must run before target imports.
+Dynamic mode subscribes to the process-local runtime registry and rebuilds its
+matcher when plugin code registers or removes patch metadata; executable
+handlers remain in memory and are never serialized. A target already loaded
+when a plugin registers is automatically re-transformed when the Node cache
+path supports it. Profile YAML only controls whether a Stent-dependent row is
+mounted (for example `config: { stent: true }`); it no longer carries patch
+stubs under `config.stent.patches`.
+The root package's `patchInstrumentation`, `expandPatchStub`, and browser transform APIs are build-time/browser utilities; they do not install Node hooks and cannot be passed to `installStentHooks`.
 The launcher boundary is separate from hook installation. The `stent-dsh` preload marks the launch before bootstrapping hooks; a plain `dsh` launch never receives that marker. `StentService` uses it as Cordis's availability check, so plugins declaring `inject: ['stent']` remain pending under plain `dsh` even if another path installed the low-level bridge. The browser client entry marks the equivalent Stent client activation. The same gate is enforced by `getStent(ctx)` before it reuses or mounts a registry: a DSH plugin that omitted `inject: ['stent']` cannot silently activate through the accessor and instead fails loudly. Explicit `new StentService(ctx)` remains the low-level escape hatch for standalone callers that intentionally manage activation themselves.
 
-A patch may set `required: true`: once the application boots and every target module has been imported, `checkRequiredPatches(patches)` fails loud, naming the patch id and its target, when a required patch's transform never rewrote anything — the `filePath` may be the wrong launch form (`src/index.ts` vs `lib/index.js`) or the function may have moved. The host runs this check automatically after `boot()` completes. Several launch forms under one patch id are covered either by a RegExp `filePath` (e.g. `/^(src\/index\.ts|lib\/index\.js)$/`) or by the `filePaths` array convenience (each entry expands into its own instrumentation under the same id, one binding record per matched file). The load-time bindings the check is built on are recorded per transformed file and visible through `ctx.stent.bindings(id?)` and each `list()` entry.
+A patch may set `required: true`: once the application boots and every target
+module has been imported, `checkRequiredPatches()` reads required entries from
+the live runtime registry and fails loud when a required patch bound nothing.
+The host runs this check automatically after boot. Several launch forms under
+one patch id are covered by a RegExp `filePath` or by the `filePaths` array;
+load-time bindings are recorded per transformed file and visible through
+`ctx.stent.bindings(id?)` and each `list()` entry.
 
 ```yaml
-# User overlay: keep the pure service row as the descriptor carrier. Its
-# package root has no Loader `apply`; the Stent launcher enables the host
-# integration row automatically for profile boots.
-- id: stent
+# Profile YAML is an activation marker, not a patch descriptor source.
+- id: dynamic-plugin
   disabled: true
   config:
-    stent:
-      patches:
-        - id: vendor/rewrite-greeting
-          target:
-            module: '@example/target-package'
-            versionRange: '^1.0.0'
-            filePath: 'lib/index.js'
-            functionQuery: { functionName: 'greet', kind: 'Sync' }
-          operation: 'before'
+    stent: true
 
 - id: stent-dsh
   disabled: false
@@ -65,7 +68,13 @@ half (`./client`, implemented by `src/browser/client`) is a separate client
 artifact that installs `ctx.stent` when its browser entry materializes; it does
 not turn the package root into a Loader plugin.
 
-The hooks must be installed before the target module's first evaluation; a patch registered after that point only takes effect for modules transformed later. The `registerHooks` API has no unregister, so the returned disposer deactivates the installation's state rather than removing the hooks.
+The dynamic hooks are installed before target imports. A patch registered before a
+target load is transformed on first evaluation; if the target already ran, the
+loader schedules a cache re-transformation for the loaded CJS/ESM module when
+Node's synchronous hook APIs are available. Handler-only enable/disable changes
+apply immediately through the bridge without another code transform. The
+`registerHooks` API has no unregister, so a disposer deactivates installation
+state rather than removing the process-lifetime hook functions.
 
 
 ## Registering a patch
@@ -121,7 +130,14 @@ const stent = createWatchedBrowserTransform(
 )
 ```
 
-The patches file holds a JSON array of static patch stubs (the same shape the profile row's `config.stent.patches` carries; JSON cannot express a `RegExp` `filePath`, so file paths are strings), and a malformed file fails the build loudly. The transform registers the file in the bundler's watch graph on every module, so under `tsdown --watch` (`pnpm run dev:web`) an edit rebuilds the bundle with the new patch set — the build trigger — and the client-hmr chain (stat poll, `rebuilt` frame, invalidate/prefetch/fiber swap) delivers it to the browser. A static in-memory patch set can still use `createBrowserTransform` directly.
+The patches file holds a JSON array of static patch stubs for browser build
+instrumentation (it is not read by the Node DSH launcher; JSON cannot express
+a `RegExp` `filePath`, so file paths are strings), and a malformed file fails
+the build loudly. The transform registers the file in the bundler's watch graph
+on every module, so under `tsdown --watch` (`pnpm run dev:web`) an edit rebuilds
+the bundle with the new patch set — the build trigger — and the client-hmr
+chain delivers it to the browser. A static in-memory patch set can still use
+`createBrowserTransform` directly.
 
 The resolver maps the package's own source tree to its package identity; the upstream adapter is not used because it requires a `node_modules` boundary that repository source builds do not have. TypeScript sources are stripped to plain JavaScript before transformation (the transformer parses emitted JavaScript).
 

@@ -29,7 +29,7 @@ import type {
 
 /** Runtime state of one registered patch. */
 interface PatchEntry {
-  /** Static patch metadata (no handler functions). */
+  /** Immutable patch metadata (no handler functions). */
   info: StentPatchInfo
   /** Currently installed handler, when the patch is enabled. */
   handler: StentHandler | undefined
@@ -48,6 +48,17 @@ interface PatchEntry {
    */
   fiber: unknown
 }
+
+/** A patch-registry change observed by the Node loader. */
+export interface StentPatchChange {
+  type: 'register' | 'remove'
+  id: PatchId
+  previous?: StentPatchInfo
+  current?: StentPatchInfo
+}
+
+/** Listener notified after patch metadata changes. */
+export type StentPatchChangeListener = (change: StentPatchChange) => void
 
 /**
  * Validate a patch id for use in diagnostics and bridge dispatch.
@@ -127,10 +138,31 @@ class StentRuntime {
   private readonly entries = new Map<PatchId, PatchEntry>()
   /** Load-time bindings per patch, recorded by the transformation hooks. */
   private readonly bindings = new Map<PatchId, StentBinding[]>()
+  /** Node loader subscribers that rebuild their current matcher snapshot. */
+  private readonly patchListeners = new Set<StentPatchChangeListener>()
   private subscribed = false
 
   /**
-   * Register a patch's static metadata; the patch stays disabled until
+   * Subscribe to patch metadata changes.
+   *
+   * The Node loader uses this to rebuild its instrumentation matcher when a
+   * plugin registers or removes a patch. Handler enable/disable changes do
+   * not emit events because transformed code dispatches through the runtime.
+   */
+  onPatchChange(listener: StentPatchChangeListener): () => void {
+    this.patchListeners.add(listener)
+    return () => {
+      this.patchListeners.delete(listener)
+    }
+  }
+
+  /** Notify all loader subscribers after the registry has changed. */
+  private notifyPatchChange(change: StentPatchChange): void {
+    for (const listener of this.patchListeners) listener(change)
+  }
+
+  /**
+   * Register patch metadata; the patch stays disabled until
    * {@link StentRuntime.enable} installs its handler.
    * @param info - validated patch metadata.
    * @param owner - identity of the registration owner; defaults to the patch
@@ -174,6 +206,9 @@ class StentRuntime {
       }
     }
     this.entries.set(info.id, { info, handler: previous?.handler, owner, fiber })
+    const change: StentPatchChange = { type: 'register', id: info.id, current: info }
+    if (previous !== undefined) change.previous = previous.info
+    this.notifyPatchChange(change)
     return previous === undefined
   }
 
@@ -211,7 +246,10 @@ class StentRuntime {
    * @param id - the patch id.
    */
   remove(id: PatchId): void {
+    const previous = this.entries.get(id)
+    if (previous === undefined) return
     this.entries.delete(id)
+    this.notifyPatchChange({ type: 'remove', id, previous: previous.info })
   }
 
   /**

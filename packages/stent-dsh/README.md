@@ -4,8 +4,8 @@ English | [中文](README.zh.md)
 
 DSH-facing integration for the Cordis Stent layer. This package is the host
 and browser assembly half of Stent: it mounts the DSH facades, reads composed
-profile rows, installs the pure `stent` hooks before target modules are
-loaded, and verifies required patch bindings after boot.
+profile rows for activation, installs the pure `stent` dynamic hooks before
+target modules are loaded, and verifies required patch bindings after boot.
 
 It is intentionally separate from the pure packages. `stent` owns
 transformation and runtime state; `stent-api` owns the cooperative
@@ -18,7 +18,7 @@ owns only the DSH integration seams.
 |---|---|
 | Host facades | `ctx.stentAgent`, `ctx.stentTools`, `ctx.stentPrompt`, and `ctx.stentCommands`, backed by the authoritative DSH services. |
 | Browser facade | `ctx.stentClient`, a narrow Mod-facing surface for commands and named UI slots. |
-| Profile bootstrap | `installStentBootstrap` installs Stent hooks from the composed `stent` row before target imports; `checkStentRequiredPatches` validates required bindings after boot. |
+| Profile bootstrap | `installStentBootstrap` calls `installStentHooks()` for embedders without the launcher; `checkStentRequiredPatches` validates live required bindings after boot. |
 | Catalog adapter | Registers the Stent service API entries when the DSH integration plugin mounts. |
 | Invariant companion | Exposes the package-owned `./invariant` function plugin; domain ownership remains with the authoritative services. |
 
@@ -45,45 +45,32 @@ namespace preserves the named exports `name`, `inject`, and `apply`.
 
 ## Profile bootstrap
 
-The pure `stent` row is the descriptor carrier. Keep that row disabled:
-the package root is a service library, not a Loader plugin. The Stent launcher
-reads its `config.stent.patches` and installs the hooks through its preload.
-A profile boot through the Stent launcher automatically enables the
-`stent-dsh` integration row; plain `dsh` keeps it disabled. Enable the row
-manually only when composing a profile without the Stent launcher:
+The launcher enables Stent-dependent rows through a generated overlay, but the
+rows contain only activation metadata. Plugin code registers both the target
+metadata and handler through `ctx.stent.register()`; no patch descriptor is
+read from YAML. Keep a dynamic patch plugin disabled by default when it should
+be opt-in:
 
 ```yaml
-- id: stent
+- id: dynamic-plugin
   disabled: true
   config:
-    stent:
-      patches:
-        - id: vendor/rewrite-greeting
-          target:
-            module: '@example/target-package'
-            versionRange: '^1.0.0'
-            filePath: 'lib/index.js'
-            functionQuery: { functionName: greet, kind: Sync }
-          operation: before
+    stent: true
 
 - id: stent-dsh
   disabled: false
 ```
 
-`installStentBootstrap(rows)` is the profile-bootstrap API for the same
-composed descriptors; in the current launcher path, the preload performs the
-installation before the target CLI imports modules. Handlers remain trusted
-runtime code registered by plugins. Patch descriptors must be declared under
-`config.stent.patches`.
-
-`checkStentRequiredPatches(rows)` runs after boot and fails loudly when a
-`required: true` patch did not bind. The launcher schedules this check for the
-composed profile; a plain `dsh` launch remains inert unless the Stent launch
-path is enabled. The preload's process-local launch capability is separate
-from hook installation, so merely installing the bridge cannot activate a
-Stent-dependent plugin. The low-level `getStent(ctx)` fallback checks the same
-capability before mounting a registry, so plugins that omitted
-`inject: ['stent']` fail loudly rather than bypassing the launch gate.
+`installStentBootstrap(rows)` is the profile-bootstrap API for embedders that
+compose a profile without `stent-dsh`'s launcher preload; it calls
+`installStentHooks()` before target modules are imported. In the launcher path, the preload performs that installation
+before the target CLI imports modules. `checkStentRequiredPatches(rows)` runs
+after boot and checks required entries in the live runtime registry. The
+preload's process-local launch capability is separate from hook installation,
+so merely installing the bridge cannot activate a Stent-dependent plugin. The
+low-level `getStent(ctx)` fallback checks the same capability before mounting a
+registry, so plugins that omitted `inject: ['stent']` fail loudly rather than
+bypassing the launch gate.
 
 ## Browser entry
 
@@ -122,5 +109,5 @@ semver ranges.
 
 The package is opt-in. The default DSH composition does not mount these
 facades, and the browser roster rows remain disabled. A host profile launched
-through `stent-dsh` enables the host integration row automatically; the pure
-`stent` descriptor carrier remains disabled.
+through `stent-dsh` enables the host integration and Stent-dependent plugin rows
+whose config carries the activation marker.

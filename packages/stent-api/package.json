@@ -14,10 +14,6 @@
       "types": "./lib/compat/service.d.ts",
       "default": "./lib/compat/service.js"
     },
-    "./compat/instrumentation": {
-      "types": "./lib/compat/instrumentation.d.ts",
-      "default": "./lib/compat/instrumentation.js"
-    },
     "./compat/types": {
       "types": "./lib/compat/types.d.ts",
       "default": "./lib/compat/types.js"

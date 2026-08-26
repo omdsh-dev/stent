@@ -15,15 +15,15 @@ export { STENT_DSH_LAUNCH_KEY, isStentDshLaunch, markStentDshLaunch } from './ac
 export { GLOBAL_BRIDGE_KEY, installBridge, isStentInstalled, publish, type StentBridgeCall } from './bridge.ts'
 export {
   checkRequiredPatches,
-  expandPatchStub,
   flushBindingReports,
   installStentHooks,
-  patchInstrumentation,
   retransformCommonJs,
   retransformEsm,
-  type StentInstrumentationConfig,
-  type InstrumentationConfig,
 } from './node/loader.ts'
+// Browser/build-time transform configuration. The Node loader does not accept
+// these configs; it only installs the dynamic runtime matcher below.
+export { expandPatchStub, orderInstrumentations, patchInstrumentation } from './transform/config.ts'
+export type { StentInstrumentationConfig, InstrumentationConfig } from './transform/config.ts'
 export {
   createBrowserTransform,
   createWatchedBrowserTransform,
@@ -35,7 +35,13 @@ export {
   type TransformOutput,
   type WatchedBrowserTransform,
 } from './browser/transform.ts'
-export { runtime, validatePatchId, validatePatchStatic } from './runtime.ts'
+export {
+  runtime,
+  validatePatchId,
+  validatePatchStatic,
+  type StentPatchChange,
+  type StentPatchChangeListener,
+} from './runtime.ts'
 export { serveBrowserTransform, type ServeBrowserTransformOptions } from './browser/serve.ts'
 export { createStentTransform } from './transform/transform.ts'
 export type {

@@ -185,11 +185,12 @@ export type WatchedBrowserTransform = (
 ) => TransformOutput | null
 
 /**
- * Parse the watched patches file: a JSON array of static patch stubs (the
- * same shape the profile row's `config.stent.patches` carries — JSON cannot
- * express a `RegExp` `filePath`, so file paths are strings here). Every
- * malformed entry fails loud at build time rather than installing a
- * never-matching transform.
+ * Parse the watched patches file: a JSON array of static patch stubs for the
+ * browser build API. The Node DSH launcher does not read profile patch
+ * descriptors; browser transforms are explicitly assembled from this file
+ * when a bundle needs static instrumentation. JSON cannot express a `RegExp`
+ * `filePath`, so file paths are strings here. Every malformed entry fails
+ * loud at build time rather than installing a never-matching transform.
  * @param content - raw file content.
  * @param patchesPath - file path, used in error messages.
  * @returns the validated patch stubs.

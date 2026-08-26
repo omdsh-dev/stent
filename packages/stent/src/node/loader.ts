@@ -11,6 +11,12 @@
  * active — so handlers may be registered, enabled, disabled, or disposed
  * after the module was already transformed.
  *
+ * The loader has one installation mode: `installStentHooks()`.
+ * Runtime metadata changes rebuild its matcher, apply to future loads, and
+ * schedule re-transformation for already-loaded matching modules when Node
+ * permits it. Handler-only changes still dispatch through the live bridge
+ * without code re-transformation.
+ *
  * Node's `registerHooks` API has no unregister; hooks compose and stay for
  * the process lifetime. The returned disposer therefore deactivates the
  * loader's state (hooks become pass-through, cached transformers are freed)
@@ -18,8 +24,8 @@
  * @module @oh-my-dsh/stent/node/loader
  */
 
-import { Module, register, registerHooks } from 'node:module'
-import { readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { Module, createRequire, register, registerHooks } from 'node:module'
+import { readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -28,14 +34,12 @@ import { create } from '@apm-js-collab/code-transformer'
 import { installBridge } from '../bridge.ts'
 import { nodePackageIdentity, type PackageIdentity } from './identity.ts'
 import { runtime } from '../runtime.ts'
-import { retransformCommonJs as reloadCommonJs, retransformEsm as reloadEsm } from '../hmr/reload.ts'
+import { retransformCommonJs as reloadCommonJs, retransformEsm as reloadEsm, loadedEsmUrls } from '../hmr/reload.ts'
 import { registerStentTransform } from '../transform/transform.ts'
-import { orderInstrumentations, type StentInstrumentationConfig } from '../transform/config.ts'
+import { expandPatchStub, orderInstrumentations, type StentInstrumentationConfig } from '../transform/config.ts'
 import { serializeInstrumentation, reviveInstrumentation } from './wire.ts'
-import type { StentBindingReport, StentPatchStub, PatchId } from '../types.ts'
+import type { StentBindingReport, StentPatchInfo, StentPatchStub, PatchId } from '../types.ts'
 
-export type { StentInstrumentationConfig, InstrumentationConfig } from '../transform/config.ts'
-export { expandPatchStub, orderInstrumentations, patchInstrumentation } from '../transform/config.ts'
 export { reviveInstrumentation, serializeInstrumentation }
 export type { StentWireInstrumentation } from './wire.ts'
 
@@ -50,11 +54,11 @@ type CompileFn = (this: Module, content: string, filename: string) => unknown
  * patch whose target never matched is a misconfiguration — wrong launch
  * form (src vs lib), moved function, or renamed module — that would
  * otherwise ship as an inert transform.
- * @param patches - the patch descriptors the hooks were installed with.
  * @throws listing every required patch that bound nothing.
  */
-export function checkRequiredPatches(patches: readonly StentPatchStub[]): void {
-  const missing = patches
+export function checkRequiredPatches(): void {
+  const descriptors = runtime.list().map(patchStubFromInfo)
+  const missing = descriptors
     .filter(patch => patch.required === true && runtime.bindingsOf(patch.id).length === 0)
     .map(patch => `${patch.id} (${patch.target.module} ${String(patch.target.filePath)}, ${patch.operation})`)
   if (missing.length > 0) {
@@ -65,7 +69,8 @@ export function checkRequiredPatches(patches: readonly StentPatchStub[]): void {
   }
 }
 
-/** Loader state shared by every hook installation of this module. */
+/** Loader installation is dynamic and takes no options. */
+/** Loader state shared by the dynamic hooks. */
 interface LoaderState {
   /** Whether this installation is currently active. */
   active: boolean
@@ -73,6 +78,8 @@ interface LoaderState {
   matcher: ReturnType<typeof create>
   /** The ordered instrumentations, serialized to the async hook entry. */
   instrumentations: StentInstrumentationConfig[]
+  /** Whether this state uses synchronous Node loader hooks. */
+  syncHooks: boolean
   /** Transformers resolved per module URL. */
   transformers: Map<string, ReturnType<ReturnType<typeof create>['getTransformer']>>
   /** URLs already transformed (guards the CJS double-path). */
@@ -82,6 +89,14 @@ interface LoaderState {
    * runs; flushed into the runtime's binding records after the file.
    */
   pending: Map<PatchId, number>
+  /** Stop listening to runtime patch changes. */
+  unsubscribePatchChanges?: () => void
+  /** Matchers superseded before the pending retransform microtask runs. */
+  pendingPreviousMatchers: ReturnType<typeof create>[]
+  /** Already-loaded module identities captured when a dynamic change arrives. */
+  pendingLoadedModules: Set<string>
+  /** Whether a loaded-module retransform has already been queued. */
+  retransformQueued: boolean
 }
 
 /**
@@ -100,11 +115,127 @@ function flushBindings(state: LoaderState, identity: PackageIdentity): void {
   state.pending.clear()
 }
 
-/** Active installations in installation order. Each installation's ESM hooks
- * capture their own state, and the CJS `_compile` wrapper chains every active
- * installation in order, so concurrent installations all transform through
- * their own matchers. */
+/** One active installation state; disposed states are removed after deactivation. */
 const states: LoaderState[] = []
+
+/** The require cache used to locate already-loaded CommonJS targets. */
+const nodeRequire = createRequire(import.meta.url)
+
+/** Convert runtime metadata back to the descriptor shape consumed by the transform. */
+function patchStubFromInfo(info: StentPatchInfo): StentPatchStub {
+  return {
+    id: info.id,
+    target: info.target,
+    operation: info.operation,
+    ...(info.priority === 0 ? {} : { priority: info.priority }),
+    ...(info.required === undefined ? {} : { required: info.required }),
+  }
+}
+
+/** Return the matcher-relevant part of one runtime patch metadata snapshot. */
+function patchShapeKey(info: StentPatchInfo): string {
+  const target = info.target
+  const filePath = target.filePath instanceof RegExp ? [target.filePath.source, target.filePath.flags] : target.filePath
+  return JSON.stringify([
+    info.id,
+    target.module,
+    target.versionRange,
+    filePath,
+    target.filePaths,
+    target.index,
+    target.functionQuery,
+    target.astQuery,
+    info.operation,
+    info.priority,
+  ])
+}
+
+/** Build the current instrumentation snapshot from the live runtime registry. */
+function currentInstrumentations(): StentInstrumentationConfig[] {
+  const runtimePatches = runtime.list().flatMap(info => expandPatchStub(patchStubFromInfo(info)))
+  return orderInstrumentations(runtimePatches)
+}
+
+/** Construct a matcher and attach its Stent transform callback. */
+function createMatcher(state: LoaderState, instrumentations: StentInstrumentationConfig[]): ReturnType<typeof create> {
+  const matcher = create(instrumentations)
+  registerStentTransform(matcher, patchId => {
+    state.pending.set(patchId, (state.pending.get(patchId) ?? 0) + 1)
+  })
+  return matcher
+}
+
+/** Clear per-installation transform marks for a reloaded module. */
+function clearSeen(filename: string): void {
+  for (const installation of states) installation.seen.delete(filename)
+}
+/** Whether a matcher selects a loaded module identity. */
+function matcherSelects(matcher: ReturnType<typeof create>, path: string): boolean {
+  const identity = moduleIdentity(path)
+  if (identity === undefined) return false
+  const transformer = matcher.getTransformer(identity.name, identity.version, identity.path)
+  if (transformer === undefined) return false
+  transformer.free()
+  return true
+}
+
+/** Queue one loaded-module refresh after the current registration completes. */
+function queueLoadedRetransform(state: LoaderState): void {
+  if (state.retransformQueued) return
+  state.retransformQueued = true
+  queueMicrotask(() => {
+    state.retransformQueued = false
+    if (!state.active) {
+      state.pendingPreviousMatchers.length = 0
+      state.pendingLoadedModules.clear()
+      return
+    }
+    const previousMatchers = state.pendingPreviousMatchers.splice(0)
+    const loadedModules = [...state.pendingLoadedModules]
+    state.pendingLoadedModules.clear()
+    void retransformLoadedTargets(state, previousMatchers, loadedModules).catch((error: unknown) => {
+      process.emitWarning(`stent: dynamic target re-transformation failed: ${String(error)}`)
+    })
+  })
+}
+
+/** Re-run loaded targets against the latest dynamic matcher snapshot. */
+async function retransformLoadedTargets(
+  state: LoaderState,
+  previousMatchers: readonly ReturnType<typeof create>[],
+  loadedModules: readonly string[],
+): Promise<void> {
+  const matchers = [state.matcher, ...previousMatchers]
+  const cjsPaths = loadedModules.filter(path => !path.startsWith('file:'))
+  const cjsSet = new Set(cjsPaths)
+  const cjsTargets = cjsPaths.filter(path => matchers.some(matcher => matcherSelects(matcher, path)))
+  for (const path of cjsTargets) reloadCommonJs(path, clearSeen)
+
+  // Node's async module.register fallback cannot safely evict its loader-thread
+  // ESM jobs from the main thread; future loads still see the rebuilt config.
+  if (!state.syncHooks) return
+  const esmTargets = loadedModules
+    .filter(url => url.startsWith('file:'))
+    .filter(url => {
+      const path = fileURLToPath(url)
+      return !cjsSet.has(path) && matchers.some(matcher => matcherSelects(matcher, url))
+    })
+  for (const url of esmTargets) await reloadEsm(url, clearSeen)
+}
+
+/** Refresh a dynamic installation after a runtime metadata change. */
+function refreshDynamicState(state: LoaderState): void {
+  const previousMatcher = state.matcher
+  for (const path of Object.keys(nodeRequire.cache)) state.pendingLoadedModules.add(path)
+  if (state.syncHooks) for (const url of loadedEsmUrls()) state.pendingLoadedModules.add(url)
+  for (const transformer of state.transformers.values()) transformer?.free()
+  state.transformers.clear()
+  state.instrumentations = currentInstrumentations()
+  state.matcher = createMatcher(state, state.instrumentations)
+  state.pendingPreviousMatchers.push(previousMatcher)
+  writeAsyncConfig()
+  queueLoadedRetransform(state)
+}
 
 /**
  * Resolve a loaded module's package identity: installed packages through
@@ -265,11 +396,12 @@ export async function flushBindingReports(timeoutMs = 200): Promise<void> {
   })
 }
 
-/** Serialize the installation stack for the async hook entry. */
+/** Serialize the active dynamic matcher snapshot for the async hook entry. */
 function writeAsyncConfig(): void {
   if (!asyncConfigPath) return
+  const nextPath = `${asyncConfigPath}.next`
   writeFileSync(
-    asyncConfigPath,
+    nextPath,
     JSON.stringify(
       states.map(state => ({
         active: state.active,
@@ -277,28 +409,37 @@ function writeAsyncConfig(): void {
       })),
     ),
   )
+  renameSync(nextPath, asyncConfigPath)
 }
 
 /**
- * Install Stent transformation hooks and the bridge handle.
+ * Install the process-wide dynamic Stent transformation hooks and bridge.
  *
- * Registers the bridge into `globalThis` and registers synchronous module
- * hooks that transform matching modules on load (or the async loader-thread
- * fallback when `registerHooks` is unavailable). Every config must carry
- * `transform: 'stent'` plus the `stentPatchId` / `stentOperation` fields
- * the Stent transform reads from the merged state.
+ * The only supported installation form is:
  *
- * Both hook modes share one main-thread installation state: the sync path
- * runs ESM and CJS through it, the async path runs CJS through it while the
- * loader thread handles ESM.
- * @param instrumentations - Orchestrion configs selecting target modules,
- * files, and functions.
- * @returns a disposer that deactivates this installation (hooks themselves
- * stay registered for the process lifetime).
+ * ```ts
+ * installStentHooks()
+ * ```
+ *
+ * Runtime patch metadata is the single source of truth. Registration updates
+ * the matcher for future loads and schedules cache re-transformation for
+ * already-loaded matching modules when Node permits it. The hook functions
+ * themselves remain process-lifetime globals; the returned disposer deactivates
+ * this installation's state.
+ *
+ * The synchronous and asynchronous hook implementations share one main-thread
+ * installation state: the sync path runs ESM and CJS through it, the async
+ * path runs CJS through it while the loader thread handles ESM.
+ * @returns a disposer that deactivates this installation.
  */
-export function installStentHooks(instrumentations: StentInstrumentationConfig[]): () => void {
+export function installStentHooks(): () => void {
+  if (arguments.length !== 0) {
+    throw new Error('stent: installStentHooks does not accept arguments; use installStentHooks()')
+  }
+  if (states.some(state => state.active)) {
+    throw new Error('stent: installStentHooks allows only one active dynamic installation')
+  }
   installBridge()
-  const ordered = orderInstrumentations(instrumentations)
   const syncHooks = supportsSyncHooks()
   if (!syncHooks) {
     if (asyncConfigPath === undefined) {
@@ -308,23 +449,33 @@ export function installStentHooks(instrumentations: StentInstrumentationConfig[]
     installAsyncHooks(asyncConfigPath)
   }
 
-  const matcher = create(ordered)
   const state: LoaderState = {
     active: true,
-    instrumentations: ordered,
-    matcher,
+    matcher: undefined as unknown as ReturnType<typeof create>,
+    instrumentations: [],
+    syncHooks,
     transformers: new Map(),
     seen: new Set(),
     pending: new Map(),
+    pendingPreviousMatchers: [],
+    pendingLoadedModules: new Set(),
+    retransformQueued: false,
   }
-  // Every node the transform actually rewrites increments the installation's
-  // pending counts; flushBindings turns them into runtime binding records
-  // after each transformed file.
-  registerStentTransform(matcher, patchId => {
-    state.pending.set(patchId, (state.pending.get(patchId) ?? 0) + 1)
-  })
+  state.instrumentations = currentInstrumentations()
+  state.matcher = createMatcher(state, state.instrumentations)
 
   states.push(state)
+  state.unsubscribePatchChanges = runtime.onPatchChange(change => {
+    if (
+      change.type === 'register' &&
+      change.previous !== undefined &&
+      change.current !== undefined &&
+      patchShapeKey(change.previous) === patchShapeKey(change.current)
+    ) {
+      return
+    }
+    refreshDynamicState(state)
+  })
   if (!syncHooks) writeAsyncConfig()
 
   if (syncHooks) {
@@ -368,13 +519,16 @@ export function installStentHooks(instrumentations: StentInstrumentationConfig[]
 
   // CommonJS files reached through plain require() (not via the ESM graph)
   // do not pass through the load hook; transform them at compile time. The
-  // wrapper is installed once per process and consults the active-installation
-  // stack, so concurrent installations never overwrite each other's patch and
-  // the disposer needs no restoration.
+  // wrapper is installed once per process and consults the active dynamic
+  // installation state, so the disposer needs no restoration.
   installCompileWrapper()
 
   return () => {
     state.active = false
+    state.unsubscribePatchChanges?.()
+    delete state.unsubscribePatchChanges
+    state.pendingPreviousMatchers.length = 0
+    state.pendingLoadedModules.clear()
     const index = states.indexOf(state)
     if (index >= 0) states.splice(index, 1)
     for (const transformer of state.transformers.values()) transformer?.free()
@@ -388,11 +542,9 @@ let compileWrapperInstalled = false
 
 /**
  * Install the process-wide `_compile` wrapper once. With no active
- * installation it passes through to the original compile function; with one
- * or more it chains the content through every active installation's matcher
- * in installation order, mirroring the sync ESM hook chain (a later
- * installation's transform applies last, wrapping outermost). Disposed
- * installations are spliced out of the stack and skipped.
+ * installation it passes through to the original compile function; the one
+ * active dynamic installation supplies the current runtime matcher. Disposed
+ * installations are spliced out of the state list and skipped.
  */
 function installCompileWrapper(): void {
   if (compileWrapperInstalled) return

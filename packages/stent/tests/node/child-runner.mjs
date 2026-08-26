@@ -6,8 +6,8 @@
  * `./src/*` export and is launched with tsx from the repository root.
  */
 
-import { checkRequiredPatches, patchInstrumentation, retransformCommonJs, retransformEsm, runtime, GLOBAL_BRIDGE_KEY } from '../../src/index.ts'
-import { expandPatchStub, installStentHooks } from '../../src/node/loader.ts'
+import { checkRequiredPatches, retransformCommonJs, retransformEsm, runtime, GLOBAL_BRIDGE_KEY } from '../../src/index.ts'
+import { installStentHooks } from '../../src/node/loader.ts'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 
@@ -27,12 +27,24 @@ function check(label, actual, expected) {
   if (!ok) process.exitCode = 1
 }
 
-/** Register and enable one patch, then run the given checks. */
+/** Register and enable one patch through the live runtime registry. */
+function registerPatch(patch) {
+  runtime.register({
+    id: patch.id,
+    target: patch.target,
+    operation: patch.operation,
+    priority: patch.priority ?? 0,
+    ...(patch.required === undefined ? {} : { required: patch.required }),
+    enabled: false,
+  })
+  if (typeof patch.handler === 'function') runtime.enable(patch.id, patch.handler)
+}
+
+/** Install the dynamic hooks, register one patch, then run the checks. */
 async function withPatch(patch, checks) {
-  installStentHooks([patchInstrumentation(patch)])
+  installStentHooks()
+  registerPatch(patch)
   const mod = await import(fixtureUrl)
-  runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, enabled: false })
-  runtime.enable(patch.id, patch.handler)
   await checks(mod)
 }
 
@@ -49,6 +61,107 @@ const flushBindings = async (id, count) => {
 }
 
 switch (caseName) {
+  case 'installGuard': {
+    const errors = []
+    for (const args of [[[{ id: 'legacy/static' }], { dynamic: true }], [{ dynamic: true }], [undefined]]) {
+      try {
+        installStentHooks(...args)
+      } catch (error) {
+        errors.push(String(error))
+      }
+    }
+    check('installGuard rejects every call with arguments', errors.length, 3)
+    check('installGuard explains the no-argument form', errors.every(error => error.includes('installStentHooks()')), true)
+    const dispose = installStentHooks()
+    let duplicateError = ''
+    try {
+      installStentHooks()
+    } catch (error) {
+      duplicateError = String(error)
+    } finally {
+      dispose()
+    }
+    check('installGuard accepts installStentHooks', typeof dispose, 'function')
+    check('installGuard rejects duplicate active installation', duplicateError.includes('one active dynamic installation'), true)
+    break
+  }
+
+  case 'dynamicBefore':
+    installStentHooks()
+    runtime.register({
+      id: 'e2e/dynamic-before',
+      target: { ...target, functionQuery: { functionName: 'add', kind: 'Sync' } },
+      operation: 'before',
+      priority: 0,
+      enabled: false,
+    })
+    runtime.enable('e2e/dynamic-before', call => {
+      call.arguments[0] *= 10
+    })
+    {
+      const mod = await import(fixtureUrl)
+      check('dynamicBefore add(2,3)', mod.add(2, 3), 23)
+    }
+    break
+
+  case 'dynamicBurst':
+    {
+      installStentHooks()
+      const mod = await import(fixtureUrl)
+      const addTarget = { ...target, functionQuery: { functionName: 'add', kind: 'Sync' } }
+      const first = {
+        id: 'e2e/burst-first',
+        target: addTarget,
+        operation: 'before',
+        handler(call) {
+          call.arguments[0] *= 10
+        },
+      }
+      const second = {
+        id: 'e2e/burst-second',
+        target: addTarget,
+        operation: 'before',
+        handler(call) {
+          call.arguments[0] *= 100
+        },
+      }
+      runtime.register({ id: first.id, target: first.target, operation: first.operation, priority: 0, enabled: false })
+      runtime.enable(first.id, first.handler)
+      runtime.register({ id: second.id, target: second.target, operation: second.operation, priority: 0, enabled: false })
+      runtime.enable(second.id, second.handler)
+      runtime.remove(first.id)
+      await new Promise(resolve => setTimeout(resolve, 100))
+      const current = await import(fixtureUrl)
+      check('dynamicBurst final patch after register/remove burst', current.add(2, 3), 203)
+      runtime.remove(second.id)
+      await new Promise(resolve => setTimeout(resolve, 100))
+      const restored = await import(fixtureUrl)
+      check('dynamicBurst original after removal burst', restored.add(2, 3), 5)
+    }
+    break
+
+  case 'dynamicLoaded':
+    installStentHooks()
+    {
+      const first = await import(fixtureUrl)
+      check('dynamicLoaded original add(2,3)', first.add(2, 3), 5)
+      runtime.register({
+        id: 'e2e/dynamic-loaded',
+        target: { ...target, functionQuery: { functionName: 'add', kind: 'Sync' } },
+        operation: 'before',
+        priority: 0,
+        enabled: false,
+      })
+      runtime.enable('e2e/dynamic-loaded', call => {
+        call.arguments[0] *= 10
+      })
+      await new Promise(resolve => setTimeout(resolve, 50))
+      const second = await import(fixtureUrl)
+      check('dynamicLoaded patched add(2,3)', second.add(2, 3), 23)
+      await flushBindings('e2e/dynamic-loaded', 1)
+      check('dynamicLoaded bindings', runtime.bindingsOf('e2e/dynamic-loaded').length, 1)
+    }
+    break
   case 'before':
     await withPatch({
       id: 'e2e/before-add',
@@ -172,10 +285,10 @@ switch (caseName) {
           call.arguments[0] = call.arguments[0] * 2
         },
       }
-      installStentHooks([patchInstrumentation(patch)])
+      installStentHooks()
+      runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, required: patch.required, enabled: false })
       const mod = await import(fixtureUrl)
       check('generator untouched counter(3)', JSON.stringify([...mod.counter(3)]), JSON.stringify([0, 1, 2]))
-      runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, enabled: false })
       runtime.enable(patch.id, patch.handler)
       check('generator patched counter(3)', JSON.stringify([...mod.counter(3)]), JSON.stringify([0, 1, 2, 3, 4, 5]))
     }
@@ -191,9 +304,9 @@ switch (caseName) {
           call.arguments[0] = call.arguments[0] * 2
         },
       }
-      installStentHooks([patchInstrumentation(patch)])
+      installStentHooks()
+      runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, required: patch.required, enabled: false })
       const mod = await import(fixtureUrl)
-      runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, enabled: false })
       runtime.enable(patch.id, patch.handler)
       const out = []
       for await (const value of mod.asyncCounter(3)) out.push(value)
@@ -268,58 +381,32 @@ switch (caseName) {
     break
 
   case 'priorityOrder':
-    installStentHooks([
-      patchInstrumentation({
-        id: 'e2e/prio-low',
-        target: { ...target, functionQuery: { functionName: 'add', kind: 'Sync' } },
-        operation: 'before',
-        priority: 0,
-      }),
-      patchInstrumentation({
-        id: 'e2e/prio-high',
-        target: { ...target, functionQuery: { functionName: 'add', kind: 'Sync' } },
-        operation: 'before',
-        priority: 10,
-      }),
-    ])
+    installStentHooks()
     {
-      const mod = await import(fixtureUrl)
       const order = []
       const functionQuery = { functionName: 'add', kind: 'Sync' }
       runtime.register({ id: 'e2e/prio-low', target: { ...target, functionQuery }, operation: 'before', priority: 0, enabled: false })
       runtime.enable('e2e/prio-low', () => { order.push('low') })
       runtime.register({ id: 'e2e/prio-high', target: { ...target, functionQuery }, operation: 'before', priority: 10, enabled: false })
       runtime.enable('e2e/prio-high', () => { order.push('high') })
+      const mod = await import(fixtureUrl)
       mod.add(2, 3)
       check('priority order add(2,3)', order.join(','), 'high,low')
     }
     break
 
   case 'priorityStable':
-    installStentHooks([
-      patchInstrumentation({
-        id: 'e2e/stable-first',
-        target: { ...target, functionQuery: { functionName: 'add', kind: 'Sync' } },
-        operation: 'before',
-        priority: 5,
-      }),
-      patchInstrumentation({
-        id: 'e2e/stable-second',
-        target: { ...target, functionQuery: { functionName: 'add', kind: 'Sync' } },
-        operation: 'before',
-        priority: 5,
-      }),
-    ])
+    installStentHooks()
     {
-      const mod = await import(fixtureUrl)
       const order = []
       const functionQuery = { functionName: 'add', kind: 'Sync' }
       runtime.register({ id: 'e2e/stable-first', target: { ...target, functionQuery }, operation: 'before', priority: 5, enabled: false })
       runtime.enable('e2e/stable-first', () => { order.push('first') })
       runtime.register({ id: 'e2e/stable-second', target: { ...target, functionQuery }, operation: 'before', priority: 5, enabled: false })
       runtime.enable('e2e/stable-second', () => { order.push('second') })
+      const mod = await import(fixtureUrl)
       mod.add(2, 3)
-      // Equal priorities keep installation order: the later instrumentation
+      // Equal priorities keep registration order: the later instrumentation
       // wraps the outermost layer, so its handler runs first.
       check('priority stable add(2,3)', order.join(','), 'second,first')
     }
@@ -348,15 +435,86 @@ switch (caseName) {
           call.arguments[0] = call.arguments[0] * 10
         },
       }
-      installStentHooks([patchInstrumentation(patch)])
+      installStentHooks()
+      runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, required: patch.required, enabled: false })
       const mod = await import(fixtureUrl)
-      runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, enabled: false })
       runtime.enable(patch.id, patch.handler)
       // A browser-like scenario: the module is transformed at build time but
       // the bridge is not installed yet (no StentService mounted). Calls must
       // fall back to the original body instead of throwing.
       delete globalThis[GLOBAL_BRIDGE_KEY]
       check('noBridge add(2,3) falls back', mod.add(2, 3), 5)
+    }
+    break
+
+  case 'dynamicRemove':
+    installStentHooks()
+    {
+      const patch = {
+        id: 'e2e/dynamic-remove',
+        target: { ...target, functionQuery: { functionName: 'add', kind: 'Sync' } },
+        operation: 'before',
+      }
+      runtime.register({ ...patch, priority: 0, enabled: false })
+      runtime.enable(patch.id, call => {
+        call.arguments[0] *= 10
+      })
+      const first = await import(fixtureUrl)
+      check('dynamicRemove patched add(2,3)', first.add(2, 3), 23)
+      runtime.remove(patch.id)
+      await new Promise(resolve => setTimeout(resolve, 50))
+      const second = await import(fixtureUrl)
+      check('dynamicRemove original add(2,3)', second.add(2, 3), 5)
+    }
+    break
+
+  case 'dynamicRequired':
+    installStentHooks()
+    runtime.register({
+      id: 'e2e/dynamic-required',
+      target: { ...target, functionQuery: { functionName: 'add', kind: 'Sync' } },
+      operation: 'before',
+      priority: 0,
+      required: true,
+      enabled: false,
+    })
+    runtime.enable('e2e/dynamic-required', () => {})
+    await import(fixtureUrl)
+    await flushBindings('e2e/dynamic-required', 1)
+    let threw = ''
+    try {
+      checkRequiredPatches()
+    } catch (error) {
+      threw = String(error)
+    }
+    check('dynamicRequired no throw', threw, '')
+    check('dynamicRequired bindings', runtime.bindingsOf('e2e/dynamic-required').length, 1)
+    break
+
+  case 'dynamicCjs':
+    installStentHooks()
+    {
+      const cjsPath = new URL('../fixtures/node_modules/stent-target-fixture/index.cjs', import.meta.url).pathname
+      const first = require(cjsPath)
+      check('dynamicCjs original add(2,3)', first.add(2, 3), 5)
+      runtime.register({
+        id: 'e2e/dynamic-cjs',
+        target: {
+          module: 'stent-target-fixture',
+          versionRange: '^1.0.0',
+          filePath: 'index.cjs',
+          functionQuery: { methodName: 'add', kind: 'Sync' },
+        },
+        operation: 'before',
+        priority: 0,
+        enabled: false,
+      })
+      runtime.enable('e2e/dynamic-cjs', call => {
+        call.arguments[0] *= 10
+      })
+      await new Promise(resolve => setTimeout(resolve, 50))
+      const second = require(cjsPath)
+      check('dynamicCjs patched add(2,3)', second.add(2, 3), 23)
     }
     break
 
@@ -375,10 +533,10 @@ switch (caseName) {
           call.arguments[0] = call.arguments[0] * 10
         },
       }
-      installStentHooks([patchInstrumentation(patch)])
+      installStentHooks()
+      runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, required: patch.required, enabled: false })
       const cjs = require(new URL('../fixtures/node_modules/stent-target-fixture/index.cjs', import.meta.url).pathname)
       check('cjs baseline add(2,3)', cjs.add(2, 3), 5)
-      runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, enabled: false })
       runtime.enable(patch.id, patch.handler)
       check('cjs patched add(2,3)', cjs.add(2, 3), 23)
     }
@@ -401,9 +559,9 @@ switch (caseName) {
           call.arguments[0] = call.arguments[0] * 10
         },
       }
-      const disposeV1 = installStentHooks([patchInstrumentation(patchV1)])
-      const m1 = require(cjsPath)
+      const disposeV1 = installStentHooks()
       runtime.register({ id: patchV1.id, target: patchV1.target, operation: patchV1.operation, priority: 0, enabled: false })
+      const m1 = require(cjsPath)
       runtime.enable(patchV1.id, patchV1.handler)
       check('retransform v1 add(2,3)', m1.add(2, 3), 23)
       const patchV2 = {
@@ -417,11 +575,12 @@ switch (caseName) {
       // HMR: the old installation is replaced by a new one (its load hook
       // becomes pass-through) before the module is re-evaluated.
       disposeV1()
-      installStentHooks([patchInstrumentation(patchV2)])
+      runtime.remove(patchV1.id)
+      installStentHooks()
       runtime.register({ id: patchV2.id, target: patchV2.target, operation: patchV2.operation, priority: 0, enabled: false })
       runtime.enable(patchV2.id, patchV2.handler)
-      // The already-evaluated module keeps the v1 transformation...
-      check('retransform cached add(2,3)', m1.add(2, 3), 23)
+      // Removing v1 disables its bridge slot on the already-evaluated module.
+      check('retransform cached add(2,3)', m1.add(2, 3), 5)
       // ...until retransformCommonJs re-evaluates it under the v2 installation.
       const m2 = retransformCommonJs(cjsPath)
       check('retransform reloaded add(2,3)', m2.add(2, 3), 203)
@@ -439,9 +598,9 @@ switch (caseName) {
           call.arguments[0] = call.arguments[0] * 10
         },
       }
-      const disposeV1 = installStentHooks([patchInstrumentation(patchV1)])
-      const m1 = await import(fixtureUrl)
+      const disposeV1 = installStentHooks()
       runtime.register({ id: patchV1.id, target: patchV1.target, operation: patchV1.operation, priority: 0, enabled: false })
+      const m1 = await import(fixtureUrl)
       runtime.enable(patchV1.id, patchV1.handler)
       check('retransformEsm v1 add(2,3)', m1.add(2, 3), 23)
       const patchV2 = {
@@ -455,10 +614,12 @@ switch (caseName) {
       // HMR: the old installation is replaced by a new one before the module
       // is evicted from Node's internal loadCache and re-imported.
       disposeV1()
-      installStentHooks([patchInstrumentation(patchV2)])
+      runtime.remove(patchV1.id)
+      installStentHooks()
       runtime.register({ id: patchV2.id, target: patchV2.target, operation: patchV2.operation, priority: 0, enabled: false })
       runtime.enable(patchV2.id, patchV2.handler)
-      check('retransformEsm cached add(2,3)', m1.add(2, 3), 23)
+      // Removing v1 disables its bridge slot on the already-evaluated module.
+      check('retransformEsm cached add(2,3)', m1.add(2, 3), 5)
       const m2 = await retransformEsm(fixtureUrl.href)
       check('retransformEsm reloaded add(2,3)', m2.add(2, 3), 203)
     }
@@ -503,10 +664,10 @@ switch (caseName) {
           call.arguments[0] = call.arguments[0] * 10
         },
       }
-      const disposeV1 = installStentHooks([patchInstrumentation(patchV1)])
+      const disposeV1 = installStentHooks()
+      runtime.register({ id: patchV1.id, target: patchV1.target, operation: patchV1.operation, priority: 0, enabled: false })
       const esm = await import(cjsUrl)
       const cjs = require(cjsPath)
-      runtime.register({ id: patchV1.id, target: patchV1.target, operation: patchV1.operation, priority: 0, enabled: false })
       runtime.enable(patchV1.id, patchV1.handler)
       check('retransformCjsDual shared instance', esm.add === cjs.add, true)
       check('retransformCjsDual v1 add(2,3)', cjs.add(2, 3), 23)
@@ -519,7 +680,8 @@ switch (caseName) {
         },
       }
       disposeV1()
-      installStentHooks([patchInstrumentation(patchV2)])
+      runtime.remove(patchV1.id)
+      installStentHooks()
       runtime.register({ id: patchV2.id, target: patchV2.target, operation: patchV2.operation, priority: 0, enabled: false })
       runtime.enable(patchV2.id, patchV2.handler)
       const m2 = retransformCommonJs(cjsPath)
@@ -553,10 +715,10 @@ switch (caseName) {
           call.arguments[0] = call.arguments[0] * 10
         },
       }
-      installStentHooks([patchInstrumentation(patch)])
+      installStentHooks()
+      runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, required: patch.required, enabled: false })
       const wsUrl = new URL('../fixtures/workspace-target-fixture/index.mjs', import.meta.url)
       const mod = await import(wsUrl)
-      runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, enabled: false })
       runtime.enable(patch.id, patch.handler)
       check('workspaceIdentity add(2,3)', mod.add(2, 3), 23)
     }
@@ -573,7 +735,8 @@ switch (caseName) {
         operation: 'before',
         handler() {},
       }
-      installStentHooks([patchInstrumentation(patch)])
+      installStentHooks()
+      runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, required: patch.required, enabled: false })
       await import(fixtureUrl)
       await flushBindings(patch.id, 1)
       const bindings = runtime.bindingsOf(patch.id)
@@ -582,7 +745,7 @@ switch (caseName) {
       check('bindingsReported file', bindings[0]?.file, 'index.mjs')
       check('bindingsReported nodes', bindings[0]?.nodes, 1)
       // list() carries the binding summary after registration too.
-      runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, enabled: false })
+      runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, required: patch.required, enabled: false })
       const listed = runtime.list().find(info => info.id === patch.id)
       check('bindingsReported list() summary', listed?.bindings.length, 1)
     }
@@ -597,12 +760,13 @@ switch (caseName) {
         operation: 'before',
         required: true,
       }
-      installStentHooks([patchInstrumentation(patch)])
+      installStentHooks()
+      runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, required: patch.required, enabled: false })
       await import(fixtureUrl)
       await flushBindings(patch.id, 1)
       let threw = ''
       try {
-        checkRequiredPatches([patch])
+        checkRequiredPatches()
       } catch (error) {
         threw = String(error)
       }
@@ -622,11 +786,12 @@ switch (caseName) {
         operation: 'before',
         required: true,
       }
-      installStentHooks([patchInstrumentation(patch)])
+      installStentHooks()
+      runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, required: patch.required, enabled: false })
       await import(fixtureUrl)
       let threw = ''
       try {
-        checkRequiredPatches([patch])
+        checkRequiredPatches()
       } catch (error) {
         threw = String(error)
       }
@@ -647,12 +812,13 @@ switch (caseName) {
         operation: 'before',
         required: true,
       }
-      installStentHooks([patchInstrumentation(patch)])
+      installStentHooks()
+      runtime.register({ id: patch.id, target: patch.target, operation: patch.operation, priority: 0, required: patch.required, enabled: false })
       await import(fixtureUrl)
       await flushBindings(patch.id, 1)
       let threw = ''
       try {
-        checkRequiredPatches([patch])
+        checkRequiredPatches()
       } catch (error) {
         threw = String(error)
       }
@@ -677,12 +843,12 @@ switch (caseName) {
         },
         operation: 'before',
       }
-      installStentHooks(expandPatchStub(stub))
+      installStentHooks()
+      runtime.register({ id: stub.id, target: stub.target, operation: stub.operation, priority: 0, enabled: false })
       const indexMod = await import(fixtureUrl)
       const libUrl = new URL('../fixtures/node_modules/stent-target-fixture/lib.js', import.meta.url)
       const libMod = await import(libUrl)
       await flushBindings(stub.id, 2)
-      runtime.register({ id: stub.id, target: stub.target, operation: stub.operation, priority: 0, enabled: false })
       runtime.enable(stub.id, (call) => { call.arguments[0] = call.arguments[0] * 10 })
       check('filePathsDual index patched', indexMod.add(2, 3), 23)
       check('filePathsDual lib patched', libMod.add(2, 3), 23)

@@ -208,6 +208,7 @@ function patchInfo(patch: StentPatch): StentPatchInfo {
     target: patch.target,
     operation: patch.operation,
     priority: patch.priority ?? 0,
+    ...(patch.required === undefined ? {} : { required: patch.required }),
     enabled: true,
   }
 }

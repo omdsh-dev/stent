@@ -6,17 +6,6 @@ import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { composeStentConfig } from '../../src/stent-dsh/profile.ts'
 
-const patch = {
-  id: 'launcher/test-patch',
-  target: {
-    module: '@example/target',
-    versionRange: '^1.0.0',
-    filePath: 'lib/index.js',
-    functionQuery: { functionName: 'greet', kind: 'Sync' },
-  },
-  operation: 'before',
-}
-
 class FakeYamlType {
   constructor(
     readonly tag: string,
@@ -38,7 +27,10 @@ function createYaml(): {
   }
 }
 
-function compose(mode: string | undefined): {
+function compose(
+  mode: string | undefined,
+  legacyPatchConfig = false,
+): {
   root: string
   result: ReturnType<typeof composeStentConfig>
   cleanup: () => void
@@ -56,31 +48,38 @@ function compose(mode: string | undefined): {
             id: 'stent',
             name: '@oh-my-dsh/stent',
             disabled: true,
-            config: { stent: { patches: [patch] } },
+            config: legacyPatchConfig ? { stent: { patches: [{ id: 'legacy/patch' }] } } : { stent: { dynamic: true } },
           },
           { id: 'stent-dsh', name: '@oh-my-dsh/stent-dsh', disabled: true },
+          { id: 'dynamic-plugin', name: '@example/dynamic-plugin', disabled: true, config: { stent: true } },
         ],
       },
     ]),
   )
 
-  const result = composeStentConfig({
-    args: {
-      dshPath: undefined,
-      profile: 'web',
-      dshHome: undefined,
-      pathEnv: undefined,
-      env: {},
-      launcherUrl: new URL(import.meta.url),
-      cwd: pathToFileURL(root),
-      patchFiles: [],
-      passthrough: mode === undefined ? [] : [mode],
-    },
-    dshHome: pathToFileURL(join(root, 'home')),
-    profileDir: pathToFileURL(profileDir),
-    requireFromProfile: createRequire(pathToFileURL(join(profileDir, 'package.json'))),
-    yaml: createYaml(),
-  })
+  let result: ReturnType<typeof composeStentConfig>
+  try {
+    result = composeStentConfig({
+      args: {
+        dshPath: undefined,
+        profile: 'web',
+        dshHome: undefined,
+        pathEnv: undefined,
+        env: {},
+        launcherUrl: new URL(import.meta.url),
+        cwd: pathToFileURL(root),
+        patchFiles: [],
+        passthrough: mode === undefined ? [] : [mode],
+      },
+      dshHome: pathToFileURL(join(root, 'home')),
+      profileDir: pathToFileURL(profileDir),
+      requireFromProfile: createRequire(pathToFileURL(join(profileDir, 'package.json'))),
+      yaml: createYaml(),
+    })
+  } catch (error) {
+    rmSync(root, { recursive: true, force: true })
+    throw error
+  }
 
   return {
     root,
@@ -96,9 +95,12 @@ describe('stent profile composition', () => {
   it('enables the DSH integration during a Stent profile boot', () => {
     const composed = compose('web')
     try {
-      expect(composed.result.patches).toHaveLength(1)
-      expect(composed.result.enableOverlay).toEqual([{ id: 'stent-dsh', disabled: false }])
+      expect(composed.result.enableOverlay).toEqual([
+        { id: 'dynamic-plugin', disabled: false },
+        { id: 'stent-dsh', disabled: false },
+      ])
       expect(JSON.parse(readFileSync(composed.result.enablePath, 'utf8'))).toEqual([
+        { id: 'dynamic-plugin', disabled: false },
         { id: 'stent-dsh', disabled: false },
       ])
     } finally {
@@ -124,5 +126,9 @@ describe('stent profile composition', () => {
     } finally {
       composed.cleanup()
     }
+  })
+
+  it('rejects legacy YAML patch descriptors instead of silently ignoring them', () => {
+    expect(() => compose('web', true)).toThrow(/config\.stent\.patches.*register patch metadata in plugin code/)
   })
 })

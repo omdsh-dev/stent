@@ -6,31 +6,14 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 
 /**
- * Preload injection equivalence: the Stent bin injects the preload through
- * `NODE_OPTIONS=--import <Stent preload>` before the official CLI entry
- * evaluates. These cases spawn the preload directly with a prepared
- * `STENT_CONFIG` to verify the same hook ordering before the entry imports its
- * targets — the guarantee the removed host patch (profile-boot
- * installStentBootstrap) used to provide.
- */
+ * Direct preload probes verify that the preload is launcher-owned: a legacy
+ * `STENT_CONFIG` variable alone cannot activate static hooks or claim a launch.
+ * The installed launcher tests cover the active dynamic preload path. */
 const preload = fileURLToPath(new URL('../../src/stent-dsh-preload.ts', import.meta.url))
 const entry = fileURLToPath(new URL('../fixtures/preload-entry.mjs', import.meta.url))
 
-const patch = {
-  id: 'preload/multiply-add',
-  target: {
-    module: 'stent-target-fixture',
-    versionRange: '^1.0.0',
-    filePath: 'index.mjs',
-    functionQuery: { functionName: 'add', kind: 'Sync' },
-  },
-  operation: 'before',
-  required: true,
-}
-
 const tempDir = mkdtempSync(join(tmpdir(), 'stent-preload-'))
-const configPath = join(tempDir, 'stent-config.json')
-writeFileSync(configPath, JSON.stringify([patch]))
+const legacyConfigPath = join(tempDir, 'legacy-stent-config.json')
 
 afterAll(() => {
   rmSync(tempDir, { recursive: true, force: true })
@@ -55,25 +38,24 @@ function run(configEnv: string | undefined, profileEnv?: string): { stdout: stri
 }
 
 describe('stent preload injection (Stent launcher shape)', () => {
-  it('bootstraps the hooks before the entry imports its targets', () => {
-    const out = run(configPath)
-    expect(out.stdout).toContain('LAUNCH=true')
-    expect(out.stdout).toContain('BEFORE add(2,3)=5 AFTER add(2,3)=23')
+  it('does not activate from STENT_CONFIG without the launcher capability', () => {
+    const out = run(legacyConfigPath)
+    expect(out.stdout).toContain('DIRECT-PRELOAD launch=false bindings=0 add(2,3)=5')
   })
 
   it('stays inert without STENT_CONFIG (host runs unmodified)', () => {
     const out = run(undefined)
-    expect(out.stdout).toContain('NO-CONFIG launch=false bindings=0 add(2,3)=5')
+    expect(out.stdout).toContain('DIRECT-PRELOAD launch=false bindings=0 add(2,3)=5')
   })
 
-  it('prints the stent-enabled launch marker only when the hooks install', () => {
-    const enabled = run(configPath)
-    expect(enabled.stderr).toContain('stent: Stent hooks installed (1 descriptor(s))')
+  it('prints no Stent activation marker for a direct preload', () => {
+    const configured = run(legacyConfigPath)
+    expect(configured.stderr).not.toContain('stent:')
     const inert = run(undefined)
     expect(inert.stderr).not.toContain('stent:')
   })
 
-  it('uses the Cordis-free loader subpath even when STENT_PROFILE is set', () => {
+  it('does not resolve a profile replacement during a direct preload', () => {
     // 写入一个会在导入时失败的 profile 替代包，验证 source launcher 不会解析到这里。
     const profileDir = join(tempDir, 'profile')
     const stubDir = join(profileDir, 'node_modules', '@oh-my-dsh', 'stent')
@@ -90,8 +72,7 @@ describe('stent preload injection (Stent launcher shape)', () => {
     )
     writeFileSync(join(stubDir, 'index.js'), "throw new Error('profile Stent package must not be imported')\n")
 
-    const out = run(configPath, profileDir)
-    expect(out.stdout).toContain('LAUNCH=true')
-    expect(out.stdout).toContain('BEFORE add(2,3)=5 AFTER add(2,3)=23')
+    const out = run(legacyConfigPath, profileDir)
+    expect(out.stdout).toContain('DIRECT-PRELOAD launch=false bindings=0 add(2,3)=5')
   })
 })

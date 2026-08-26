@@ -53,25 +53,40 @@ capability gate is enforced by `getStent(ctx)`: a plugin that omitted
 Everything the official channels already cover is deliberately excluded:
 installing the trio (`dsh plugin add`), bundle roster rows and dependencies,
 catalog generation, invariant/gate exemptions for trio-in-workspace, and all
-documentation (`README*`, `docs/`, `.agents/`). What remains is what no channel
-can provide: launcher bootstrap (`apps/cli/src/profile-boot.ts` calls
-`installStentBootstrap` before any target import and
-`checkStentRequiredPatches` after boot), the `clientBundle` source-transform
-build seam (`packages/client/tsdown.client.ts`), catalog entries compiled into
-the official `tool-cordis` package, their tests, and the pnpm-policy seams.
+documentation (`README*`, `docs/`, `.agents/`). What remains is what no
+channel can provide: the launcher-owned preload/bootstrap and its tests, the
+`clientBundle` source-transform build seam, catalog entries compiled into the
+official `tool-cordis` package, and the pnpm-policy seams.
 
 ### 2.1 The disabled opt-in rows
 
 The web-app bundle layer inserts the `stent` / `stent-dsh` rows as
-**disabled opt-ins**. The pure `stent` package remains disabled because its
-root row is a descriptor carrier rather than a Loader plugin. A profile boot
-through the explicit `stent-dsh` launcher automatically enables the
-`stent-dsh` integration row through a generated overlay, so its post-boot
-required-patch check and hook summary run. Plain `dsh` leaves the rows disabled;
-the bundle layer still applies on every boot, so pre-existing profiles need no
-manual edit.
+**disabled opt-ins**. A dynamic patch plugin marks its row with a Stent
+configuration marker (for example `config: { stent: true }`); the launcher
+only uses that marker to enable the row through a generated overlay. It never
+extracts patch metadata from YAML. Plugin code registers the target metadata
+and executable handler through `ctx.stent.register()` after `installStentHooks()` has
+been installed. Plain `dsh` leaves these rows disabled.
 
-### 2.2 The TSX dead end (recorded and reverted)
+### 2.2 Dynamic patch registration
+
+The Node launcher installs `installStentHooks()` before the
+official CLI imports target plugins. A plugin's `ctx.stent.register({ id,
+target, operation, priority, required, handler })` call is the single source of
+truth for a patch: runtime metadata updates the loader matcher, while the
+handler remains in process memory and is never serialized. New imports use the
+new matcher immediately. If a target was already loaded, the loader schedules
+CJS/ESM cache re-transformation under the new matcher when the synchronous Node
+hooks are available; an async loader-thread fallback applies the update to
+future ESM loads.
+
+Removing a patch refreshes the matcher and re-transforms loaded targets when
+possible. Enabling or disabling a handler does not need a code transform,
+because transformed bridge calls dispatch against the live runtime registry.
+`required: true` is checked from the runtime registry after boot, not from a
+YAML descriptor list. Profile YAML may mark a row as Stent-dependent for
+activation, but it must not contain `config.stent.patches` descriptors.
+### 2.3 The TSX dead end (recorded and reverted)
 
 The `dsh` source launch (`node --import tsx/esm apps/cli/src/bin.ts`) once
 appeared to need `TSX_TSCONFIG_PATH` or a register preload: `FiberState` (a

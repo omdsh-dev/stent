@@ -21,39 +21,40 @@
 ## 安装和 bootstrap
 
 ```ts
-import { expandPatchStub, installStentHooks } from '@oh-my-dsh/stent/node/loader'
+import { installStentHooks } from '@oh-my-dsh/stent/node/loader'
 import { StentService } from '@oh-my-dsh/stent'
-import type { StentPatchStub } from '@oh-my-dsh/stent/types'
 import type { Context } from 'cordis'
 
 declare const ctx: Context
-const patches: StentPatchStub[] = []
-const disposeHooks = installStentHooks(patches.flatMap(expandPatchStub))
+// DSH launcher 使用空 matcher；插件之后通过 ctx.stent.register 注册
+// metadata 和 handler。
+const disposeHooks = installStentHooks()
 await ctx.plugin(StentService)
 disposeHooks()
 ```
 
-`installStentHooks` 从已经展开的 instrumentation 安装变换 hooks。若输入的是静态 patch 描述符，应先使用 `patches.flatMap(expandPatchStub)` 展开。在宿主中，`stent` composition 行在 `config.stent.patches` 下携带静态描述（id/target/operation——handler 是注册时绑定的受信任代码）时，会在 `boot()` 准备阶段自动安装，早于任何 config-tree entry 挂载。
+`installStentHooks` 只有一个 Node 安装路径：`installStentHooks()`，且必须在目标模块导入前执行。
+dynamic mode 订阅进程内 runtime registry；插件代码注册或移除 patch metadata 时
+会重建 matcher，handler 留在内存中，绝不序列化。目标模块若已加载，Node loader
+会在支持时调度 CJS/ESM cache 重新变换。Profile YAML 只负责标记 Stent 依赖的
+row（例如 `config: { stent: true }`），不再在 `config.stent.patches` 下携带
+patch stub。根入口导出的 `patchInstrumentation`、`expandPatchStub` 和 browser transform API
+只用于 build-time/browser；它们不会安装 Node hooks，也不能传给 `installStentHooks`。
 
 启动路径和 hooks 安装是两个不同的概念。`stent-dsh` preload 会在 bootstrap hooks 前写入启动标记；普通 `dsh` 启动不会获得该标记。`StentService` 将它作为 Cordis 的可用性检查，因此声明 `inject: ['stent']` 的插件即使通过其他路径安装了底层 bridge，在普通 `dsh` 下也会保持 pending。browser client entry 会写入等价的 Stent 客户端激活标记。`getStent(ctx)` 在复用或挂载 registry 前也会检查同一启动能力；漏写 `inject: ['stent']` 的 DSH 插件不能通过该 accessor 静默绕过门控，而会 loud failure。明确管理独立生命周期的底层调用方仍可直接构造 `new StentService(ctx)`。
 
-patch 可以设置 `required: true`：一旦应用启动完成、所有目标模块都已导入，`checkRequiredPatches(patches)` 会在某个 required patch 的变换从未重写过任何东西时 loud 失败，并点名该 patch id 与其目标——`filePath` 可能是错误的启动形态（`src/index.ts` 对 `lib/index.js`），或函数已移动。宿主会在 `boot()` 完成后自动运行此检查。一个 patch id 覆盖多种启动形态，既可用 RegExp `filePath`（如 `/^(src\/index\.ts|lib\/index\.js)$/`），也可用 `filePaths` 数组便捷项（每项展开为同 id 下的一份 instrumentation，每个命中的文件一条绑定记录）。检查所依赖的加载期绑定按被变换的文件逐条记录，可通过 `ctx.stent.bindings(id?)` 和每条 `list()` 条目查看。
+patch 可以设置 `required: true`：boot 后 `checkRequiredPatches()` 从 live
+runtime registry 读取 required entries；若某个 required patch 没有任何绑定就
+loud failure。宿主会自动运行该检查。一个 patch id 覆盖多种启动形态可用
+RegExp `filePath` 或 `filePaths` 数组；加载期绑定按被变换的文件记录，可通过
+`ctx.stent.bindings(id?)` 和 `list()` 查看。
 
 ```yaml
-# User overlay:纯 service row 作为 descriptor carrier 保持 disabled。
-# 它的 package root 没有 Loader `apply`;Stent launcher 在 profile boot 时自动启用宿主 integration row。
-- id: stent
+# Profile YAML 只作为 activation marker，不是 patch descriptor 来源。
+- id: dynamic-plugin
   disabled: true
   config:
-    stent:
-      patches:
-        - id: vendor/rewrite-greeting
-          target:
-            module: '@example/target-package'
-            versionRange: '^1.0.0'
-            filePath: 'lib/index.js'
-            functionQuery: { functionName: 'greet', kind: 'Sync' }
-          operation: 'before'
+    stent: true
 
 - id: stent-dsh
   disabled: false
@@ -61,7 +62,11 @@ patch 可以设置 `required: true`：一旦应用启动完成、所有目标模
 
 宿主 integration row 负责挂载 Host facade。核心包的 browser half（`./client`，实现位于 `src/browser/client`）是独立的 client artifact,在 browser entry 物化时安装 `ctx.stent`;它不会把 package root 变成 Loader plugin。
 
-hooks 必须在目标模块首次求值前安装；之后注册的 patch 只对后续才被变换的模块生效。`registerHooks` API 没有 unregister，因此返回的 disposer 只是停用该安装的状态，而不是移除 hook 函数本身。
+dynamic hooks 必须在目标模块首次求值前安装。插件在目标加载前注册时会在
+首次求值中变换；若目标已经求值，Node 同步 hook API 可用时 loader 会调度
+CJS/ESM cache 重新变换。只切换 handler 的 enable/disable 会通过 live bridge
+立即生效，不需要再次变换。`registerHooks` 没有 unregister，因此 disposer
+停用的是 installation state，而不是移除进程生命周期内的 hook 函数。
 
 
 ## 注册 patch
@@ -117,7 +122,11 @@ const stent = createWatchedBrowserTransform(
 )
 ```
 
-patches 文件是一个静态 patch stub 的 JSON 数组（与 profile 行的 `config.stent.patches` 形状相同；JSON 无法表达 `RegExp` `filePath`，因此文件路径是字符串），文件畸形会在构建期失败即显式。变换在每个模块上把该文件注册进打包器的 watch 图，因此在 `tsdown --watch`（`pnpm run dev:web`）下编辑它会用新 patch 集合重建 bundle——这就是构建触发器——重建产物经 client-hmr 链（stat 轮询、`rebuilt` 帧、invalidate/prefetch/换纤）送达浏览器。静态内存 patch 集合仍可直接使用 `createBrowserTransform`。
+patches 文件是一个用于 browser build instrumentation 的静态 patch stub JSON
+数组（Node DSH launcher 不读取它；JSON 无法表达 `RegExp` `filePath`，因此
+文件路径是字符串）。文件畸形会在构建期失败即显式。变换会把文件注册进
+打包器 watch 图，因此在 `tsdown --watch`（`pnpm run dev:web`）下编辑它会
+重建 bundle；静态内存 patch 集合仍可直接使用 `createBrowserTransform`。
 
 resolver 把包自身的源码树映射到包身份；不使用上游 adapter，因为它要求 `node_modules` 边界，而仓库源码构建没有该边界。TypeScript 源码会在变换前剥离类型注解（transformer 解析编译后的 JavaScript）。
 

@@ -5,9 +5,10 @@
  * `ctx.stentTools`, `ctx.stentPrompt`, `ctx.stentCommands`), a browser
  * facade (`ctx.stentClient`) that delegates to the authoritative DSH
  * client services, the package invariant companion, and the DSH profile
- * bootstrap (`installStentBootstrap`) that composes the pure
- * `stent` transformation hooks from profile rows. Mount this entry
- * to provide all Host modules; mount a subpath to provide one module.
+ * bootstrap that installs the runtime-driven Stent transformation hooks.
+ * Patch metadata and handlers are supplied by plugin code through
+ * `ctx.stent.register()`; profile rows only control plugin activation. Mount
+ * this entry to provide all Host modules; mount a subpath to provide one module.
  * @module @oh-my-dsh/stent-dsh
  */
 
@@ -48,7 +49,7 @@ export async function apply(ctx: Context): Promise<void> {
   await ctx.plugin(StentPromptService)
   await ctx.plugin(StentCommandsService)
   // Post-boot patch verification under the stent-dsh launcher (no-op for
-  // plain dsh): the launcher injects the hooks and writes the composed
-  // descriptors to $STENT_CONFIG; the Host plugin owns the loud check.
+  // plain dsh): the launcher installs the dynamic hooks before plugins run;
+  // plugin code owns metadata, handlers, and required-patch declarations.
   scheduleRequiredPatchCheck(ctx)
 }

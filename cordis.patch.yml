@@ -6,7 +6,9 @@
 # owns the host catalog adapter; the pure service remains host-independent.
 # Plain `dsh` leaves both rows disabled. The stent-dsh launcher is itself the
 # explicit profile opt-in and enables the integration row through its generated
-# overlay; its preload activates Stent-dependent plugins before target imports.
+# overlay; its plugin code registers target metadata and handlers through
+# ctx.stent.register(). Profile rows for such plugins may carry config:
+# { stent: true } as an activation marker, but no patch descriptors.
 # The low-level getStent(ctx) fallback is gated by the same capability, so a
 # plugin that omitted inject: ['stent'] cannot mount the registry under plain dsh.
 # The pure `stent-api` package is peer-only: Mods mount its compat

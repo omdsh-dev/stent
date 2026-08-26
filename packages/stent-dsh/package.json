@@ -1,6 +1,6 @@
 {
   "name": "@oh-my-dsh/stent-dsh",
-  "description": "DSH integrations for the Cordis Stent layer: DSH-facing facades, the package invariant, and the DSH profile bootstrap that composes the pure stent hooks",
+  "description": "DSH integrations for the Cordis Stent layer: DSH-facing facades, the package invariant, and the runtime-driven DSH profile bootstrap",
   "version": "0.1.1",
   "type": "module",
   "main": "lib/index.js",

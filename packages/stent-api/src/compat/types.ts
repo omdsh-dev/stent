@@ -1,8 +1,8 @@
 import type { StentOperation, StentTarget, PatchId } from '@oh-my-dsh/stent'
 
-/** Static patch descriptor of one compat target (the handler is bound at runtime). */
+/** Patch metadata for one compat target; the handler is bound by the runtime registry. */
 export interface StentCompatPatch {
-  /** Patch id; must be stable and match the instrumentation installed at bootstrap. */
+  /** Patch id; must be stable for runtime registration and HMR ownership. */
   readonly id: PatchId
   /** Target descriptor: module, version range, file path, and function selector. */
   readonly target: StentTarget

@@ -16,33 +16,33 @@ function runScenario(name: string): string {
   return result.stdout
 }
 
-describe('stent concurrent installations (child processes)', () => {
-  it("transforms through each installation's own matcher", () => {
-    const out = runScenario('concurrent')
-    expect(out).toContain('PASS concurrent add(2,3): 23')
-    expect(out).toContain('PASS concurrent greet(world): "hello WORLD"')
+describe('stent dynamic matcher registrations (child processes)', () => {
+  it('merges multiple plugin registrations into one matcher', () => {
+    const out = runScenario('registered')
+    expect(out).toContain('PASS registered add(2,3): 23')
+    expect(out).toContain('PASS registered greet(world): "hello WORLD"')
   })
 
-  it('disposing an earlier installation leaves later ones intact', () => {
+  it('only registered patches participate in an initial load', () => {
     const out = runScenario('disposeFirst')
     expect(out).toContain('PASS after disposeA add(2,3): 5')
     expect(out).toContain('PASS after disposeA greet(world): "hello WORLD"')
   })
 
-  it('chains concurrent installations through the CJS _compile wrapper', () => {
-    const out = runScenario('concurrentCjs')
-    expect(out).toContain('PASS concurrent cjs add(2,3): 23')
-    expect(out).toContain('PASS concurrent cjs greet(world): "hello WORLD"')
+  it('applies multiple registrations through the CJS compile hook', () => {
+    const out = runScenario('registeredCjs')
+    expect(out).toContain('PASS registered cjs add(2,3): 23')
+    expect(out).toContain('PASS registered cjs greet(world): "hello WORLD"')
   })
 
-  it('drops a disposed installation out of the CJS chain', () => {
+  it('omits unregistered patches from the CJS matcher', () => {
     const out = runScenario('disposeFirstCjs')
     expect(out).toContain('PASS after disposeA cjs add(2,3): 5')
     expect(out).toContain('PASS after disposeA cjs greet(world): "hello WORLD"')
   })
 
-  it('stacks cross-installation patches by installation order, not priority', () => {
+  it('orders dynamic registrations by priority', () => {
     const out = runScenario('stackedGreet')
-    expect(out).toContain('PASS stacked greet(world): "hello worldBA"')
+    expect(out).toContain('PASS stacked greet(world): "hello worldAB"')
   })
 })

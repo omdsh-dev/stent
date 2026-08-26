@@ -38,20 +38,26 @@ Stent 依赖插件仍不可用。`getStent(ctx)` 也使用同一能力门控：�
 `inject: ['stent']` 的插件在普通 `dsh` 下无法通过 accessor 挂载 registry，
 而会 loud failure。
 
-官方通道已经覆盖的内容被刻意排除:安装 trio(`dsh plugin add`)、bundle 行名册与依赖、catalog 生成、trio-in-workspace 的 invariant/gate 豁免、以及全部文档(`README*`、`docs/`、`.agents/`)。剩下的是任何通道都提供不了的:launcher bootstrap(`apps/cli/src/profile-boot.ts` 在任何目标导入之前调用 `installStentBootstrap`、boot 后调用 `checkStentRequiredPatches`)、`clientBundle` 源码 transform 构建接缝(`packages/client/tsdown.client.ts`)、编译进官方 `tool-cordis` 包的 catalog 条目、它们的测试、以及 pnpm 策略接缝。
+官方通道已经覆盖的内容被刻意排除:安装 trio(`dsh plugin add`)、bundle 行名册与依赖、catalog 生成、trio-in-workspace 的 invariant/gate 豁免、以及全部文档(`README*`、`docs/`、`.agents/`)。剩下的是任何通道都提供不了的:launcher-owned preload/bootstrap、`clientBundle` 源码 transform 构建接缝、编译进官方 `tool-cordis` 包的 catalog 条目、它们的测试、以及 pnpm 策略接缝。### 2.1 disabled opt-in 行
 
-### 2.1 disabled opt-in 行
+web-app bundle 层把 `stent` / `stent-dsh` 行插入为 **disabled opt-in**。动态
+patch plugin 的 row 只需要 activation marker（例如 `config: { stent: true }`）；
+launcher 通过生成的 overlay 自动启用它和 `stent-dsh` integration row。YAML
+不会再提供 patch metadata。plugin code 在 preload 调用 `installStentHooks()` 后，
+通过 `ctx.stent.register()` 注册 metadata 与 handler。普通 `dsh` 仍保持这些
+行 disabled。
 
-web-app bundle 层把 `stent` / `stent-dsh` 行插入为 **disabled opt-in**。纯
-`stent` 包的根行仍保持 disabled,因为它目前是 descriptor carrier 而不是
-Loader plugin。通过显式的 `stent-dsh` launcher 启动 profile 时,launcher
-会通过生成的 overlay 自动启用 `stent-dsh` integration row,因此 boot 后的
-required-patch 检查和 hook summary 会执行。普通 `dsh` 仍保持这些行 disabled;
-bundle 层每次 boot 都应用,所以既有 profile 不需要手动编辑。
+### 2.2 完全动态的 patch 注册
 
-### 2.2 TSX 死胡同(已记录并撤销)
+`installStentHooks()` 在官方 CLI 导入目标 plugin 前安装。
+新的注册会刷新 loader matcher；尚未加载的模块直接使用新 matcher，已加载的
+CJS/ESM 模块在同步 Node hooks 可用时会调度 cache re-transform。handler 只
+保存在进程内，enable/disable 通过 live bridge 立即生效。`required: true`
+由 boot 后的 live runtime registry 检查，而不是 YAML descriptor 列表。
 
-`dsh` 的 source 启动(`node --import tsx/esm apps/cli/src/bin.ts`)一度看起来需要 `TSX_TSCONFIG_PATH` 或 register preload:`FiberState`(const enum,只在 `vendor/cordis/src` 存在)解析失败。两个 workaround 都曾发布,后来**全部撤销**——真正原因是 shell 里一个指向旧 staging checkout 的过期 `TSX_TSCONFIG_PATH`。干净环境下 tsx 自动发现入口的 tsconfig(继承 base)并把别名解析到 `src`。官方脚本原样运行;patch 中不存在相关接缝。
+### 2.3 TSX 死胡同(已记录并撤销)
+
+`dsh` 的 source 启动一度看起来需要 `TSX_TSCONFIG_PATH` 或 register preload:`FiberState`(const enum,只在 `vendor/cordis/src` 存在)解析失败。两个 workaround 都曾发布,后来**全部撤销**——真正原因是 shell 里一个指向旧 staging checkout 的过期 `TSX_TSCONFIG_PATH`。干净环境下 tsx 自动发现入口的 tsconfig(继承 base)并把别名解析到 `src`。官方脚本原样运行;patch 中不存在相关接缝。
 
 ## 3. 安装模型:npm bundle
 

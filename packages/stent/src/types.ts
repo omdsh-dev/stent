@@ -160,6 +160,8 @@ export interface StentPatchInfo {
   operation: StentOperation
   /** Registration priority (defaults to 0); higher runs first. */
   priority: number
+  /** Whether this patch must bind a target during startup. */
+  required?: boolean
   /** Whether the patch is currently installed. */
   enabled: boolean
   /**

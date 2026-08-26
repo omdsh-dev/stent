@@ -1,6 +1,6 @@
 /**
  * Child side of the Stent test kit: reads the fixture payload, installs the
- * patch hooks, imports the entry module, runs its default export, and writes
+ * dynamic hooks, registers patch metadata, imports the entry module, runs its default export, and writes
  * one JSON envelope to stdout.
  *
  * Runs under `node --import tsx/esm` (see {@link runPatchFixture}); the
@@ -11,7 +11,7 @@
  * @module @oh-my-dsh/stent/test/testkit-runner
  */
 
-import { expandPatchStub, flushBindingReports, installStentHooks } from '../node/loader.ts'
+import { flushBindingReports, installStentHooks } from '../node/loader.ts'
 import { runtime } from '../runtime.ts'
 import type { StentPatchStub } from '../types.ts'
 
@@ -51,7 +51,14 @@ if (!Array.isArray(payload.patches) || typeof payload.entry !== 'string') {
 }
 
 try {
-  installStentHooks(payload.patches.flatMap(expandPatchStub))
+  installStentHooks()
+  for (const patch of payload.patches) {
+    runtime.register({
+      ...patch,
+      priority: patch.priority ?? 0,
+      enabled: false,
+    })
+  }
   // The entry is a runtime-provided module specifier; its shape is the
   // documented default-export function contract.
   const mod = (await import(payload.entry)) as { default?: unknown }
