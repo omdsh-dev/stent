@@ -13,9 +13,9 @@ export type { ServeBrowserTransformOptions } from './serve.ts'
 export {
   createBrowserTransform,
   createWatchedBrowserTransform,
-  installedPackageResolver,
   repoSourceResolver,
 } from '../transform/browser.ts'
+export { resolvePackageIdentity } from '../transform/identity.ts'
 export type {
   BrowserTransform,
   BrowserTransformOptions,

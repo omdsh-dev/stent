@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createWatchedBrowserTransform, installedPackageResolver } from '../../src/browser/index.ts'
+import { createWatchedBrowserTransform, resolvePackageIdentity } from '../../src/browser/index.ts'
 
 const fixtureDir = fileURLToPath(new URL('../fixtures/node_modules/stent-target-fixture/', import.meta.url))
 
@@ -34,7 +34,7 @@ describe('createWatchedBrowserTransform', () => {
 
   it('transforms matching modules from the file-backed patch set', () => {
     const path = patchesFile([stub])
-    const transform = createWatchedBrowserTransform({ patchesPath: path, resolve: installedPackageResolver() })
+    const transform = createWatchedBrowserTransform({ patchesPath: path, resolve: resolvePackageIdentity })
     const id = `${fixtureDir}index.mjs`
     const output = transform(readFileSync(id, 'utf8'), id)
     expect(output).not.toBeNull()
@@ -46,13 +46,13 @@ describe('createWatchedBrowserTransform', () => {
 
   it('returns null for modules no patch targets', () => {
     const path = patchesFile([stub])
-    const transform = createWatchedBrowserTransform({ patchesPath: path, resolve: installedPackageResolver() })
+    const transform = createWatchedBrowserTransform({ patchesPath: path, resolve: resolvePackageIdentity })
     expect(transform('export const x = 1', '/tmp/other-pkg/lib/index.js')).toBeNull()
   })
 
   it('registers the patches file in the watch graph for matching and unmatched modules alike', () => {
     const path = patchesFile([stub])
-    const transform = createWatchedBrowserTransform({ patchesPath: path, resolve: installedPackageResolver() })
+    const transform = createWatchedBrowserTransform({ patchesPath: path, resolve: resolvePackageIdentity })
     const watched: string[] = []
     const addWatchFile = (file: string): void => {
       watched.push(file)
@@ -66,7 +66,7 @@ describe('createWatchedBrowserTransform', () => {
 
   it('rebuilds the matcher when the patches file content changes', () => {
     const path = patchesFile([stub])
-    const transform = createWatchedBrowserTransform({ patchesPath: path, resolve: installedPackageResolver() })
+    const transform = createWatchedBrowserTransform({ patchesPath: path, resolve: resolvePackageIdentity })
     const id = `${fixtureDir}index.mjs`
     const source = readFileSync(id, 'utf8')
     expect(transform(source, id)!.code).toContain('operation: "before"')
@@ -86,25 +86,25 @@ describe('createWatchedBrowserTransform', () => {
     roots.push(root)
     const missing = createWatchedBrowserTransform({
       patchesPath: join(root, 'absent.json'),
-      resolve: installedPackageResolver(),
+      resolve: resolvePackageIdentity,
     })
     expect(() => missing('export const x = 1', '/tmp/x/index.js')).toThrow(/cannot read watched patches file/)
 
     const notJson = createWatchedBrowserTransform({
       patchesPath: patchesFile('not json {'),
-      resolve: installedPackageResolver(),
+      resolve: resolvePackageIdentity,
     })
     expect(() => notJson('export const x = 1', '/tmp/x/index.js')).toThrow(/cannot parse watched patches file/)
 
     const notArray = createWatchedBrowserTransform({
       patchesPath: patchesFile({ id: 'x' }),
-      resolve: installedPackageResolver(),
+      resolve: resolvePackageIdentity,
     })
     expect(() => notArray('export const x = 1', '/tmp/x/index.js')).toThrow(/JSON array of patch stubs/)
 
     const noTarget = createWatchedBrowserTransform({
       patchesPath: patchesFile([{ id: 'web/x' }]),
-      resolve: installedPackageResolver(),
+      resolve: resolvePackageIdentity,
     })
     expect(() => noTarget('export const x = 1', '/tmp/x/index.js')).toThrow(
       /entry 0 must be a patch stub object with a target/,
@@ -112,7 +112,7 @@ describe('createWatchedBrowserTransform', () => {
 
     const badId = createWatchedBrowserTransform({
       patchesPath: patchesFile([{ ...stub, id: 'has space' }]),
-      resolve: installedPackageResolver(),
+      resolve: resolvePackageIdentity,
     })
     expect(() => badId('export const x = 1', '/tmp/x/index.js')).toThrow(/patch id/)
   })

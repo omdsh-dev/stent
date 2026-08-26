@@ -105,7 +105,7 @@ export function apply(ctx: Context & { stent: StentService }): void {
 
 ## 平台支持
 
-- **Node Host（ESM + CommonJS）：** 从 `@oh-my-dsh/stent/node` 使用同步 `module.registerHooks`（Node ≥ 22.22.3 / ≥ 24.11.1）和 CJS `_compile` 路径。模块身份解析和 loader-thread entry 都属于内部实现，不是公开 API；entry 只注册一次并在每次加载时读取共享配置，因此重新变换、销毁与并发安装在两条路径上行为一致。
+- **Node Host（ESM + CommonJS）：** 从 `@oh-my-dsh/stent/node` 使用同步 `module.registerHooks`（Node ≥ 22.22.3 / ≥ 24.11.1）和 CJS `_compile` 路径。模块身份从最近的 `package.json` 解析，因此同时支持已安装 package、workspace realpath 以及 pnpm isolated `node_modules` 布局；loader-thread entry 仍属于内部实现，不是公开 API；entry 只注册一次并在每次加载时读取共享配置，因此重新变换、销毁与并发安装在两条路径上行为一致。
 - **Browser/Web：** bundle 期重写（`createWatchedBrowserTransform`（静态集合用 `createBrowserTransform`）+ `repoSourceResolver`，经 `clientBundle(id, libEntry, { transform })` 接入）重写 client 插件函数；本 package 的 client half（`./client`，实现位于 `src/browser/client`）在浏览器 Cordis 树中安装 bridge 并挂载 `ctx.stent`。client bundle 在该 entry 物化前回退到原函数，因此 patch 对浏览器 Stent runtime 就绪后的调用生效。web roster 的 `stent` 行默认禁用（opt-in）。
 
 ## Browser 构建用法

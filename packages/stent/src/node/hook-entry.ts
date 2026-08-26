@@ -21,7 +21,8 @@
 
 import { readFileSync } from 'node:fs'
 import type { MessagePort } from 'node:worker_threads'
-import { createInstrumentedTransform, nodePackageResolver } from '../transform/browser.ts'
+import { createInstrumentedTransform } from '../transform/browser.ts'
+import { resolvePackageIdentity } from '../transform/identity.ts'
 import type { StentBindingReport } from '../types.ts'
 import { reviveInstrumentation, type StentWireInstrumentation } from '../transform/wire.ts'
 
@@ -84,7 +85,7 @@ function readTransforms(): TransformFn[] {
       const instrumentations = (entry.instrumentations ?? []).map(reviveInstrumentation)
       return instrumentations.length === 0
         ? undefined
-        : createInstrumentedTransform(instrumentations, nodePackageResolver())
+        : createInstrumentedTransform(instrumentations, resolvePackageIdentity)
     })
     .filter((transform): transform is TransformFn => transform !== undefined)
   cached = { config: raw, transforms }

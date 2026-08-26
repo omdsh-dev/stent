@@ -19,7 +19,8 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
-import { createBrowserTransform, nodePackageResolver } from '../transform/browser.ts'
+import { createBrowserTransform } from '../transform/browser.ts'
+import { resolvePackageIdentity } from '../transform/identity.ts'
 import type { TransformOutput } from '../transform/browser.ts'
 import type { StentPatchStub } from '../types.ts'
 
@@ -122,7 +123,7 @@ export function serveBrowserTransform(ctx: Context, options: ServeBrowserTransfo
   const bundlePath = join(pkgDir, filePath)
   // Validation and matcher construction happen once: a malformed descriptor
   // fails at registration, and every request reuses the same matcher.
-  const transform = createBrowserTransform({ patches, resolve: nodePackageResolver() })
+  const transform = createBrowserTransform({ patches, resolve: resolvePackageIdentity })
   let cached: { source: string; code: string } | undefined
 
   /** The bytes to serve: the transformed bundle, cached per source content. */

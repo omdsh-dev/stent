@@ -43,7 +43,7 @@ import {
   type StentMatcher,
   type StentTransformer,
 } from '../transform/matcher.ts'
-import { nodePackageIdentity, type PackageIdentity } from '../transform/identity.ts'
+import { resolvePackageIdentity, type PackageIdentity } from '../transform/identity.ts'
 import { serializeInstrumentation } from '../transform/wire.ts'
 import type { StentBindingReport, StentPatchInfo, StentPatchStub, PatchId } from '../types.ts'
 /** The `Module.prototype._compile` internals this loader wraps for CJS. */
@@ -239,15 +239,14 @@ function refreshDynamicState(state: LoaderState): void {
 }
 
 /**
- * Resolve a loaded module's package identity: installed packages through
- * their node_modules boundary, workspace packages through their nearest
- * package.json (Node realpaths workspace links, so the npm-layout parser
- * alone cannot name them).
+ * Resolve a loaded module's package identity from its nearest package.json.
+ * This works for both installed packages and workspace realpaths, including
+ * pnpm's isolated node_modules layout.
  * @param urlOrPath - the module URL or filesystem path.
  * @returns the identity for the matcher, or undefined outside any package.
  */
 function moduleIdentity(urlOrPath: string): PackageIdentity | undefined {
-  return nodePackageIdentity(urlOrPath)
+  return resolvePackageIdentity(urlOrPath)
 }
 
 /**

@@ -116,7 +116,7 @@ The registration is a fiber effect owned by the registering plugin: disposing th
 
 ## Platform support
 
-- **Node Host (ESM + CommonJS):** supported via `@oh-my-dsh/stent/node`, using synchronous `module.registerHooks` (Node ≥ 22.22.3 / ≥ 24.11.1) and the CJS `_compile` path. The implementation resolves module identity through the npm-layout parser first and falls back to the nearest `package.json`; the loader-thread entry is private and not part of the public API. The entry is registered once and reads a shared configuration file on each load, so re-transformation, disposal, and concurrent installations behave the same on both paths.
+- **Node Host (ESM + CommonJS):** supported via `@oh-my-dsh/stent/node`, using synchronous `module.registerHooks` (Node ≥ 22.22.3 / ≥ 24.11.1) and the CJS `_compile` path. Module identity is resolved from the nearest `package.json`, which works for both installed packages and workspace realpaths, including pnpm's isolated `node_modules` layout; the loader-thread entry is private and not part of the public API. The entry is registered once and reads a shared configuration file on each load, so re-transformation, disposal, and concurrent installations behave the same on both paths.
 - **Browser/Web:** the bundle-time rewrite (`createWatchedBrowserTransform` (or `createBrowserTransform` for a static set) + `repoSourceResolver`, wired through `clientBundle(id, libEntry, { transform })`) rewrites client plugin functions, and the package's own client half (`./client`, implemented by `src/browser/client`) installs the bridge and mounts `ctx.stent` in the browser Cordis tree. Client bundles fall back to the original body until that entry materializes, so patches take effect for calls after the browser Stent runtime is up. The web roster row `stent` is disabled by default (opt-in).
 
 ## Browser build usage
@@ -145,7 +145,7 @@ the bundle with the new patch set — the build trigger — and the client-hmr
 chain delivers it to the browser. A static in-memory patch set can still use
 `createBrowserTransform` directly.
 
-The resolver maps the package's own source tree to its package identity; the upstream adapter is not used because it requires a `node_modules` boundary that repository source builds do not have. TypeScript sources are stripped to plain JavaScript before transformation (the transformer parses emitted JavaScript).
+The resolver maps the package's own source tree to its package identity; use `repoSourceResolver` for repository source builds because their identity is declared by the host rather than inferred from a `node_modules` path. The built-in installed-package resolver locates the nearest package manifest directly and supports virtual or not-yet-written bundler module ids. TypeScript sources are stripped to plain JavaScript before transformation (the transformer parses emitted JavaScript).
 
 ### Runtime bundle serving
 

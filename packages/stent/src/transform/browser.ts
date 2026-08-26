@@ -17,7 +17,7 @@
 import { readFileSync } from 'node:fs'
 import { relative } from 'node:path'
 import ts from 'typescript'
-import { detectModuleType, installedPackageIdentity, nodePackageIdentity } from './identity.ts'
+import { detectModuleType } from './identity.ts'
 import { createStentMatcher, getStentTransformer, transformStentSource } from './matcher.ts'
 import { expandPatchStub, type StentInstrumentationConfig } from './config.ts'
 import type { StentBindingReport, StentPatchStub } from '../types.ts'
@@ -85,26 +85,6 @@ export function repoSourceResolver({ packageName, packageRoot, version }: RepoSo
     if (!id.startsWith(root)) return undefined
     return { name: packageName, version, path: relative(packageRoot, id).replaceAll('\\', '/') }
   }
-}
-
-/**
- * Resolve installed-package modules through `node_modules` boundaries.
- * @returns an identity resolver for module ids inside any installed package.
- */
-export function installedPackageResolver(): IdentityResolver {
-  return id => installedPackageIdentity(id)
-}
-
-/**
- * Resolve module identity the way the Node host loads it: installed packages
- * through their node_modules boundary, workspace packages through their
- * nearest package.json (Node realpaths workspace links, so the npm-layout
- * parser alone cannot name them). Shared by the async loader-thread entry
- * and any Node-side consumer of {@link createBrowserTransform}.
- * @returns an identity resolver for Node-loaded module ids (paths or file URLs).
- */
-export function nodePackageResolver(): IdentityResolver {
-  return id => nodePackageIdentity(id)
 }
 
 /** A transformed module: rewritten source plus an optional source map. */

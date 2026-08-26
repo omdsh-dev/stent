@@ -700,8 +700,8 @@ switch (caseName) {
     {
       // The workspace-package shape: the module is reached at its real path
       // (no node_modules boundary — Node realpaths workspace links), so the
-      // npm-layout parser cannot name it and the nearest-package.json fallback
-      // must. This is how host packages load in the real product launch.
+      // nearest package.json must identify it.
+      // This is how host packages load in the real product launch.
       const patch = {
         id: 'e2e/workspace-identity',
         target: {

@@ -1,4 +1,4 @@
-import { createBrowserTransform, installedPackageResolver, repoSourceResolver } from '../../src/browser/index.ts'
+import { createBrowserTransform, repoSourceResolver, resolvePackageIdentity } from '../../src/browser/index.ts'
 import type { IdentityResolver } from '../../src/browser/index.ts'
 import type { StentPatchStub } from '../../src/types.ts'
 import { readFileSync } from 'node:fs'
@@ -19,7 +19,7 @@ const patch = {
   handler: () => {},
 }
 
-const createTransform = (patches: readonly StentPatchStub[], resolve: IdentityResolver = installedPackageResolver()) =>
+const createTransform = (patches: readonly StentPatchStub[], resolve: IdentityResolver = resolvePackageIdentity) =>
   createBrowserTransform({ patches, resolve })
 
 describe('createBrowserTransform validation', () => {
@@ -59,7 +59,7 @@ describe('createBrowserTransform validation', () => {
 })
 
 describe('createBrowserTransform', () => {
-  it('transforms installed-package modules through installedPackageResolver', () => {
+  it('transforms installed-package modules through their nearest package.json resolver', () => {
     const transform = createTransform([patch])
     const id = `${fixtureDir}index.mjs`
     const source = readFileSync(id, 'utf8')
