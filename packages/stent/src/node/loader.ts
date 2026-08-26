@@ -1,7 +1,7 @@
 /**
  * Node transformation hooks for Stent: installs the bridge handle and the
  * synchronous ESM/CJS load hooks that rewrite target modules with the
- * Orchestrion Stent transform before they are evaluated.
+ * Stent transformation before they are evaluated.
  *
  * The hooks must be installed before any target module is imported (the
  * Cordis Loader imports plugin modules only after entries are created, so a
@@ -30,18 +30,25 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { MessagePort } from 'node:worker_threads'
-import { create } from '@apm-js-collab/code-transformer'
 import { installBridge } from '../bridge.ts'
-import { nodePackageIdentity, type PackageIdentity } from './identity.ts'
 import { runtime } from '../runtime.ts'
 import { retransformCommonJs as reloadCommonJs, retransformEsm as reloadEsm, loadedEsmUrls } from '../hmr/reload.ts'
-import { registerStentTransform } from '../transform/transform.ts'
-import { expandPatchStub, orderInstrumentations, type StentInstrumentationConfig } from '../transform/config.ts'
-import { serializeInstrumentation, reviveInstrumentation } from './wire.ts'
+import { expandPatchStub, type StentInstrumentationConfig } from '../transform/config.ts'
+import {
+  createStentMatcher,
+  freeStentTransformer,
+  getStentTransformer,
+  orderStentInstrumentations,
+  transformStentSource,
+  type StentMatcher,
+  type StentTransformer,
+} from '../transform/matcher.ts'
+import { nodePackageIdentity, type PackageIdentity } from '../transform/identity.ts'
+import { reviveInstrumentation, serializeInstrumentation } from '../transform/wire.ts'
 import type { StentBindingReport, StentPatchInfo, StentPatchStub, PatchId } from '../types.ts'
 
 export { reviveInstrumentation, serializeInstrumentation }
-export type { StentWireInstrumentation } from './wire.ts'
+export type { StentWireInstrumentation } from '../transform/wire.ts'
 
 /** The `Module.prototype._compile` internals this loader wraps for CJS. */
 type CompileFn = (this: Module, content: string, filename: string) => unknown
@@ -74,14 +81,14 @@ export function checkRequiredPatches(): void {
 interface LoaderState {
   /** Whether this installation is currently active. */
   active: boolean
-  /** Orchestrion matcher with the Stent transform registered. */
-  matcher: ReturnType<typeof create>
+  /** Stent matcher with the custom transform registered. */
+  matcher: StentMatcher
   /** The ordered instrumentations, serialized to the async hook entry. */
   instrumentations: StentInstrumentationConfig[]
   /** Whether this state uses synchronous Node loader hooks. */
   syncHooks: boolean
   /** Transformers resolved per module URL. */
-  transformers: Map<string, ReturnType<ReturnType<typeof create>['getTransformer']>>
+  transformers: Map<string, StentTransformer>
   /** URLs already transformed (guards the CJS double-path). */
   seen: Set<string>
   /**
@@ -92,7 +99,7 @@ interface LoaderState {
   /** Stop listening to runtime patch changes. */
   unsubscribePatchChanges?: () => void
   /** Matchers superseded before the pending retransform microtask runs. */
-  pendingPreviousMatchers: ReturnType<typeof create>[]
+  pendingPreviousMatchers: StentMatcher[]
   /** Already-loaded module identities captured when a dynamic change arrives. */
   pendingLoadedModules: Set<string>
   /** Whether a loaded-module retransform has already been queued. */
@@ -153,16 +160,14 @@ function patchShapeKey(info: StentPatchInfo): string {
 /** Build the current instrumentation snapshot from the live runtime registry. */
 function currentInstrumentations(): StentInstrumentationConfig[] {
   const runtimePatches = runtime.list().flatMap(info => expandPatchStub(patchStubFromInfo(info)))
-  return orderInstrumentations(runtimePatches)
+  return orderStentInstrumentations(runtimePatches)
 }
 
 /** Construct a matcher and attach its Stent transform callback. */
-function createMatcher(state: LoaderState, instrumentations: StentInstrumentationConfig[]): ReturnType<typeof create> {
-  const matcher = create(instrumentations)
-  registerStentTransform(matcher, patchId => {
+function createMatcher(state: LoaderState, instrumentations: StentInstrumentationConfig[]): StentMatcher {
+  return createStentMatcher(instrumentations, patchId => {
     state.pending.set(patchId, (state.pending.get(patchId) ?? 0) + 1)
   })
-  return matcher
 }
 
 /** Clear per-installation transform marks for a reloaded module. */
@@ -170,12 +175,12 @@ function clearSeen(filename: string): void {
   for (const installation of states) installation.seen.delete(filename)
 }
 /** Whether a matcher selects a loaded module identity. */
-function matcherSelects(matcher: ReturnType<typeof create>, path: string): boolean {
+function matcherSelects(matcher: StentMatcher, path: string): boolean {
   const identity = moduleIdentity(path)
   if (identity === undefined) return false
-  const transformer = matcher.getTransformer(identity.name, identity.version, identity.path)
+  const transformer = getStentTransformer(matcher, identity.name, identity.version, identity.path)
   if (transformer === undefined) return false
-  transformer.free()
+  freeStentTransformer(transformer)
   return true
 }
 
@@ -202,7 +207,7 @@ function queueLoadedRetransform(state: LoaderState): void {
 /** Re-run loaded targets against the latest dynamic matcher snapshot. */
 async function retransformLoadedTargets(
   state: LoaderState,
-  previousMatchers: readonly ReturnType<typeof create>[],
+  previousMatchers: readonly StentMatcher[],
   loadedModules: readonly string[],
 ): Promise<void> {
   const matchers = [state.matcher, ...previousMatchers]
@@ -228,7 +233,7 @@ function refreshDynamicState(state: LoaderState): void {
   const previousMatcher = state.matcher
   for (const path of Object.keys(nodeRequire.cache)) state.pendingLoadedModules.add(path)
   if (state.syncHooks) for (const url of loadedEsmUrls()) state.pendingLoadedModules.add(url)
-  for (const transformer of state.transformers.values()) transformer?.free()
+  for (const transformer of state.transformers.values()) freeStentTransformer(transformer)
   state.transformers.clear()
   state.instrumentations = currentInstrumentations()
   state.matcher = createMatcher(state, state.instrumentations)
@@ -451,7 +456,7 @@ export function installStentHooks(): () => void {
 
   const state: LoaderState = {
     active: true,
-    matcher: undefined as unknown as ReturnType<typeof create>,
+    matcher: undefined as unknown as StentMatcher,
     instrumentations: [],
     syncHooks,
     transformers: new Map(),
@@ -485,7 +490,7 @@ export function installStentHooks(): () => void {
         if (!state.active) return resolved
         const identity = moduleIdentity(resolved.url)
         if (identity === undefined) return resolved
-        const transformer = state.matcher.getTransformer(identity.name, identity.version, identity.path)
+        const transformer = getStentTransformer(state.matcher, identity.name, identity.version, identity.path)
         if (transformer) state.transformers.set(resolved.url, transformer)
         return resolved
       },
@@ -504,7 +509,7 @@ export function installStentHooks(): () => void {
         try {
           const source = readSource(result, url)
           const moduleType = context.format === 'module' ? 'esm' : 'cjs'
-          const transformed = transformer.transform(source, moduleType)
+          const transformed = transformStentSource(transformer, source, moduleType)
           const identity = moduleIdentity(path)
           if (identity !== undefined) flushBindings(stateRef, identity)
           return { ...result, source: transformed.code, shortCircuit: true }
@@ -531,7 +536,7 @@ export function installStentHooks(): () => void {
     state.pendingLoadedModules.clear()
     const index = states.indexOf(state)
     if (index >= 0) states.splice(index, 1)
-    for (const transformer of state.transformers.values()) transformer?.free()
+    for (const transformer of state.transformers.values()) freeStentTransformer(transformer)
     state.transformers.clear()
     writeAsyncConfig()
   }
@@ -557,11 +562,11 @@ function installCompileWrapper(): void {
     if (identity !== undefined) {
       for (const state of states) {
         if (!state.active) continue
-        const transformer = state.matcher.getTransformer(identity.name, identity.version, identity.path)
+        const transformer = getStentTransformer(state.matcher, identity.name, identity.version, identity.path)
         if (!transformer || state.seen.has(filename)) continue
         state.seen.add(filename)
         try {
-          content = transformer.transform(content, 'cjs').code
+          content = transformStentSource(transformer, content, 'cjs').code
           flushBindings(state, identity)
         } catch (error) {
           state.pending.clear()

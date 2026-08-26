@@ -5,9 +5,9 @@
  * @module @oh-my-dsh/stent/transform/config
  */
 
-import type { InstrumentationConfig } from '@apm-js-collab/code-transformer'
+import type { InstrumentationConfig } from './orchestrion.ts'
 
-export type { InstrumentationConfig } from '@apm-js-collab/code-transformer'
+export type { InstrumentationConfig } from './orchestrion.ts'
 import { validatePatchId, validatePatchStatic } from '../runtime.ts'
 import type { StentPatchStub } from '../types.ts'
 

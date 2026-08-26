@@ -2,7 +2,7 @@
  * Ambient declaration for `module-details-from-path` — a tiny CJS helper that
  * maps a module filename back to its owning npm package name, package
  * directory, and package-relative path. The upstream package ships no types,
- * so this project-owned declaration is the ESM consumption contract.
+ * so this project-owned declaration is the transform identity contract.
  * @module module-details-from-path
  */
 

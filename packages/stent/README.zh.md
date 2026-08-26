@@ -15,7 +15,7 @@
 | `around` | 决定原函数体是否执行，并可替换其结果（调用 `invoke()` 委托）。 |
 | `replace` | 完全接管调用；只有 handler 调用 `invoke()` 时才执行原函数体。 |
 
-源码分层在三个既有包内部完成，不新增第四个包：`stent/src/transform` 负责平台无关的 instrumentation 配置和 AST 重写；`src/node` 负责 Node hooks、模块身份和 loader-thread wire 传输；`src/browser` 负责浏览器变换和运行时 bundle serving；`src/hmr` 负责 HMR generation ownership 与 Node cache 重新变换；`src/testing` 负责子进程测试夹具。`stent-api/src/compat` 分开合作式 contract、instrumentation builder 与 service。伴随的宿主集成包提供 `src/host`、`src/browser`、`src/bootstrap` 入口，分别负责宿主 facade、浏览器服务和 profile 组装；其 catalog adapter 由该集成包挂载，因此纯 Stent service 不依赖 catalog。
+源码分层在三个既有包内部完成，不新增第四个包：`stent/src/transform` 是唯一的 Orchestrion 边界，负责 matcher adapter、instrumentation 配置、模块身份、loader-thread wire 序列化和 AST 重写；`src/node` 负责 Node hooks 以及 Node 子路径的兼容入口；`src/browser` 负责公开的 browser-transform facade、client runtime 和 bundle serving；`src/hmr` 负责 HMR generation ownership 与 Node cache 重新变换；`src/testing` 负责子进程测试夹具。`stent-api/src/compat` 分开合作式 contract、instrumentation builder 与 service。伴随的宿主集成包提供 `src/host`、`src/browser`、`src/bootstrap` 入口，分别负责宿主 facade、浏览器服务和 profile 组装；其 catalog adapter 由该集成包挂载，因此纯 Stent service 不依赖 catalog。
 
 
 ## 安装和 bootstrap

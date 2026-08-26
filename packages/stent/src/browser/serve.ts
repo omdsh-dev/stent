@@ -19,9 +19,9 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
-import { createBrowserTransform, nodePackageResolver } from './transform.ts'
+import { createBrowserTransform, nodePackageResolver } from '../transform/browser.ts'
 import { expandPatchStub } from '../transform/config.ts'
-import type { TransformOutput } from './transform.ts'
+import type { TransformOutput } from '../transform/browser.ts'
 import type { StentPatchStub } from '../types.ts'
 
 /** Options for {@link serveBrowserTransform}. */

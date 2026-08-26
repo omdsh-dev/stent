@@ -4,7 +4,9 @@ import { defineConfig } from 'tsdown'
  * stent is a dual-face package: the node half (index, the
  * loader-thread hook entry, and the testkit pair) plus the browser client
  * bundle. tsdown compiles the source entries directly; the hook entry is a
- * third node artifact the async loader fallback resolves.
+ * third node artifact the async loader fallback resolves. Orchestrion adapters
+ * live under `src/transform`; the legacy node/browser paths remain thin
+ * public facades.
  */
 export default [
   defineConfig({
@@ -22,6 +24,12 @@ export default [
       'hmr/reload': 'src/hmr/reload.ts',
       'transform/config': 'src/transform/config.ts',
       'transform/transform': 'src/transform/transform.ts',
+      'transform/browser': 'src/transform/browser.ts',
+      'transform/identity': 'src/transform/identity.ts',
+      'transform/matcher': 'src/transform/matcher.ts',
+      'transform/orchestrion': 'src/transform/orchestrion.ts',
+      'transform/types': 'src/transform/types.ts',
+      'transform/wire': 'src/transform/wire.ts',
       'testing/testkit': 'src/testing/testkit.ts',
       'testing/testkit-runner': 'src/testing/testkit-runner.ts',
       'browser/client': 'src/browser/client/index.ts',

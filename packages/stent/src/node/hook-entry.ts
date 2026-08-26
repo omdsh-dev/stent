@@ -21,9 +21,9 @@
 
 import { readFileSync } from 'node:fs'
 import type { MessagePort } from 'node:worker_threads'
-import { createBrowserTransform, nodePackageResolver } from '../browser/transform.ts'
+import { createBrowserTransform, nodePackageResolver } from '../transform/browser.ts'
 import type { StentBindingReport } from '../types.ts'
-import { reviveInstrumentation, type StentWireInstrumentation } from './wire.ts'
+import { reviveInstrumentation, type StentWireInstrumentation } from '../transform/wire.ts'
 
 /** Shared configuration path, passed through `module.register` data. */
 let configPath: string | undefined

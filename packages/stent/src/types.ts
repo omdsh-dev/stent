@@ -4,7 +4,7 @@
  * @module @oh-my-dsh/stent/types
  */
 
-import type { FunctionQuery } from '@apm-js-collab/code-transformer'
+import type { StentFunctionQuery } from './transform/types.ts'
 
 /** Stable identity of one Stent patch (unique within one Stent runtime). */
 export type PatchId = string
@@ -36,7 +36,7 @@ export interface StentTarget {
    */
   filePaths?: string[]
   /** Name-based function query (function, method, class, private method…). */
-  functionQuery?: FunctionQuery
+  functionQuery?: StentFunctionQuery
   /** Raw esquery selector; when set it takes precedence over name matching. */
   astQuery?: string
   /**

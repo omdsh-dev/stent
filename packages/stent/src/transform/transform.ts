@@ -25,8 +25,7 @@
  * @module @oh-my-dsh/stent/transform/transform
  */
 
-import type { CustomTransform } from '@apm-js-collab/code-transformer'
-import { create } from '@apm-js-collab/code-transformer'
+import type { CustomTransform, InstrumentationMatcher } from './orchestrion.ts'
 import type {
   ArrowFunctionExpression,
   Expression,
@@ -58,7 +57,7 @@ const OUTER_ARGUMENTS = 'stentOuterArguments'
  * node the transform actually rewrites; the Node loader counts these into
  * its load-time binding records.
  */
-export function registerStentTransform(matcher: ReturnType<typeof create>, onMatch?: (patchId: string) => void): void {
+export function registerStentTransform(matcher: InstrumentationMatcher, onMatch?: (patchId: string) => void): void {
   matcher.addTransform('stent', (state, node, parent, ancestry) => {
     const patchId = state.stentPatchId
     const operation = state.stentOperation
