@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 import parse from 'module-details-from-path'
 
 /** Read the version field of the owning package.json. */
-export function getPackageVersion(basedir: string): string {
+function getPackageVersion(basedir: string): string {
   try {
     const url = new URL(basedir)
     if (url.protocol === 'file:') basedir = fileURLToPath(url)
@@ -58,7 +58,7 @@ function findPackageRoot(filename: string): string | undefined {
  * @param filename - the module's filesystem path (never a URL).
  * @returns the owning package identity, or undefined outside any package.
  */
-export function packageIdentityFromPath(filename: string): PackageIdentity | undefined {
+function packageIdentityFromPath(filename: string): PackageIdentity | undefined {
   const root = findPackageRoot(filename)
   if (root === undefined) return undefined
   let manifest = manifestCache.get(root)

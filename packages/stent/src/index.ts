@@ -1,9 +1,10 @@
 /**
- * Cordis Stent service: the runtime face of the experimental Stent/Mixin
- * extension layer. Trusted plugins register patches (target + operation +
- * handler) here; the transformation hooks installed by
- * {@link installStentHooks} rewrite the target functions, and this service
- * attaches and detaches the handlers in the shared runtime.
+ * Cordis Stent service and platform-free runtime API.
+ *
+ * Node hook installation lives under `@oh-my-dsh/stent/node`; browser build
+ * and bundle-serving APIs live under `@oh-my-dsh/stent/browser`. Keeping those
+ * platform boundaries out of this entry also keeps Orchestrion implementation
+ * details private to the transform layer.
  *
  * The service is opt-in: nothing in the default host composition mounts it,
  * and a plugin only receives `ctx.stent` when it declares the service and the
@@ -14,36 +15,12 @@
 export { STENT_DSH_LAUNCH_KEY, isStentDshLaunch, markStentDshLaunch } from './activation.ts'
 export { GLOBAL_BRIDGE_KEY, installBridge, isStentInstalled, publish, type StentBridgeCall } from './bridge.ts'
 export {
-  checkRequiredPatches,
-  flushBindingReports,
-  installStentHooks,
-  retransformCommonJs,
-  retransformEsm,
-} from './node/loader.ts'
-// Browser/build-time transform configuration. The Node loader does not accept
-// these configs; it only installs the dynamic runtime matcher below.
-export { expandPatchStub, orderInstrumentations, patchInstrumentation } from './transform/config.ts'
-export type { StentInstrumentationConfig, InstrumentationConfig } from './transform/config.ts'
-export {
-  createBrowserTransform,
-  createWatchedBrowserTransform,
-  nodeModulesResolver,
-  nodePackageResolver,
-  repoSourceResolver,
-  type IdentityResolver,
-  type ModuleIdentity,
-  type TransformOutput,
-  type WatchedBrowserTransform,
-} from './browser/transform.ts'
-export {
   runtime,
   validatePatchId,
   validatePatchStatic,
   type StentPatchChange,
   type StentPatchChangeListener,
 } from './runtime.ts'
-export { serveBrowserTransform, type ServeBrowserTransformOptions } from './browser/serve.ts'
-export { createStentTransform } from './transform/transform.ts'
 export type {
   StentAfterHandler,
   StentAroundHandler,
@@ -51,6 +28,8 @@ export type {
   StentBinding,
   StentBindingReport,
   StentCall,
+  StentFunctionKind,
+  StentFunctionQuery,
   StentHandler,
   StentInvoke,
   StentOperation,
@@ -61,5 +40,4 @@ export type {
   StentTarget,
   PatchId,
 } from './types.ts'
-
 export { StentService, getStent } from './service.ts'

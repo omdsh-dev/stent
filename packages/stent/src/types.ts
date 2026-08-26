@@ -6,6 +6,8 @@
 
 import type { StentFunctionQuery } from './transform/types.ts'
 
+export type { StentFunctionKind, StentFunctionQuery } from './transform/types.ts'
+
 /** Stable identity of one Stent patch (unique within one Stent runtime). */
 export type PatchId = string
 

@@ -15,13 +15,13 @@
 | `around` | 决定原函数体是否执行，并可替换其结果（调用 `invoke()` 委托）。 |
 | `replace` | 完全接管调用；只有 handler 调用 `invoke()` 时才执行原函数体。 |
 
-源码分层在三个既有包内部完成，不新增第四个包：`stent/src/transform` 是唯一的 Orchestrion 边界，负责 matcher adapter、instrumentation 配置、模块身份、loader-thread wire 序列化和 AST 重写；`src/node` 负责 Node hooks 以及 Node 子路径的兼容入口；`src/browser` 负责公开的 browser-transform facade、client runtime 和 bundle serving；`src/hmr` 负责 HMR generation ownership 与 Node cache 重新变换；`src/testing` 负责子进程测试夹具。`stent-api/src/compat` 分开合作式 contract、instrumentation builder 与 service。伴随的宿主集成包提供 `src/host`、`src/browser`、`src/bootstrap` 入口，分别负责宿主 facade、浏览器服务和 profile 组装；其 catalog adapter 由该集成包挂载，因此纯 Stent service 不依赖 catalog。
+源码仍然分层在三个既有包内部，不新增第四个包。根入口只包含与平台无关的 runtime 和 service；Node hook 生命周期 API 从 `@oh-my-dsh/stent/node` 导入，build-time transform 和运行时 bundle serving 从 `@oh-my-dsh/stent/browser` 导入，浏览器 Cordis entry 从 `@oh-my-dsh/stent/client` 导入。Orchestrion adapter 及其中间 instrumentation 类型属于 `stent/src/transform` 内部实现，不是公开 API。`src/node` 负责 Node hooks，`src/browser` 负责浏览器构建/运行时接缝，`src/hmr` 负责 HMR generation ownership 与 Node cache 重新变换，`src/testing` 负责子进程测试夹具。`stent-api/src/compat` 分开合作式 contract 与 service；宿主集成包负责 host facade、浏览器服务和 profile 组装，因此纯 Stent service 不依赖 catalog。
 
 
 ## 安装和 bootstrap
 
 ```ts
-import { installStentHooks } from '@oh-my-dsh/stent/node/loader'
+import { installStentHooks } from '@oh-my-dsh/stent/node'
 import { StentService } from '@oh-my-dsh/stent'
 import type { Context } from 'cordis'
 
@@ -38,8 +38,7 @@ dynamic mode 订阅进程内 runtime registry；插件代码注册或移除 patc
 会重建 matcher，handler 留在内存中，绝不序列化。目标模块若已加载，Node loader
 会在支持时调度 CJS/ESM cache 重新变换。Profile YAML 只负责标记 Stent 依赖的
 row（例如 `config: { stent: true }`），不再在 `config.stent.patches` 下携带
-patch stub。根入口导出的 `patchInstrumentation`、`expandPatchStub` 和 browser transform API
-只用于 build-time/browser；它们不会安装 Node hooks，也不能传给 `installStentHooks`。
+根入口只包含 runtime 和 service；Node hooks 从 `@oh-my-dsh/stent/node` 导入，browser build/serve API 从 `@oh-my-dsh/stent/browser` 导入。它们不会安装 Node hooks，也不能传给 `installStentHooks`。
 
 启动路径和 hooks 安装是两个不同的概念。`stent-dsh` preload 会在 bootstrap hooks 前写入启动标记；普通 `dsh` 启动不会获得该标记。`StentService` 将它作为 Cordis 的可用性检查，因此声明 `inject: ['stent']` 的插件即使通过其他路径安装了底层 bridge，在普通 `dsh` 下也会保持 pending。browser client entry 会写入等价的 Stent 客户端激活标记。`getStent(ctx)` 在复用或挂载 registry 前也会检查同一启动能力；漏写 `inject: ['stent']` 的 DSH 插件不能通过该 accessor 静默绕过门控，而会 loud failure。明确管理独立生命周期的底层调用方仍可直接构造 `new StentService(ctx)`。
 
@@ -60,7 +59,7 @@ RegExp `filePath` 或 `filePaths` 数组；加载期绑定按被变换的文件�
   disabled: false
 ```
 
-宿主 integration row 负责挂载 Host facade。核心包的 browser half（`./client`，实现位于 `src/browser/client`）是独立的 client artifact,在 browser entry 物化时安装 `ctx.stent`;它不会把 package root 变成 Loader plugin。
+宿主 integration row 负责挂载 Host facade。核心包的 browser half（`./client`，实现位于 `src/browser/client`）是由 browser ModuleLoader 加载的 closure-factory artifact（不是普通 Node/ESM import）；它的声明文件描述的是生成该 factory 的 source entry。browser entry 物化时它安装 `ctx.stent`，不会把 package root 变成 Loader plugin。
 
 dynamic hooks 必须在目标模块首次求值前安装。插件在目标加载前注册时会在
 首次求值中变换；若目标已经求值，Node 同步 hook API 可用时 loader 会调度
@@ -106,7 +105,7 @@ export function apply(ctx: Context & { stent: StentService }): void {
 
 ## 平台支持
 
-- **Node Host（ESM + CommonJS）：** 通过同步 `module.registerHooks`（Node ≥ 22.22.3 / ≥ 24.11.1）和 CJS `_compile` 路径支持。模块身份先经 npm 布局解析器解析，失败时回退到最近的 `package.json`（`nodePackageResolver`）——Node 会把 workspace 链接 realpath 成真实路径，因此 workspace 包加载后的 URL 没有可供布局解析器命名的 `node_modules` 边界，而最近的 manifest 总能命名它。这正是补丁能按真实路径命中第一方 workspace 包（例如宿主工具 bundle）的原因。`registerHooks` 从 22.19.0 起就存在，但在 22.22.3 / 24.11.1 之前，当 loader-thread hooks（`module.register`，例如这些版本上的 tsx）同时存在时，其同步 load 链对 CommonJS 模块不返回 source，会导致 Node 的 load 校验崩溃；这些版本因此通过 `node/hook-entry` loader-thread 模块走异步 `module.register` fallback。entry 只注册一次，并在每次加载时读取共享配置文件（主线程在每次安装与销毁时重写），因此重新变换、销毁与并发安装在两条路径上行为一致。
+- **Node Host（ESM + CommonJS）：** 从 `@oh-my-dsh/stent/node` 使用同步 `module.registerHooks`（Node ≥ 22.22.3 / ≥ 24.11.1）和 CJS `_compile` 路径。模块身份解析和 loader-thread entry 都属于内部实现，不是公开 API；entry 只注册一次并在每次加载时读取共享配置，因此重新变换、销毁与并发安装在两条路径上行为一致。
 - **Browser/Web：** bundle 期重写（`createWatchedBrowserTransform`（静态集合用 `createBrowserTransform`）+ `repoSourceResolver`，经 `clientBundle(id, libEntry, { transform })` 接入）重写 client 插件函数；本 package 的 client half（`./client`，实现位于 `src/browser/client`）在浏览器 Cordis 树中安装 bridge 并挂载 `ctx.stent`。client bundle 在该 entry 物化前回退到原函数，因此 patch 对浏览器 Stent runtime 就绪后的调用生效。web roster 的 `stent` 行默认禁用（opt-in）。
 
 ## Browser 构建用法
@@ -114,12 +113,16 @@ export function apply(ctx: Context & { stent: StentService }): void {
 宿主构建接缝（`clientBundle`）由 profile 选择的宿主版本提供；本包只提供 transform。宿主集成把 transform 接入自己的 bundle 步骤：
 
 ```ts ignore-check
-import { createWatchedBrowserTransform, repoSourceResolver } from '@oh-my-dsh/stent'
+import { createWatchedBrowserTransform, repoSourceResolver } from '@oh-my-dsh/stent/browser'
 
-const stent = createWatchedBrowserTransform(
-  new URL('./stent.patches.json', import.meta.url).pathname,
-  repoSourceResolver('@example/client-my-plugin', new URL('..', import.meta.url).pathname, '0.0.1'),
-)
+const stent = createWatchedBrowserTransform({
+  patchesPath: new URL('./stent.patches.json', import.meta.url).pathname,
+  resolve: repoSourceResolver({
+    packageName: '@example/client-my-plugin',
+    packageRoot: new URL('..', import.meta.url).pathname,
+    version: '0.0.1',
+  }),
+})
 ```
 
 patches 文件是一个用于 browser build instrumentation 的静态 patch stub JSON
@@ -132,11 +135,11 @@ resolver 把包自身的源码树映射到包身份；不使用上游 adapter，
 
 ### 运行时 bundle 服务
 
-当目标 bundle 无法在构建期变换时（它的构建属于另一个包），`serveBrowserTransform(ctx, options)` 在运行时提供变换后的副本：它注册一条 EXACT webserver 路由（精确表胜过最长前缀，因此可压过模块宿主的 `/plugins` 路由而无冲突），通过 Loader 组合锚点（`ctx.baseUrl`）而非 Stent 自身的依赖树解析 patches 的 `module` 包，按源内容缓存逐请求应用各 patch 的重写，非 GET 回答 405、bundle 不可读回答 404，且任一选择器未重写任何内容时默认 loud 失败（500 并点名每个未绑定的 patch id）——只有 `fallback: 'raw'` 才降级为原始 bundle。组合锚点缺失或目标包不可解析会在注册时失败。`patch` 接受单个描述符或数组：多个 patch 在同一文件上按与 Node 侧相同的语义叠加（升序 priority 包裹最外层），因此多个插件可以增强同一 bundle 而无须拥有它——路由保持单一属主，重写叠加。路由是 fiber effect；返回的 disposer 可立即移除它。
+当目标 bundle 无法在构建期变换时（它的构建属于另一个包），`serveBrowserTransform(ctx, options)` 在运行时提供变换后的副本：它注册一条 EXACT webserver 路由（精确表胜过最长前缀，因此可压过模块宿主的 `/plugins` 路由而无冲突），通过 Loader 组合锚点（`ctx.baseUrl`）而非 Stent 自身的依赖树解析 patches 的 `module` 包，按源内容缓存逐请求应用各 patch 的重写，非 GET 回答 405、bundle 不可读回答 404，且任一选择器未重写任何内容时默认 loud 失败（500 并点名每个未绑定的 patch id）——只有 `fallback: 'raw'` 才降级为原始 bundle。组合锚点缺失或目标包不可解析会在注册时失败。`patches` 接受 patch 描述数组：多个 patch 在同一文件上按与 Node 侧相同的语义叠加（升序 priority 包裹最外层），因此多个插件可以增强同一 bundle 而无须拥有它——路由保持单一属主，重写叠加。路由是 fiber effect；返回的 disposer 可立即移除它。
 
 ### 测试 patches
 
-变换 hooks 无法卸载、已变换模块保持缓存，因此每个 patch 场景都需要全新进程。`stent/test/testkit` 的 `runPatchFixture({ patches, entry, args })` 让这变得机械：它派生一个子进程 bootstrap patches、导入 `entry`（其 default export 以 `args` 运行），并返回 `{ bindings, result, error, exitCode }`——抛出的错误 message 原样穿越进程边界（node-half spec 的富化错误断言无需手写 child runner），每个 patch 的加载期绑定记录让未绑定的 patch 在同一次调用中可见。
+变换 hooks 无法卸载、已变换模块保持缓存，因此每个 patch 场景都需要全新进程。`@oh-my-dsh/stent/testing` 的 `runPatchFixture({ patches, entry, args })` 让这变得机械：它派生一个子进程 bootstrap patches、导入 `entry`（其 default export 以 `args` 运行），并返回 `{ bindings, result, error, exitCode }`——抛出的错误 message 原样穿越进程边界（node-half spec 的富化错误断言无需手写 child runner），每个 patch 的加载期绑定记录让未绑定的 patch 在同一次调用中可见。
 
 ## Model Experience
 

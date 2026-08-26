@@ -11,7 +11,7 @@
  * bundle is 404; a transform that matches nothing or fails is loud by
  * default (500 naming the patch id) and serves the raw bundle only with
  * `fallback: 'raw'`.
- * @module @oh-my-dsh/stent/browser/serve
+ * @module @oh-my-dsh/stent/browser/internal-serve
  */
 
 import { readFileSync } from 'node:fs'
@@ -20,7 +20,6 @@ import { dirname, join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import { createBrowserTransform, nodePackageResolver } from '../transform/browser.ts'
-import { expandPatchStub } from '../transform/config.ts'
 import type { TransformOutput } from '../transform/browser.ts'
 import type { StentPatchStub } from '../types.ts'
 
@@ -32,16 +31,13 @@ export interface ServeBrowserTransformOptions {
    */
   route: string
   /**
-   * Static patch descriptor(s) whose targets select the rewrites. Each
-   * patch id names its emitted bridge channel and binding records; every
-   * target must resolve to the SAME bundle file (same `module` and
-   * `filePath` — the route serves one file), and the patches stack on that
-   * file exactly like Node-side patches: ascending priority wraps
-   * outermost, equal priorities keep registration order. A single patch
-   * is the common case; several plugins can thus enhance the same bundle
-   * without owning it.
+   * Static patch descriptors whose targets select the rewrites. Every patch
+   * must resolve to the SAME bundle file (same `module` and `filePath` — the
+   * route serves one file), and the patches stack on that file exactly like
+   * Node-side patches: ascending priority wraps outermost, equal priorities
+   * keep registration order. Pass an array even when there is one patch.
    */
-  patch: StentPatchStub | readonly StentPatchStub[]
+  patches: readonly StentPatchStub[]
   /**
    * Degradation when the transform matches nothing or fails: `'error'`
    * (default) fails the request loud with a 500 naming the patch id;
@@ -59,11 +55,6 @@ class BundleUnreadableError extends Error {
   }
 }
 
-/** Whether the patch option is an array (multiple rewrites on one file). */
-function isPatchArray(value: StentPatchStub | readonly StentPatchStub[]): value is readonly StentPatchStub[] {
-  return Array.isArray(value)
-}
-
 /**
  * Serve a browser bundle with one or more Stent transforms applied,
  * through an exact webserver route owned by the calling fiber.
@@ -75,7 +66,7 @@ function isPatchArray(value: StentPatchStub | readonly StentPatchStub[]): value 
  * Stent's own dependency tree; the transforms and matcher are built once at
  * registration, and the served bytes are cached per source content.
  * @param ctx - the Host context providing the webserver and composition base URL.
- * @param options - route, patch(es), and degradation policy.
+ * @param options - route, patches, and degradation policy.
  * @returns a disposer removing the route.
  * @throws when the context has no `webServer` service or composition base URL,
  * the target package cannot resolve, a descriptor is malformed, or the patches
@@ -95,7 +86,10 @@ export function serveBrowserTransform(ctx: Context, options: ServeBrowserTransfo
     throw new Error('stent: serveBrowserTransform requires the webServer service on the context')
   }
   const fallback = options.fallback ?? 'error'
-  const patches = isPatchArray(options.patch) ? [...options.patch] : [options.patch]
+  const patches = [...options.patches]
+  if (patches.length === 0) {
+    throw new Error('stent: serveBrowserTransform requires at least one patch')
+  }
   // Every patch must rewrite the SAME file the route serves: the bundle
   // path comes from the shared module + filePath, so a divergent target
   // would silently never bind. Fail loud at registration instead.
@@ -128,7 +122,7 @@ export function serveBrowserTransform(ctx: Context, options: ServeBrowserTransfo
   const bundlePath = join(pkgDir, filePath)
   // Validation and matcher construction happen once: a malformed descriptor
   // fails at registration, and every request reuses the same matcher.
-  const transform = createBrowserTransform(patches.flatMap(expandPatchStub), nodePackageResolver())
+  const transform = createBrowserTransform({ patches, resolve: nodePackageResolver() })
   let cached: { source: string; code: string } | undefined
 
   /** The bytes to serve: the transformed bundle, cached per source content. */

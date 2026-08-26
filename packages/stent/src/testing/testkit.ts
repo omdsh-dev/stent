@@ -13,7 +13,7 @@
  * The kit is test-only: it spawns the child through tsx, imports the
  * package's source entry (the `./src/*` export), and is itself imported
  * through that same export in repository tests.
- * @module @oh-my-dsh/stent/test/testkit
+ * @module @oh-my-dsh/stent/testing/testkit
  */
 
 import { spawnSync } from 'node:child_process'

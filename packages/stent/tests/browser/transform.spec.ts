@@ -1,9 +1,6 @@
-import {
-  createBrowserTransform,
-  repoSourceResolver,
-  nodeModulesResolver,
-  patchInstrumentation,
-} from '../../src/index.ts'
+import { createBrowserTransform, installedPackageResolver, repoSourceResolver } from '../../src/browser/index.ts'
+import type { IdentityResolver } from '../../src/browser/index.ts'
+import type { StentPatchStub } from '../../src/types.ts'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -22,47 +19,48 @@ const patch = {
   handler: () => {},
 }
 
-describe('patchInstrumentation validation', () => {
+const createTransform = (patches: readonly StentPatchStub[], resolve: IdentityResolver = installedPackageResolver()) =>
+  createBrowserTransform({ patches, resolve })
+
+describe('createBrowserTransform validation', () => {
+  const createInvalid = (value: StentPatchStub): unknown => createTransform([value])
+
   it('rejects malformed static fields instead of installing a never-matching config', () => {
-    expect(() => patchInstrumentation({ ...patch, id: 'has space' })).toThrow(/patch id/)
+    expect(() => createInvalid({ ...patch, id: 'has space' })).toThrow(/patch id/)
     expect(() =>
-      patchInstrumentation({
+      createInvalid({
         ...patch,
         target: { ...patch.target, module: '' },
       }),
     ).toThrow(/module/)
     expect(() =>
-      patchInstrumentation({
+      createInvalid({
         ...patch,
         target: { ...patch.target, versionRange: '' },
       }),
     ).toThrow(/versionRange/)
     expect(() =>
-      patchInstrumentation({
+      createInvalid({
         ...patch,
         target: { ...patch.target, filePath: 42 as never },
       }),
     ).toThrow(/filePath/)
     expect(() =>
-      patchInstrumentation({
+      createInvalid({
         ...patch,
         operation: 'sideways' as never,
       }),
     ).toThrow(/operation/)
   })
 
-  it('accepts a valid patch and returns the instrumentation config', () => {
-    const config = patchInstrumentation(patch)
-    expect(config.channelName).toBe('web/before-add')
-    expect(config.module).toEqual({ name: 'stent-target-fixture', versionRange: '^1.0.0', filePath: 'index.mjs' })
-    expect(config.transform).toBe('stent')
-    expect(config.astQuery).toContain('FunctionDeclaration[id.name="add"]')
+  it('accepts a valid patch and returns a transform function', () => {
+    expect(createTransform([patch])).toEqual(expect.any(Function))
   })
 })
 
 describe('createBrowserTransform', () => {
-  it('transforms installed-package modules through nodeModulesResolver', () => {
-    const transform = createBrowserTransform([patchInstrumentation(patch)], nodeModulesResolver())
+  it('transforms installed-package modules through installedPackageResolver', () => {
+    const transform = createTransform([patch])
     const id = `${fixtureDir}index.mjs`
     const source = readFileSync(id, 'utf8')
     const output = transform(source, id)
@@ -74,14 +72,14 @@ describe('createBrowserTransform', () => {
   })
 
   it('returns null for modules no instrumentation targets', () => {
-    const transform = createBrowserTransform([patchInstrumentation(patch)], nodeModulesResolver())
+    const transform = createTransform([patch])
     const output = transform('export const x = 1', '/tmp/other-pkg/lib/index.js')
     expect(output).toBeNull()
   })
 
   it('repoSourceResolver maps source-tree ids to the package identity', () => {
     const packageRoot = ['/repo', 'packages', 'client', 'x'].join('/')
-    const resolver = repoSourceResolver('@example/client-x', packageRoot, '0.0.1')
+    const resolver = repoSourceResolver({ packageName: '@example/client-x', packageRoot, version: '0.0.1' })
     expect(resolver(`${packageRoot}/src/client/index.ts`)).toEqual({
       name: '@example/client-x',
       version: '0.0.1',
@@ -92,9 +90,9 @@ describe('createBrowserTransform', () => {
 
   it('transforms source-tree modules through repoSourceResolver', () => {
     const root = fixtureDir.replace(/\/$/, '')
-    const transform = createBrowserTransform(
-      [patchInstrumentation(patch)],
-      repoSourceResolver('stent-target-fixture', root, '1.0.0'),
+    const transform = createTransform(
+      [patch],
+      repoSourceResolver({ packageName: 'stent-target-fixture', packageRoot: root, version: '1.0.0' }),
     )
     const id = `${root}/index.mjs`
     const source = readFileSync(id, 'utf8')
@@ -113,7 +111,7 @@ describe('createBrowserTransform', () => {
         functionQuery: { functionName: 'renderName', kind: 'Sync' as const },
       },
     }
-    const transform = createBrowserTransform([patchInstrumentation(patchTsx)], nodeModulesResolver())
+    const transform = createTransform([patchTsx])
     const id = `${fixtureDir}jsx-target.tsx`
     const source = readFileSync(id, 'utf8')
     const output = transform(source, id)
@@ -136,7 +134,7 @@ describe('createBrowserTransform', () => {
         functionQuery: { functionName: 'addTs', kind: 'Sync' as const },
       },
     }
-    const transform = createBrowserTransform([patchInstrumentation(patchTs)], nodeModulesResolver())
+    const transform = createTransform([patchTs])
     const id = `${fixtureDir}ts-target.ts`
     const source = readFileSync(id, 'utf8')
     const output = transform(source, id)
@@ -166,10 +164,7 @@ describe('createBrowserTransform', () => {
         functionQuery: { methodName: 'name', kind: 'Sync' as const },
       },
     }
-    const transform = createBrowserTransform(
-      [patchInstrumentation(patchGetter), patchInstrumentation(patchSetter)],
-      nodeModulesResolver(),
-    )
+    const transform = createTransform([patchGetter, patchSetter])
     const id = `${fixtureDir}accessors.js`
     const source = [
       'export const obj = {',
@@ -202,7 +197,7 @@ describe('createBrowserTransform', () => {
         functionQuery: { functionName: 'readOuter', kind: 'Sync' as const },
       },
     }
-    const transform = createBrowserTransform([patchInstrumentation(patchCollision)], nodeModulesResolver())
+    const transform = createTransform([patchCollision])
     const id = `${fixtureDir}collision.js`
     const source = ['const stentCall = "outer"', 'export function readOuter() { return stentCall }'].join('\n')
     const output = transform(source, id)
@@ -224,7 +219,7 @@ describe('createBrowserTransform', () => {
         functionQuery: { expressionName: 'bad', kind: 'Sync' as const },
       },
     }
-    const transform = createBrowserTransform([patchInstrumentation(patchArgs)], nodeModulesResolver())
+    const transform = createTransform([patchArgs])
     const id = `${fixtureDir}args-arrow.js`
     const source = 'function wrap() { return (x) => x + arguments[0] }\nexport const bad = () => arguments[0]'
     const output = transform(source, id)
@@ -242,10 +237,7 @@ describe('multi-match selection', () => {
   const multiSource = (): string => readFileSync(multiId, 'utf8')
   const multiTarget = { module: 'stent-target-fixture', versionRange: '^1.0.0', filePath: 'multi.mjs' }
   const multiTransform = (target: Record<string, unknown>) =>
-    createBrowserTransform(
-      [patchInstrumentation({ id: 'web/multi', operation: 'before', target: target as never })],
-      nodeModulesResolver(),
-    )
+    createTransform([{ id: 'web/multi', operation: 'before', target: target as never }])
 
   it('transforms every function the selector picks by default (name query)', () => {
     const output = multiTransform({ ...multiTarget, functionQuery: { methodName: 'close', kind: 'Sync' } })(
@@ -291,18 +283,22 @@ describe('multi-match selection', () => {
 
   it('rejects malformed index fields at instrumentation build time', () => {
     expect(() =>
-      patchInstrumentation({
-        id: 'web/bad-index',
-        operation: 'before',
-        target: { ...multiTarget, astQuery: 'FunctionDeclaration', index: -1 },
-      }),
+      createTransform([
+        {
+          id: 'web/bad-index',
+          operation: 'before',
+          target: { ...multiTarget, astQuery: 'FunctionDeclaration', index: -1 },
+        },
+      ]),
     ).toThrow(/target\.index/)
     expect(() =>
-      patchInstrumentation({
-        id: 'web/bad-fq-index',
-        operation: 'before',
-        target: { ...multiTarget, functionQuery: { methodName: 'close', kind: 'Sync', index: 1.5 } },
-      }),
+      createTransform([
+        {
+          id: 'web/bad-fq-index',
+          operation: 'before',
+          target: { ...multiTarget, functionQuery: { methodName: 'close', kind: 'Sync', index: 1.5 } },
+        },
+      ]),
     ).toThrow(/functionQuery\.index/)
   })
 

@@ -4,7 +4,8 @@
  */
 
 import { createRequire } from 'node:module'
-import { installStentHooks, runtime } from '../../src/index.ts'
+import { installStentHooks } from '../../src/node/index.ts'
+import { runtime } from '../../src/index.ts'
 
 const require = createRequire(import.meta.url)
 

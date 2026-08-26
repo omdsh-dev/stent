@@ -21,7 +21,7 @@
 
 import { readFileSync } from 'node:fs'
 import type { MessagePort } from 'node:worker_threads'
-import { createBrowserTransform, nodePackageResolver } from '../transform/browser.ts'
+import { createInstrumentedTransform, nodePackageResolver } from '../transform/browser.ts'
 import type { StentBindingReport } from '../types.ts'
 import { reviveInstrumentation, type StentWireInstrumentation } from '../transform/wire.ts'
 
@@ -32,7 +32,7 @@ let configPath: string | undefined
 let bindingPort: MessagePort | undefined
 
 /** One installation's transform in the per-installation chain. */
-type TransformFn = ReturnType<typeof createBrowserTransform>
+type TransformFn = ReturnType<typeof createInstrumentedTransform>
 
 /** Cached transform chain for the last-read configuration content. */
 let cached: { config: string; transforms: TransformFn[] } | undefined
@@ -82,7 +82,9 @@ function readTransforms(): TransformFn[] {
     .filter(entry => entry.active === true)
     .map(entry => {
       const instrumentations = (entry.instrumentations ?? []).map(reviveInstrumentation)
-      return instrumentations.length === 0 ? undefined : createBrowserTransform(instrumentations, nodePackageResolver())
+      return instrumentations.length === 0
+        ? undefined
+        : createInstrumentedTransform(instrumentations, nodePackageResolver())
     })
     .filter((transform): transform is TransformFn => transform !== undefined)
   cached = { config: raw, transforms }

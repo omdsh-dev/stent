@@ -97,10 +97,9 @@ writeFileSync(
 )
 
 // The profile's installed trio copy is used by the installed bundle below.
-// The source checkout launcher uses the Cordis-free loader subpath from its
-// own dependency graph.
+// The source checkout launcher uses the Cordis-free Node API from its own dependency graph.
 const stubStent = join(profileDir, 'node_modules', '@oh-my-dsh', 'stent')
-mkdirSync(join(stubStent, 'node'), { recursive: true })
+mkdirSync(stubStent, { recursive: true })
 writeFileSync(join(profileDir, 'package.json'), '{}\n')
 writeFileSync(
   join(stubStent, 'package.json'),
@@ -111,7 +110,7 @@ writeFileSync(
     exports: {
       '.': './index.js',
       './activation': './activation.js',
-      './node/loader': './node/loader.js',
+      './node': './node.js',
     },
   }),
 )
@@ -120,7 +119,7 @@ writeFileSync(
   "export function markStentDshLaunch() { globalThis[Symbol.for('oh-my-dsh.stent-dsh.launch')] = true }\n",
 )
 writeFileSync(
-  join(stubStent, 'node', 'loader.js'),
+  join(stubStent, 'node.js'),
   ['export function installStentHooks() { console.log(`PROFILE-BOOT dynamic=true`) }', ''].join('\n'),
 )
 writeFileSync(join(stubStent, 'activation.js'), "export { markStentDshLaunch } from './index.js'\n")

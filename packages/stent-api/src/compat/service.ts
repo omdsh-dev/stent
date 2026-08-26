@@ -18,9 +18,10 @@
 
 import { Service } from '@deepseek-ai/cordis'
 import type { Context, Fiber } from '@deepseek-ai/cordis'
-import { getStent, isStentInstalled, serveBrowserTransform } from '@oh-my-dsh/stent'
-import type { StentService } from '@oh-my-dsh/stent'
-import type { StentCall, StentHandler, StentPatch, PatchId, ServeBrowserTransformOptions } from '@oh-my-dsh/stent'
+import { getStent, isStentInstalled } from '@oh-my-dsh/stent'
+import { serveBrowserTransform } from '@oh-my-dsh/stent/browser'
+import type { ServeBrowserTransformOptions } from '@oh-my-dsh/stent/browser'
+import type { StentService, StentCall, StentHandler, StentPatch, PatchId } from '@oh-my-dsh/stent'
 import type { StentCompatConfig, StentCompatTarget } from './types.ts'
 
 export type { StentCompatConfig, StentCompatPatch, StentCompatTarget } from './types.ts'
@@ -33,8 +34,8 @@ export type {
   StentPatch,
   StentTarget,
   PatchId,
-  ServeBrowserTransformOptions,
 } from '@oh-my-dsh/stent'
+export type { ServeBrowserTransformOptions } from '@oh-my-dsh/stent/browser'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -167,7 +168,7 @@ export class StentCompatService extends Service {
    * Serve a transformed browser bundle through the runtime bundle
    * primitive — the cooperative entry for browser-side bundle rewrites
    * (the low-level {@link serveBrowserTransform} under the facade).
-   * @param options - route, patch(es), and degradation policy.
+   * @param options - route, patches array, and degradation policy.
    * @returns a disposer removing the route.
    */
   serveBundle(options: ServeBrowserTransformOptions): () => void {

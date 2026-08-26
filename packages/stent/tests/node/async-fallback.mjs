@@ -6,7 +6,8 @@
  * resolves next to the built loader.
  */
 
-import { installStentHooks, retransformEsm, runtime } from '../../lib/index.js'
+import { installStentHooks, retransformEsm } from '../../lib/node.js'
+import { runtime } from '../../lib/index.js'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 

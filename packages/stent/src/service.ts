@@ -1,7 +1,7 @@
 /**
  * The Cordis Stent service: the runtime face of the Stent extension layer.
  * Trusted plugins register patches (target + operation + handler) here; the
- * transformation hooks installed by {@link installStentHooks} rewrite the
+ * transformation hooks installed by `installStentHooks()` rewrite the
  * target functions, and this service attaches and detaches the handlers in
  * the shared runtime.
  *

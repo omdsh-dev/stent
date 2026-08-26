@@ -50,14 +50,14 @@ function assertDynamicProfile(rows: StentProfileRows): void {
 export async function installStentBootstrap(rows: StentProfileRows): Promise<void> {
   assertDynamicProfile(rows)
   if (!rows.has('stent') || isStentDshLaunch()) return
-  const { installStentHooks } = await import('@oh-my-dsh/stent/node/loader')
+  const { installStentHooks } = await import('@oh-my-dsh/stent/node')
   installStentHooks()
 }
 
 /** Verify all dynamically registered required patches after profile boot. */
 export async function checkStentRequiredPatches(rows: StentProfileRows): Promise<void> {
   assertDynamicProfile(rows)
-  const { checkRequiredPatches } = await import('@oh-my-dsh/stent')
+  const { checkRequiredPatches } = await import('@oh-my-dsh/stent/node')
   checkRequiredPatches()
 }
 
@@ -102,7 +102,8 @@ export function scheduleRequiredPatchCheck(ctx: Context): void {
     const timer = setTimeout(() => {
       if (!stentOn) return
       void (async () => {
-        const { checkRequiredPatches, flushBindingReports, runtime } = await import('@oh-my-dsh/stent')
+        const { checkRequiredPatches, flushBindingReports } = await import('@oh-my-dsh/stent/node')
+        const { runtime } = await import('@oh-my-dsh/stent')
         await flushBindingReports(1000)
         checkRequiredPatches()
         logHookSummary(runtime.list(), runtime as unknown as { bindingsOf: (id: string) => StentBindingView[] })

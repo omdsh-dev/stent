@@ -9,8 +9,8 @@
  *
  * Like the Node path, the transform parses emitted JavaScript: TypeScript
  * sources must be compiled before transformation, or the parse fails loudly.
- * This module is the transform-layer implementation; the public
- * `browser/transform` entry re-exports it for compatibility.
+ * This module is an internal implementation used by the public
+ * `@oh-my-dsh/stent/browser` entry.
  * @module @oh-my-dsh/stent/transform/browser
  */
 
@@ -20,7 +20,6 @@ import ts from 'typescript'
 import { detectModuleType, installedPackageIdentity, nodePackageIdentity } from './identity.ts'
 import { createStentMatcher, getStentTransformer, transformStentSource } from './matcher.ts'
 import { expandPatchStub, type StentInstrumentationConfig } from './config.ts'
-import type { InstrumentationConfig } from './orchestrion.ts'
 import type { StentBindingReport, StentPatchStub } from '../types.ts'
 
 /**
@@ -63,16 +62,24 @@ export interface ModuleIdentity {
 /** Map a bundler module id to its package identity; `undefined` skips it. */
 export type IdentityResolver = (id: string) => ModuleIdentity | undefined
 
+/** Options for {@link repoSourceResolver}. */
+export interface RepoSourceResolverOptions {
+  /** npm package name of the built client plugin. */
+  packageName: string
+  /** Absolute source root of the package. */
+  packageRoot: string
+  /** Package version stamped into transformed calls. */
+  version: string
+}
+
 /**
  * Resolve repository source modules: any id under `packageRoot` maps to the
  * given package name and version. This is the resolver client plugin builds
  * use, since their sources live at `packages/<group>/<name>/src/...`.
- * @param packageName - the npm package name of the built plugin.
- * @param packageRoot - absolute source root of the package.
- * @param version - package version stamped into transformed calls.
+ * @param options - package identity and source-root options.
  * @returns an identity resolver for that package's sources.
  */
-export function repoSourceResolver(packageName: string, packageRoot: string, version: string): IdentityResolver {
+export function repoSourceResolver({ packageName, packageRoot, version }: RepoSourceResolverOptions): IdentityResolver {
   const root = packageRoot.endsWith('/') ? packageRoot : `${packageRoot}/`
   return id => {
     if (!id.startsWith(root)) return undefined
@@ -84,7 +91,7 @@ export function repoSourceResolver(packageName: string, packageRoot: string, ver
  * Resolve installed-package modules through `node_modules` boundaries.
  * @returns an identity resolver for module ids inside any installed package.
  */
-export function nodeModulesResolver(): IdentityResolver {
+export function installedPackageResolver(): IdentityResolver {
   return id => installedPackageIdentity(id)
 }
 
@@ -100,9 +107,7 @@ export function nodePackageResolver(): IdentityResolver {
   return id => nodePackageIdentity(id)
 }
 
-/**
- * A transformed module: rewritten source plus an optional source map.
- */
+/** A transformed module: rewritten source plus an optional source map. */
 export interface TransformOutput {
   /** Rewritten source code. */
   code: string
@@ -112,23 +117,37 @@ export interface TransformOutput {
   bindings?: StentBindingReport[]
 }
 
+/** A bundler transform for one set of Stent patches. */
+export type BrowserTransform = (code: string, id: string) => TransformOutput | null
+
+/** Options for {@link createBrowserTransform}. */
+export interface BrowserTransformOptions {
+  /** Static patch stubs to apply during the bundle build. */
+  patches: readonly StentPatchStub[]
+  /** Resolver mapping a bundler module id to its package identity. */
+  resolve: IdentityResolver
+}
+
+/** Options for {@link createWatchedBrowserTransform}. */
+export interface WatchedBrowserTransformOptions {
+  /** Absolute path of the JSON patch-stub file to watch. */
+  patchesPath: string
+  /** Resolver mapping a bundler module id to its package identity. */
+  resolve: IdentityResolver
+}
+
 /**
- * Build a bundler transform for Stent instrumentations.
- *
- * The returned function can be wired into a bundler's `transform` hook
- * (tsdown/Rolldown, Rollup, Vite); it returns `null` for modules the
- * instrumentations do not target. When the transform rewrote anything, the
- * output carries `bindings` (per-patch function-node counts for this module),
- * which the async loader-thread path forwards to the main-thread runtime.
- * @param instrumentations - Stent instrumentations (see
- * {@link patchInstrumentation}).
+ * Build a transform from already-expanded internal instrumentation configs.
+ * Node's loader-thread entry uses this boundary after reviving its wire data;
+ * browser consumers should use {@link createBrowserTransform} with patch stubs.
+ * @param instrumentations - expanded Stent instrumentation configs.
  * @param resolve - module identity resolver for the build's source layout.
  * @returns a transform function `(code, id) => output | null`.
  */
-export function createBrowserTransform(
-  instrumentations: StentInstrumentationConfig[],
+export function createInstrumentedTransform(
+  instrumentations: readonly StentInstrumentationConfig[],
   resolve: IdentityResolver,
-): (code: string, id: string) => TransformOutput | null {
+): BrowserTransform {
   // Per-call pending counts: the transform function below runs once per
   // module, so counts accumulated during one call belong to that module.
   const pending = new Map<string, number>()
@@ -160,7 +179,14 @@ export function createBrowserTransform(
   }
 }
 
-export type { InstrumentationConfig }
+/**
+ * Build a browser bundle transform from public Stent patch stubs.
+ * @param options - patch stubs and the build's identity resolver.
+ * @returns a transform function `(code, id) => output | null`.
+ */
+export function createBrowserTransform({ patches, resolve }: BrowserTransformOptions): BrowserTransform {
+  return createInstrumentedTransform(patches.flatMap(expandPatchStub), resolve)
+}
 
 /**
  * A browser transform that also receives the bundler's watch-file
@@ -223,16 +249,17 @@ function parsePatchesFile(content: string, patchesPath: string): StentPatchStub[
  * (`scripts/dev-web.ts`), and the rebuilt bundle rides the client-hmr
  * chain (stat poll → `rebuilt` frame → invalidate/prefetch/fiber swap) into
  * the browser: the build trigger for browser re-transformation.
- * @param patchesPath - absolute path of the JSON patches file.
- * @param resolve - module identity resolver for the build's source layout.
+ * @param options - watched patch file and the build's identity resolver.
  * @returns a transform function `(code, id, addWatchFile?) => output | null`.
  */
-export function createWatchedBrowserTransform(patchesPath: string, resolve: IdentityResolver): WatchedBrowserTransform {
+export function createWatchedBrowserTransform({
+  patchesPath,
+  resolve,
+}: WatchedBrowserTransformOptions): WatchedBrowserTransform {
   let cached: { content: string; transform: (code: string, id: string) => TransformOutput | null } | undefined
   const transformFor = (content: string): ((code: string, id: string) => TransformOutput | null) => {
     if (cached?.content === content) return cached.transform
-    const instrumentations = parsePatchesFile(content, patchesPath).flatMap(expandPatchStub)
-    const transform = createBrowserTransform(instrumentations, resolve)
+    const transform = createBrowserTransform({ patches: parsePatchesFile(content, patchesPath), resolve })
     cached = { content, transform }
     return transform
   }

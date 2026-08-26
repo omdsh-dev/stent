@@ -9,7 +9,7 @@
  */
 import { pathToFileURL, fileURLToPath } from 'node:url'
 import { sep } from 'node:path'
-import { installStentHooks } from '@oh-my-dsh/stent/node/loader'
+import { installStentHooks } from '@oh-my-dsh/stent/node'
 import { markStentDshLaunch } from '@oh-my-dsh/stent/activation'
 import { buildCliArgs, parseOpt } from './stent-dsh/args.ts'
 import { resolveHost } from './stent-dsh/cli.ts'

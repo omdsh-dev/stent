@@ -10,9 +10,13 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./node/loader": {
-      "types": "./lib/node/loader.d.ts",
-      "default": "./lib/node/loader.js"
+    "./node": {
+      "types": "./lib/node.d.ts",
+      "default": "./lib/node.js"
+    },
+    "./browser": {
+      "types": "./lib/browser.d.ts",
+      "default": "./lib/browser.js"
     },
     "./activation": {
       "types": "./lib/activation.d.ts",
@@ -22,37 +26,9 @@
       "types": "./lib/types.d.ts",
       "default": "./lib/types.js"
     },
-    "./node/hook-entry": {
-      "types": "./lib/node/hook-entry.d.ts",
-      "default": "./lib/node/hook-entry.js"
-    },
-    "./node/identity": {
-      "types": "./lib/node/identity.d.ts",
-      "default": "./lib/node/identity.js"
-    },
-    "./node/wire": {
-      "types": "./lib/node/wire.d.ts",
-      "default": "./lib/node/wire.js"
-    },
-    "./browser/client": {
+    "./client": {
       "types": "./lib/browser/client.d.ts",
-      "default": "./lib/browser/client.js"
-    },
-    "./browser/transform": {
-      "types": "./lib/browser/transform.d.ts",
-      "default": "./lib/browser/transform.js"
-    },
-    "./browser/serve": {
-      "types": "./lib/browser/serve.d.ts",
-      "default": "./lib/browser/serve.js"
-    },
-    "./transform/config": {
-      "types": "./lib/transform/config.d.ts",
-      "default": "./lib/transform/config.js"
-    },
-    "./transform/transform": {
-      "types": "./lib/transform/transform.d.ts",
-      "default": "./lib/transform/transform.js"
+      "default": "./lib/client.js"
     },
     "./hmr/ownership": {
       "types": "./lib/hmr/ownership.d.ts",
@@ -62,17 +38,9 @@
       "types": "./lib/hmr/reload.d.ts",
       "default": "./lib/hmr/reload.js"
     },
-    "./testing/testkit": {
-      "types": "./lib/testing/testkit.d.ts",
-      "default": "./lib/testing/testkit.js"
-    },
-    "./testing/testkit-runner": {
-      "types": "./lib/testing/testkit-runner.d.ts",
-      "default": "./lib/testing/testkit-runner.js"
-    },
-    "./client": {
-      "types": "./lib/browser/client.d.ts",
-      "default": "./lib/client.js"
+    "./testing": {
+      "types": "./lib/testing.d.ts",
+      "default": "./lib/testing.js"
     },
     "./package.json": "./package.json"
   },

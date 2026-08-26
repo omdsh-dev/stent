@@ -7,7 +7,6 @@
 
 import type { InstrumentationConfig } from './orchestrion.ts'
 
-export type { InstrumentationConfig } from './orchestrion.ts'
 import { validatePatchId, validatePatchStatic } from '../runtime.ts'
 import type { StentPatchStub } from '../types.ts'
 
@@ -26,7 +25,7 @@ export type StentInstrumentationConfig = InstrumentationConfig & {
 }
 
 /** Build one Orchestrion instrumentation from a static Stent patch. */
-export function patchInstrumentation(patch: StentPatchStub): StentInstrumentationConfig {
+function patchInstrumentation(patch: StentPatchStub): StentInstrumentationConfig {
   validatePatchId(patch.id)
   validatePatchStatic(patch)
   const target = patch.target

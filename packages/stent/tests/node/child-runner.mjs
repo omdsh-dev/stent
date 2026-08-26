@@ -6,8 +6,8 @@
  * `./src/*` export and is launched with tsx from the repository root.
  */
 
-import { checkRequiredPatches, retransformCommonJs, retransformEsm, runtime, GLOBAL_BRIDGE_KEY } from '../../src/index.ts'
-import { installStentHooks } from '../../src/node/loader.ts'
+import { checkRequiredPatches, installStentHooks, retransformCommonJs, retransformEsm } from '../../src/node/index.ts'
+import { runtime, GLOBAL_BRIDGE_KEY } from '../../src/index.ts'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 

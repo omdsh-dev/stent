@@ -21,7 +21,7 @@
  * the process lifetime. The returned disposer therefore deactivates the
  * loader's state (hooks become pass-through, cached transformers are freed)
  * rather than removing the hook functions themselves.
- * @module @oh-my-dsh/stent/node/loader
+ * @module @oh-my-dsh/stent/node/internal-loader
  */
 
 import { Module, createRequire, register, registerHooks } from 'node:module'
@@ -44,12 +44,8 @@ import {
   type StentTransformer,
 } from '../transform/matcher.ts'
 import { nodePackageIdentity, type PackageIdentity } from '../transform/identity.ts'
-import { reviveInstrumentation, serializeInstrumentation } from '../transform/wire.ts'
+import { serializeInstrumentation } from '../transform/wire.ts'
 import type { StentBindingReport, StentPatchInfo, StentPatchStub, PatchId } from '../types.ts'
-
-export { reviveInstrumentation, serializeInstrumentation }
-export type { StentWireInstrumentation } from '../transform/wire.ts'
-
 /** The `Module.prototype._compile` internals this loader wraps for CJS. */
 type CompileFn = (this: Module, content: string, filename: string) => unknown
 

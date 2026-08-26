@@ -15,13 +15,13 @@ A trusted plugin (A) can change the behavior of another plugin's function (B) **
 | `around` | Decide whether the original body runs and optionally replace its result (call `invoke()` to delegate). |
 | `replace` | Own the call entirely; the original body only runs if the handler calls `invoke()`. |
 
-The source is layered inside the three packages rather than adding another package. `stent/src/transform` is the single Orchestrion boundary: it owns the matcher adapter, instrumentation configuration, module identity, loader-thread wire serialization, and AST rewriting; `src/node` owns Node hooks and the compatibility entry points for Node subpaths; `src/browser` owns the public browser-transform facade, client runtime, and bundle serving; `src/hmr` owns HMR generation ownership and Node cache re-transformation; `src/testing` owns child-process fixtures. `stent-api/src/compat` separates the cooperative contract, instrumentation builder, and service. The companion integration package's `src/host`, `src/browser`, and `src/bootstrap` entries provide host facades, browser services, and profile assembly. Its catalog adapter is mounted by that companion package, so the pure Stent service has no catalog dependency.
+The source is layered inside the three packages rather than adding another package. The root entry contains only the platform-free runtime and service. Use `@oh-my-dsh/stent/node` for Node hook lifecycle APIs, `@oh-my-dsh/stent/browser` for build-time transforms and runtime bundle serving, and `@oh-my-dsh/stent/client` for the browser Cordis entry. The Orchestrion adapter and its intermediate instrumentation types are implementation details under `stent/src/transform`, not public API. `src/node` owns Node hooks, `src/browser` owns the build/runtime browser seams, `src/hmr` owns HMR generation ownership and Node cache re-transformation, and `src/testing` owns child-process fixtures. `stent-api/src/compat` separates the cooperative contract and service. The companion integration package's `src/host`, `src/browser`, and `src/bootstrap` entries provide host facades, browser services, and profile assembly. Its catalog adapter is mounted by that companion package, so the pure Stent service has no catalog dependency.
 
 
 ## Installation and bootstrap
 
 ```ts
-import { installStentHooks } from '@oh-my-dsh/stent/node/loader'
+import { installStentHooks } from '@oh-my-dsh/stent/node'
 import { StentService } from '@oh-my-dsh/stent'
 import type { Context } from 'cordis'
 
@@ -41,7 +41,7 @@ when a plugin registers is automatically re-transformed when the Node cache
 path supports it. Profile YAML only controls whether a Stent-dependent row is
 mounted (for example `config: { stent: true }`); it no longer carries patch
 stubs under `config.stent.patches`.
-The root package's `patchInstrumentation`, `expandPatchStub`, and browser transform APIs are build-time/browser utilities; they do not install Node hooks and cannot be passed to `installStentHooks`.
+The root entry contains only runtime and service APIs. Browser build APIs are imported from `@oh-my-dsh/stent/browser`; Node hook APIs are imported from `@oh-my-dsh/stent/node`. Neither platform entry exposes Orchestrion's intermediate instrumentation configuration.
 The launcher boundary is separate from hook installation. The `stent-dsh` preload marks the launch before bootstrapping hooks; a plain `dsh` launch never receives that marker. `StentService` uses it as Cordis's availability check, so plugins declaring `inject: ['stent']` remain pending under plain `dsh` even if another path installed the low-level bridge. The browser client entry marks the equivalent Stent client activation. The same gate is enforced by `getStent(ctx)` before it reuses or mounts a registry: a DSH plugin that omitted `inject: ['stent']` cannot silently activate through the accessor and instead fails loudly. Explicit `new StentService(ctx)` remains the low-level escape hatch for standalone callers that intentionally manage activation themselves.
 
 A patch may set `required: true`: once the application boots and every target
@@ -64,9 +64,11 @@ load-time bindings are recorded per transformed file and visible through
 ```
 
 The host integration row mounts the Host facades. The core package's browser
-half (`./client`, implemented by `src/browser/client`) is a separate client
-artifact that installs `ctx.stent` when its browser entry materializes; it does
-not turn the package root into a Loader plugin.
+half (`./client`, implemented by `src/browser/client`) is a closure-factory
+artifact loaded by the browser ModuleLoader (not a normal Node/ESM import); its
+declaration file describes the source entry used to build that factory. It
+installs `ctx.stent` when the browser entry materializes and does not turn the
+package root into a Loader plugin.
 
 The dynamic hooks are installed before target imports. A patch registered before a
 target load is transformed on first evaluation; if the target already ran, the
@@ -114,7 +116,7 @@ The registration is a fiber effect owned by the registering plugin: disposing th
 
 ## Platform support
 
-- **Node Host (ESM + CommonJS):** supported via synchronous `module.registerHooks` (Node ≥ 22.22.3 / ≥ 24.11.1) and the CJS `_compile` path. Module identity resolves through the npm-layout parser first and falls back to the nearest `package.json` (`nodePackageResolver`) — Node realpaths workspace links, so a workspace package's loaded URL has no `node_modules` boundary for the layout parser to name, while the nearest manifest always can. This is what lets patches target first-party workspace packages (e.g. a host tool bundle) at their real paths. `registerHooks` exists from 22.19.0, but before 22.22.3 / 24.11.1 its synchronous load chain returns no source for CommonJS modules when loader-thread hooks (`module.register`, e.g. tsx on those versions) are also present, which crashes Node's load validation; those versions therefore use the async `module.register` fallback through the `node/hook-entry` loader-thread module. The entry is registered once and reads a shared configuration file (rewritten by the main thread on every installation and disposal) on each load, so re-transformation, disposal, and concurrent installations behave the same on both paths.
+- **Node Host (ESM + CommonJS):** supported via `@oh-my-dsh/stent/node`, using synchronous `module.registerHooks` (Node ≥ 22.22.3 / ≥ 24.11.1) and the CJS `_compile` path. The implementation resolves module identity through the npm-layout parser first and falls back to the nearest `package.json`; the loader-thread entry is private and not part of the public API. The entry is registered once and reads a shared configuration file on each load, so re-transformation, disposal, and concurrent installations behave the same on both paths.
 - **Browser/Web:** the bundle-time rewrite (`createWatchedBrowserTransform` (or `createBrowserTransform` for a static set) + `repoSourceResolver`, wired through `clientBundle(id, libEntry, { transform })`) rewrites client plugin functions, and the package's own client half (`./client`, implemented by `src/browser/client`) installs the bridge and mounts `ctx.stent` in the browser Cordis tree. Client bundles fall back to the original body until that entry materializes, so patches take effect for calls after the browser Stent runtime is up. The web roster row `stent` is disabled by default (opt-in).
 
 ## Browser build usage
@@ -122,12 +124,16 @@ The registration is a fiber effect owned by the registering plugin: disposing th
 The host build seam (`clientBundle`) is owned by the host version selected by the profile; this package only provides the transform. A host integration wires the transform into its bundle step:
 
 ```ts ignore-check
-import { createWatchedBrowserTransform, repoSourceResolver } from '@oh-my-dsh/stent'
+import { createWatchedBrowserTransform, repoSourceResolver } from '@oh-my-dsh/stent/browser'
 
-const stent = createWatchedBrowserTransform(
-  new URL('./stent.patches.json', import.meta.url).pathname,
-  repoSourceResolver('@example/client-my-plugin', new URL('..', import.meta.url).pathname, '0.0.1'),
-)
+const stent = createWatchedBrowserTransform({
+  patchesPath: new URL('./stent.patches.json', import.meta.url).pathname,
+  resolve: repoSourceResolver({
+    packageName: '@example/client-my-plugin',
+    packageRoot: new URL('..', import.meta.url).pathname,
+    version: '0.0.1',
+  }),
+})
 ```
 
 The patches file holds a JSON array of static patch stubs for browser build
@@ -143,11 +149,11 @@ The resolver maps the package's own source tree to its package identity; the ups
 
 ### Runtime bundle serving
 
-When the target bundle cannot be transformed at build time (its build is owned by another package), `serveBrowserTransform(ctx, options)` serves a transformed copy at runtime: it registers an EXACT webserver route (the exact table wins before longest-prefix, so it outranks the module host's `/plugins` route without a conflict), resolves the patches' `module` package through the Loader composition anchor (`ctx.baseUrl`) rather than Stent's dependency tree, applies the patch rewrites per request under a source-content cache, answers 405 for non-GET and 404 for an unreadable bundle, and is loud by default when any selector rewrites nothing (500 naming every unbound patch id) — degrading to the raw bundle only with `fallback: 'raw'`. A missing composition anchor or unresolvable target package fails at registration. `patch` accepts one descriptor or an array: several patches stack on the same file exactly like Node-side patches (ascending priority wraps outermost), so several plugins can enhance the same bundle without owning it — the route stays single-owned, the rewrites stack. The route is a fiber effect; the returned disposer removes it immediately.
+When the target bundle cannot be transformed at build time (its build is owned by another package), `serveBrowserTransform(ctx, options)` serves a transformed copy at runtime: it registers an EXACT webserver route (the exact table wins before longest-prefix, so it outranks the module host's `/plugins` route without a conflict), resolves the patches' `module` package through the Loader composition anchor (`ctx.baseUrl`) rather than Stent's dependency tree, applies the patch rewrites per request under a source-content cache, answers 405 for non-GET and 404 for an unreadable bundle, and is loud by default when any selector rewrites nothing (500 naming every unbound patch id) — degrading to the raw bundle only with `fallback: 'raw'`. A missing composition anchor or unresolvable target package fails at registration. `patches` accepts an array of descriptors: several patches stack on the same file exactly like Node-side patches (ascending priority wraps outermost), so several plugins can enhance the same bundle without owning it — the route stays single-owned, the rewrites stack. The route is a fiber effect; the returned disposer removes it immediately.
 
 ### Testing patches
 
-The transformation hooks cannot be unregistered and transformed modules stay cached, so every patch scenario needs a fresh process. `runPatchFixture({ patches, entry, args })` from `stent/test/testkit` makes that mechanical: it spawns a child that bootstraps the patches, imports `entry` (whose default export runs with `args`), and returns `{ bindings, result, error, exitCode }` — the thrown error's message travels verbatim (the enriched-error assertions of a node-half spec need no hand-rolled child runner), and each patch's load-time binding records make an unbound patch visible in the same call.
+The transformation hooks cannot be unregistered and transformed modules stay cached, so every patch scenario needs a fresh process. `runPatchFixture({ patches, entry, args })` from `@oh-my-dsh/stent/testing` makes that mechanical: it spawns a child that bootstraps the patches, imports `entry` (whose default export runs with `args`), and returns `{ bindings, result, error, exitCode }` — the thrown error's message travels verbatim (the enriched-error assertions of a node-half spec need no hand-rolled child runner), and each patch's load-time binding records make an unbound patch visible in the same call.
 
 ## Model Experience
 

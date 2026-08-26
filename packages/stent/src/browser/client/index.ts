@@ -12,7 +12,7 @@
  * The exports are limited to platform-free faces (`../../service.ts`,
  * `../../bridge.ts`, `../../runtime.ts`): the node half of this package
  * imports `node:*` modules and must never enter the browser bundle.
- * @module @oh-my-dsh/stent/browser/client
+ * @module @oh-my-dsh/stent/client
  */
 
 import { installBridge } from '../../bridge.ts'

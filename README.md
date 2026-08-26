@@ -86,7 +86,24 @@ because transformed bridge calls dispatch against the live runtime registry.
 `required: true` is checked from the runtime registry after boot, not from a
 YAML descriptor list. Profile YAML may mark a row as Stent-dependent for
 activation, but it must not contain `config.stent.patches` descriptors.
-### 2.3 The TSX dead end (recorded and reverted)
+### 2.3 Public API boundaries
+
+The `@oh-my-dsh/stent` package is intentionally split by platform:
+
+- `@oh-my-dsh/stent` — platform-free runtime, bridge, service, and patch types;
+- `@oh-my-dsh/stent/node` — Node hook installation, binding flush, and cache re-transformation;
+- `@oh-my-dsh/stent/browser` — build transforms, package identity resolvers, and runtime bundle serving;
+- `@oh-my-dsh/stent/client` — browser Cordis client artifact;
+- `@oh-my-dsh/stent/testing` — isolated child-process fixtures.
+
+Orchestrion configuration, wire serialization, module identity internals, and
+loader-thread implementation remain private under `packages/stent/src/transform`
+and `packages/stent/src/node`. Browser transforms accept public `StentPatchStub`
+arrays and convert them internally; Node hooks read only the live runtime
+registry. The package no longer exports platform implementation files as
+compatibility subpaths.
+
+### 2.4 The TSX dead end (recorded and reverted)
 
 The `dsh` source launch (`node --import tsx/esm apps/cli/src/bin.ts`) once
 appeared to need `TSX_TSCONFIG_PATH` or a register preload: `FiberState` (a

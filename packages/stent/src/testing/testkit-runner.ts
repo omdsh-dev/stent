@@ -8,10 +8,10 @@
  * The child exits 0 for a completed run even when the entry threw (the
  * error travels in the envelope); infrastructure failures (bootstrap error,
  * bad payload) exit non-zero with the reason on stderr.
- * @module @oh-my-dsh/stent/test/testkit-runner
+ * @module @oh-my-dsh/stent/testing/testkit-runner
  */
 
-import { flushBindingReports, installStentHooks } from '../node/loader.ts'
+import { flushBindingReports, installStentHooks } from '../node/index.ts'
 import { runtime } from '../runtime.ts'
 import type { StentPatchStub } from '../types.ts'
 

@@ -10,7 +10,6 @@ import { create as createOrchestrion } from '@apm-js-collab/code-transformer'
 export { createOrchestrion }
 export type {
   CustomTransform,
-  FunctionQuery,
   InstrumentationConfig,
   InstrumentationMatcher,
   Transformer,

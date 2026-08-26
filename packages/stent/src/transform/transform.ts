@@ -91,7 +91,7 @@ interface MatchedFunction {
  * @returns the per-node rewrite function, returning whether the node was
  * actually rewritten (false for selected non-function nodes).
  */
-export function createStentTransform(
+function createStentTransform(
   patchId: string,
   operation: string,
 ): (state: Parameters<CustomTransform>[0], node: Node, parent: Node, ancestry: Node[]) => boolean {
