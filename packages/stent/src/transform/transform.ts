@@ -113,354 +113,377 @@ function createStentTransform(
   parent: Node,
   ancestry: Node[],
 ) => boolean {
-  return (_state, node, parent, ancestry) => {
-    if (isConstructorTarget(node, parent)) {
-      // A constructor body cannot move into the traced closure: a derived
-      // constructor's super() call is a syntax error inside a plain function,
-      // and new.target would silently become undefined. Fail the transform
-      // loudly instead of emitting a module that breaks at evaluation.
-      throw new Error(
-        'stent: constructor targets are not supported (super() and new.target cannot survive '
-          + 'the traced-closure replay); patch a method or factory instead',
-      )
+  return (_state, node, parent, ancestry) =>
+    transformMatchedNode(patchId, operation, node, parent, ancestry)
+}
+
+function transformMatchedNode(
+  patchId: string,
+  operation: string,
+  node: Node,
+  parent: Node,
+  ancestry: Node[],
+): boolean {
+  return transformMatchedFunction(patchId, operation, node, parent, ancestry)
+}
+
+function transformMatchedFunction(
+  patchId: string,
+  operation: string,
+  node: Node,
+  parent: Node,
+  ancestry: Node[],
+): boolean {
+  if (isConstructorTarget(node, parent)) {
+    throw new Error(
+      'stent: constructor targets are not supported (super() and new.target cannot survive '
+        + 'the traced-closure replay); patch a method or factory instead',
+    )
+  }
+  const matched = matchFunction(node)
+  const program = ancestry[ancestry.length - 1]
+  if (!matched || !program || program.type !== 'Program' || !matched.body) {
+    return false
+  }
+  const block = ensureBlockBody(matched)
+  const names = namesOf(program)
+  const outerArgsName = prepareOuterArguments(matched, block, names)
+  const argsName = names.unique(ARGS)
+  const tracedName = names.unique(TRACED)
+  const callName = names.unique(CALL)
+  const capture = createOuterArgumentsCapture(outerArgsName)
+  const args = createArgumentsStatement(matched, argsName)
+  const traced = createTracedStatement(
+    matched,
+    block.body,
+    argsName,
+    tracedName,
+  )
+  const call = createCallStatement(
+    patchId,
+    operation,
+    argsName,
+    tracedName,
+    callName,
+  )
+  const publish = createPublishStatement(matched, names, callName, tracedName)
+  block.body = createInjectedStatements(capture, args, traced, call, publish)
+  return true
+}
+
+function ensureBlockBody(matched: MatchedFunction): {
+  type: 'BlockStatement'
+  body: Statement[]
+} {
+  if (matched.body?.type !== 'BlockStatement') {
+    const synthesized: Node = {
+      type: 'BlockStatement',
+      body: [{ type: 'ReturnStatement', argument: matched.body as Expression }],
     }
-    const matched = matchFunction(node)
-    if (!matched) {
-      return false
-    }
-    const program = ancestry[ancestry.length - 1]
-    if (!program || program.type !== 'Program') {
-      return false
-    }
+    matched.node.body = synthesized
+    matched.body = synthesized
+  }
+  return matched.body
+}
 
-    // Expression-bodied arrows get a synthesized block body so the injected
-    // statements have a statement list to live in. Both the node and the
-    // local `body` reference must move to the new block.
-    if (!matched.body) {
-      return false
-    }
-    if (matched.body.type !== 'BlockStatement') {
-      const statements: Statement[] = [
-        { type: 'ReturnStatement', argument: matched.body as Expression },
-      ]
-      const synthesized: Node = { type: 'BlockStatement', body: statements }
-      matched.node.body = synthesized
-      matched.body = synthesized
-    }
-    const block = matched.body as { type: 'BlockStatement'; body: Statement[] }
-    const statements = block.body
+function prepareOuterArguments(
+  matched: MatchedFunction,
+  block: { body: Statement[] },
+  names: ReturnType<typeof namesOf>,
+): string | undefined {
+  if (
+    !matched.arrow
+    || !mapOuterArguments(block as unknown as Node, undefined)
+  ) {
+    return undefined
+  }
+  const name = names.unique(OUTER_ARGUMENTS)
+  mapOuterArguments(block as unknown as Node, name)
+  return name
+}
 
-    // Injected names must not shadow identifiers the file already uses (the
-    // traced body keeps resolving through the transformed function's scope);
-    // the per-program allocator is seeded with every identifier in the file.
-    const refs = namesOf(program)
-    const argsName = refs.unique(ARGS)
-    const tracedName = refs.unique(TRACED)
-    const callName = refs.unique(CALL)
+function createOuterArgumentsCapture(
+  name: string | undefined,
+): Statement | undefined {
+  if (name === undefined) {
+    return undefined
+  }
+  return {
+    type: 'VariableDeclaration',
+    kind: 'const',
+    declarations: [
+      {
+        type: 'VariableDeclarator',
+        id: { type: 'Identifier', name },
+        init: { type: 'Identifier', name: 'arguments' },
+      },
+    ],
+  }
+}
 
-    // An arrow body referencing the enclosing `arguments` object would break
-    // when moved into the traced regular function (its own `arguments` would
-    // shadow the outer one). The arrow's own lexical resolution makes
-    // `arguments` in an injected capture statement refer to the outer scope,
-    // so the reference is preserved: capture it first, then rewrite the
-    // body's `arguments` identifiers (lexical references only — nested
-    // non-arrow functions own their `arguments` and are not descended into)
-    // to the capture.
-    const outerArgsName =
-      matched.arrow && mapOuterArguments(matched.body, undefined)
-        ? refs.unique(OUTER_ARGUMENTS)
-        : undefined
-    if (outerArgsName) {
-      mapOuterArguments(matched.body, outerArgsName)
-    }
-
-    // const stentOuterArguments = arguments
-    // Only arrows: the arrow's own lexical resolution makes `arguments` here
-    // refer to the enclosing scope, preserving the body's outer reference.
-    const capture: Statement | undefined =
-      outerArgsName === undefined
-        ? undefined
-        : {
-            type: 'VariableDeclaration',
-            kind: 'const',
-            declarations: [
-              {
-                type: 'VariableDeclarator',
-                id: { type: 'Identifier', name: outerArgsName },
-                init: { type: 'Identifier', name: 'arguments' },
-              },
-            ],
-          }
-
-    // const stentArguments = <args>
-    // Regular functions rebuild from their own `arguments` object; arrows have
-    // no own binding, so the array is assembled from the parameter patterns —
-    // handler mutations then flow through apply() to the replayed body.
-    const args: Statement = matched.arrow
-      ? {
-          type: 'VariableDeclaration',
-          kind: 'const',
-          declarations: [
-            {
-              type: 'VariableDeclarator',
-              id: { type: 'Identifier', name: argsName },
-              init: {
-                type: 'ArrayExpression',
-                elements: matched.params.map(patternToExpression),
-              },
-            },
-          ],
-        }
-      : {
-          type: 'VariableDeclaration',
-          kind: 'const',
-          declarations: [
-            {
-              type: 'VariableDeclarator',
-              id: { type: 'Identifier', name: argsName },
-              init: {
-                type: 'CallExpression',
-                optional: false,
-                callee: {
-                  type: 'MemberExpression',
-                  computed: false,
-                  optional: false,
-                  object: {
-                    type: 'MemberExpression',
-                    computed: false,
-                    optional: false,
-                    object: {
-                      type: 'MemberExpression',
-                      computed: false,
-                      optional: false,
-                      object: { type: 'Identifier', name: 'Array' },
-                      property: { type: 'Identifier', name: 'prototype' },
-                    },
-                    property: { type: 'Identifier', name: 'slice' },
-                  },
-                  property: { type: 'Identifier', name: 'call' },
-                },
-                arguments: [{ type: 'Identifier', name: 'arguments' }],
-              },
-            },
-          ],
-        }
-
-    // const stentTraced = () => (function () { <original body> }).apply(this, stentArguments)
-    const traced: Statement = {
-      type: 'VariableDeclaration',
-      kind: 'const',
-      declarations: [
-        {
-          type: 'VariableDeclarator',
-          id: { type: 'Identifier', name: tracedName },
-          init: {
-            type: 'ArrowFunctionExpression',
-            expression: false,
-            generator: false,
-            async: false,
-            params: [],
-            body: {
-              type: 'BlockStatement',
-              body: [
-                {
-                  type: 'ReturnStatement',
-                  argument: {
-                    type: 'CallExpression',
-                    optional: false,
-                    callee: {
-                      type: 'MemberExpression',
-                      computed: false,
-                      optional: false,
-                      object: {
-                        type: 'FunctionExpression',
-                        id: null,
-                        params: matched.params,
-                        body: { type: 'BlockStatement', body: statements },
-                        generator: matched.generator,
-                        async: matched.async,
-                      },
-                      property: { type: 'Identifier', name: 'apply' },
-                    },
-                    arguments: [
-                      { type: 'ThisExpression' },
-                      { type: 'Identifier', name: argsName },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        },
-      ],
-    }
-
-    // const stentCall = { id, operation, arguments: stentArguments, self, traced }
-    const call: Statement = {
-      type: 'VariableDeclaration',
-      kind: 'const',
-      declarations: [
-        {
-          type: 'VariableDeclarator',
-          id: { type: 'Identifier', name: callName },
-          init: {
-            type: 'ObjectExpression',
-            properties: [
-              property('id', { type: 'Literal', value: patchId }),
-              property('operation', { type: 'Literal', value: operation }),
-              property('arguments', { type: 'Identifier', name: argsName }),
-              property('self', { type: 'ThisExpression' }),
-              property('traced', { type: 'Identifier', name: tracedName }),
-            ],
-          },
-        },
-      ],
-    }
-
-    // globalThis["__stentBridge"]
-    const bridge = (): Expression => ({
-      type: 'MemberExpression',
-      computed: true,
-      optional: false,
-      object: { type: 'Identifier', name: 'globalThis' },
-      property: { type: 'Literal', value: GLOBAL_BRIDGE_KEY },
-    })
-
-    // globalThis["__stentBridge"] ? publish(stentCall) : stentTraced()
-    const publishCall = (): Expression => ({
-      type: 'ConditionalExpression',
-      test: bridge(),
-      consequent: {
+function createArgumentsStatement(
+  matched: MatchedFunction,
+  name: string,
+): Statement {
+  const init: Expression = matched.arrow
+    ? {
+        type: 'ArrayExpression',
+        elements: matched.params.map(patternToExpression),
+      }
+    : {
         type: 'CallExpression',
         optional: false,
         callee: {
           type: 'MemberExpression',
           computed: false,
           optional: false,
-          object: bridge(),
-          property: { type: 'Identifier', name: 'publish' },
-        },
-        arguments: [{ type: 'Identifier', name: callName }],
-      },
-      alternate: {
-        type: 'CallExpression',
-        optional: false,
-        callee: { type: 'Identifier', name: tracedName },
-        arguments: [],
-      },
-    })
-
-    // Generator functions delegate instead of returning: publish may hand
-    // back the traced generator (no handler, before, or an around/replace
-    // that invoked), which is delegated with `yield*` so iteration semantics
-    // survive; a handler-supplied replacement that is not iterable is
-    // returned directly (the caller's choice to break the iterator contract).
-    // Async generators also accept async iterables.
-    let publish: Statement
-    if (matched.generator) {
-      const resultName = refs.unique('stentResult')
-      const isIterable = (
-        symbol: 'iterator' | 'asyncIterator',
-      ): Expression => ({
-        type: 'BinaryExpression',
-        operator: '===',
-        left: {
-          type: 'UnaryExpression',
-          operator: 'typeof',
-          prefix: true,
-          argument: {
+          object: {
             type: 'MemberExpression',
-            computed: true,
+            computed: false,
             optional: false,
-            object: { type: 'Identifier', name: resultName },
-            property: {
+            object: {
               type: 'MemberExpression',
               computed: false,
               optional: false,
-              object: { type: 'Identifier', name: 'Symbol' },
-              property: { type: 'Identifier', name: symbol },
+              object: { type: 'Identifier', name: 'Array' },
+              property: { type: 'Identifier', name: 'prototype' },
             },
+            property: { type: 'Identifier', name: 'slice' },
+          },
+          property: { type: 'Identifier', name: 'call' },
+        },
+        arguments: [{ type: 'Identifier', name: 'arguments' }],
+      }
+  return {
+    type: 'VariableDeclaration',
+    kind: 'const',
+    declarations: [
+      {
+        type: 'VariableDeclarator',
+        id: { type: 'Identifier', name },
+        init,
+      },
+    ],
+  }
+}
+
+function createTracedStatement(
+  matched: MatchedFunction,
+  body: Statement[],
+  argsName: string,
+  tracedName: string,
+): Statement {
+  return {
+    type: 'VariableDeclaration',
+    kind: 'const',
+    declarations: [
+      {
+        type: 'VariableDeclarator',
+        id: { type: 'Identifier', name: tracedName },
+        init: {
+          type: 'ArrowFunctionExpression',
+          expression: false,
+          generator: false,
+          async: false,
+          params: [],
+          body: {
+            type: 'BlockStatement',
+            body: [
+              {
+                type: 'ReturnStatement',
+                argument: {
+                  type: 'CallExpression',
+                  optional: false,
+                  callee: {
+                    type: 'MemberExpression',
+                    computed: false,
+                    optional: false,
+                    object: {
+                      type: 'FunctionExpression',
+                      id: null,
+                      params: matched.params,
+                      body: { type: 'BlockStatement', body },
+                      generator: matched.generator,
+                      async: matched.async,
+                    },
+                    property: { type: 'Identifier', name: 'apply' },
+                  },
+                  arguments: [
+                    { type: 'ThisExpression' },
+                    { type: 'Identifier', name: argsName },
+                  ],
+                },
+              },
+            ],
           },
         },
-        right: { type: 'Literal', value: 'function' },
-      })
-      const iterableCheck: Expression = matched.async
-        ? {
-            type: 'LogicalExpression',
-            operator: '||',
-            left: isIterable('iterator'),
-            right: isIterable('asyncIterator'),
-          }
-        : isIterable('iterator')
-      publish = {
+      },
+    ],
+  }
+}
+
+function createCallStatement(
+  patchId: string,
+  operation: string,
+  argsName: string,
+  tracedName: string,
+  callName: string,
+): Statement {
+  return {
+    type: 'VariableDeclaration',
+    kind: 'const',
+    declarations: [
+      {
+        type: 'VariableDeclarator',
+        id: { type: 'Identifier', name: callName },
+        init: {
+          type: 'ObjectExpression',
+          properties: [
+            property('id', { type: 'Literal', value: patchId }),
+            property('operation', { type: 'Literal', value: operation }),
+            property('arguments', { type: 'Identifier', name: argsName }),
+            property('self', { type: 'ThisExpression' }),
+            property('traced', { type: 'Identifier', name: tracedName }),
+          ],
+        },
+      },
+    ],
+  }
+}
+
+function bridgeExpression(): Expression {
+  return {
+    type: 'MemberExpression',
+    computed: true,
+    optional: false,
+    object: { type: 'Identifier', name: 'globalThis' },
+    property: { type: 'Literal', value: GLOBAL_BRIDGE_KEY },
+  }
+}
+
+function publishExpression(callName: string, tracedName: string): Expression {
+  const bridge = bridgeExpression()
+  return {
+    type: 'ConditionalExpression',
+    test: bridge,
+    consequent: {
+      type: 'CallExpression',
+      optional: false,
+      callee: {
+        type: 'MemberExpression',
+        computed: false,
+        optional: false,
+        object: bridge,
+        property: { type: 'Identifier', name: 'publish' },
+      },
+      arguments: [{ type: 'Identifier', name: callName }],
+    },
+    alternate: {
+      type: 'CallExpression',
+      optional: false,
+      callee: { type: 'Identifier', name: tracedName },
+      arguments: [],
+    },
+  }
+}
+
+function createPublishStatement(
+  matched: MatchedFunction,
+  names: ReturnType<typeof namesOf>,
+  callName: string,
+  tracedName: string,
+): Statement {
+  if (!matched.generator) {
+    return {
+      type: 'ReturnStatement',
+      argument: publishExpression(callName, tracedName),
+    }
+  }
+  const resultName = names.unique('stentResult')
+  const result = { type: 'Identifier' as const, name: resultName }
+  const delegate: Statement = {
+    type: 'IfStatement',
+    test: {
+      type: 'LogicalExpression',
+      operator: '&&',
+      left: {
+        type: 'BinaryExpression',
+        operator: '!=',
+        left: result,
+        right: { type: 'Literal', value: null },
+      },
+      right: iterableExpression(resultName, matched.async),
+    },
+    consequent: {
+      type: 'ReturnStatement',
+      argument: { type: 'YieldExpression', delegate: true, argument: result },
+    },
+  }
+  return {
+    type: 'BlockStatement',
+    body: [
+      {
         type: 'VariableDeclaration',
         kind: 'const',
         declarations: [
           {
             type: 'VariableDeclarator',
-            id: { type: 'Identifier', name: resultName },
-            init: publishCall(),
+            id: result,
+            init: publishExpression(callName, tracedName),
           },
         ],
-      }
-      const delegate: Statement = {
-        type: 'IfStatement',
-        test: {
-          type: 'LogicalExpression',
-          operator: '&&',
-          left: {
-            type: 'BinaryExpression',
-            operator: '!=',
-            left: { type: 'Identifier', name: resultName },
-            right: { type: 'Literal', value: null },
-          },
-          right: iterableCheck,
-        },
-        consequent: {
-          type: 'ReturnStatement',
-          argument: {
-            type: 'YieldExpression',
-            delegate: true,
-            argument: { type: 'Identifier', name: resultName },
-          },
-        },
-      }
-      const fallbackReturn: Statement = {
-        type: 'ReturnStatement',
-        argument: { type: 'Identifier', name: resultName },
-      }
-      const delegatedBody: (Statement | undefined)[] = [
-        capture,
-        args,
-        traced,
-        call,
-        publish,
-        delegate,
-        fallbackReturn,
-      ]
-      block.body = delegatedBody.filter(
-        (statement): statement is Statement => statement !== undefined,
-      )
-      return true
-    }
+      },
+      delegate,
+      { type: 'ReturnStatement', argument: result },
+    ],
+  } as unknown as Statement
+}
 
-    publish = {
-      type: 'ReturnStatement',
-      argument: publishCall(),
-    }
+function iterableExpression(name: string, async: boolean): Expression {
+  const check = (symbol: 'iterator' | 'asyncIterator'): Expression => ({
+    type: 'BinaryExpression',
+    operator: '===',
+    left: {
+      type: 'UnaryExpression',
+      operator: 'typeof',
+      prefix: true,
+      argument: {
+        type: 'MemberExpression',
+        computed: true,
+        optional: false,
+        object: { type: 'Identifier', name },
+        property: {
+          type: 'MemberExpression',
+          computed: false,
+          optional: false,
+          object: { type: 'Identifier', name: 'Symbol' },
+          property: { type: 'Identifier', name: symbol },
+        },
+      },
+    },
+    right: { type: 'Literal', value: 'function' },
+  })
+  return async
+    ? {
+        type: 'LogicalExpression',
+        operator: '||',
+        left: check('iterator'),
+        right: check('asyncIterator'),
+      }
+    : check('iterator')
+}
 
-    const injected: (Statement | undefined)[] = [
-      capture,
-      args,
-      traced,
-      call,
-      publish,
-    ]
-    block.body = injected.filter(
-      (statement): statement is Statement => statement !== undefined,
-    )
-    return true
-  }
+function createInjectedStatements(
+  capture: Statement | undefined,
+  args: Statement,
+  traced: Statement,
+  call: Statement,
+  publish: Statement,
+): Statement[] {
+  const injected = [capture, args, traced, call, publish]
+  return injected.filter(
+    (statement): statement is Statement => statement !== undefined,
+  )
 }
 
 /** Whether the matched node selects a class constructor. */
@@ -693,23 +716,30 @@ function mapOuterArguments(
       continue
     }
     const value = (node as unknown as Record<string, unknown>)[key]
-    if (Array.isArray(value)) {
-      for (const child of value) {
-        if (
-          typeof child === 'object'
-          && child !== null
-          && mapOuterArguments(child as Node, name)
-        ) {
-          found = true
-        }
-      }
-    } else if (typeof value === 'object' && value !== null) {
-      if (mapOuterArguments(value as Node, name)) {
-        found = true
-      }
+    if (mapOuterArgumentsValue(value, name)) {
+      found = true
     }
   }
   return found
+}
+
+/** Scan an AST child value for enclosing-scope `arguments` references. */
+function mapOuterArgumentsValue(
+  value: unknown,
+  name: string | undefined,
+): boolean {
+  if (Array.isArray(value)) {
+    return value.some(
+      (child) =>
+        typeof child === 'object'
+        && child !== null
+        && mapOuterArguments(child as Node, name),
+    )
+  }
+  if (typeof value === 'object' && value !== null) {
+    return mapOuterArguments(value as Node, name)
+  }
+  return false
 }
 
 /** A `key: value` object property. */
@@ -773,15 +803,22 @@ function collectIdentifiers(node: Node, out: Set<string>): void {
       continue
     }
     const value = (node as unknown as Record<string, unknown>)[key]
-    if (Array.isArray(value)) {
-      for (const child of value) {
-        if (typeof child === 'object' && child !== null) {
-          collectIdentifiers(child as Node, out)
-        }
+    collectIdentifierValue(value, out)
+  }
+}
+
+/** Collect identifiers from an AST child value. */
+function collectIdentifierValue(value: unknown, out: Set<string>): void {
+  if (Array.isArray(value)) {
+    for (const child of value) {
+      if (typeof child === 'object' && child !== null) {
+        collectIdentifiers(child as Node, out)
       }
-    } else if (typeof value === 'object' && value !== null) {
-      collectIdentifiers(value as Node, out)
     }
+    return
+  }
+  if (typeof value === 'object' && value !== null) {
+    collectIdentifiers(value as Node, out)
   }
 }
 

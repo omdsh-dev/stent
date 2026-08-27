@@ -143,20 +143,7 @@ class StentRuntime {
         previous?.info.operation === 'replace'
         && targetKey(previous.info.target) === key
       if (!selfClaim) {
-        for (const [id, existing] of this.entries) {
-          if (id === info.id) {
-            continue
-          }
-          if (
-            existing.info.operation === 'replace'
-            && targetKey(existing.info.target) === key
-          ) {
-            throw new Error(
-              `stent: replace patch ${JSON.stringify(info.id)} conflicts with existing `
-                + `replace patch ${JSON.stringify(existing.info.id)} on the same target`,
-            )
-          }
-        }
+        assertNoReplaceConflict(this.entries, info.id, key)
       }
     }
     this.entries.set(info.id, {
@@ -298,6 +285,28 @@ class StentRuntime {
       }
       return dispatch(entry, call)
     })
+  }
+}
+
+/** Reject another replace patch claiming the same target. */
+function assertNoReplaceConflict(
+  entries: ReadonlyMap<PatchId, PatchEntry>,
+  patchId: PatchId,
+  target: string,
+): void {
+  for (const [id, existing] of entries) {
+    if (id === patchId) {
+      continue
+    }
+    if (
+      existing.info.operation === 'replace'
+      && targetKey(existing.info.target) === target
+    ) {
+      throw new Error(
+        `stent: replace patch ${JSON.stringify(patchId)} conflicts with existing `
+          + `replace patch ${JSON.stringify(existing.info.id)} on the same target`,
+      )
+    }
   }
 }
 

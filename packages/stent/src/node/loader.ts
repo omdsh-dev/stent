@@ -583,65 +583,7 @@ export function installStentHooks(): () => void {
   }
 
   if (syncHooks) {
-    registerHooks({
-      resolve: (specifier, context, nextResolve) => {
-        const resolved = nextResolve(specifier, context)
-        if (!state.active) {
-          return resolved
-        }
-        const identity = resolvePackageIdentity(resolved.url)
-        if (identity === undefined) {
-          return resolved
-        }
-        const transformer = getStentTransformer(
-          state.matcher,
-          identity.name,
-          identity.version,
-          identity.path,
-        )
-        if (transformer) {
-          state.transformers.set(resolved.url, transformer)
-        }
-        return resolved
-      },
-      load: (url, context, nextLoad) => {
-        const result = nextLoad(url, context)
-        const stateRef = state
-        if (!stateRef.active) {
-          return result
-        }
-        const transformer = stateRef.transformers.get(url)
-        if (!transformer) {
-          return result
-        }
-        // Track by filesystem path: the CJS `_compile` patch below records the
-        // same key, so a CommonJS module reached through both the ESM graph and
-        // plain require() is transformed exactly once.
-        const path = url.startsWith('file:') ? fileURLToPath(url) : url
-        if (stateRef.seen.has(path)) {
-          return result
-        }
-        stateRef.seen.add(path)
-        try {
-          const source = readSource(result, url)
-          const moduleType = context.format === 'module' ? 'esm' : 'cjs'
-          const transformed = transformStentSource(
-            transformer,
-            source,
-            moduleType,
-          )
-          const identity = resolvePackageIdentity(path)
-          if (identity !== undefined) {
-            flushBindings(stateRef, identity)
-          }
-          return { ...result, source: transformed.code, shortCircuit: true }
-        } catch (error) {
-          stateRef.pending.clear()
-          stateRef.transformers.delete(url)
-          throw new Error(`stent: failed to transform ${url}`, { cause: error })
-        }
-      },
-    })
+    installSynchronousHooks(state)
   }
 
   // CommonJS files reached through plain require() (not via the ESM graph)
@@ -666,6 +608,68 @@ export function installStentHooks(): () => void {
     state.transformers.clear()
     writeAsyncConfig()
   }
+}
+
+/** Register synchronous ESM and CJS load hooks for one installation. */
+function installSynchronousHooks(state: LoaderState): void {
+  registerHooks({
+    resolve: (specifier, context, nextResolve) => {
+      const resolved = nextResolve(specifier, context)
+      if (!state.active) {
+        return resolved
+      }
+      const identity = resolvePackageIdentity(resolved.url)
+      if (identity === undefined) {
+        return resolved
+      }
+      const transformer = getStentTransformer(
+        state.matcher,
+        identity.name,
+        identity.version,
+        identity.path,
+      )
+      if (transformer) {
+        state.transformers.set(resolved.url, transformer)
+      }
+      return resolved
+    },
+    load: (url, context, nextLoad) => {
+      const result = nextLoad(url, context)
+      if (!state.active) {
+        return result
+      }
+      const transformer = state.transformers.get(url)
+      if (!transformer) {
+        return result
+      }
+      // Track by filesystem path: the CJS `_compile` patch below records the
+      // same key, so a CommonJS module reached through both the ESM graph and
+      // plain require() is transformed exactly once.
+      const path = url.startsWith('file:') ? fileURLToPath(url) : url
+      if (state.seen.has(path)) {
+        return result
+      }
+      state.seen.add(path)
+      try {
+        const source = readSource(result, url)
+        const moduleType = context.format === 'module' ? 'esm' : 'cjs'
+        const transformed = transformStentSource(
+          transformer,
+          source,
+          moduleType,
+        )
+        const identity = resolvePackageIdentity(path)
+        if (identity !== undefined) {
+          flushBindings(state, identity)
+        }
+        return { ...result, source: transformed.code, shortCircuit: true }
+      } catch (error) {
+        state.pending.clear()
+        state.transformers.delete(url)
+        throw new Error(`stent: failed to transform ${url}`, { cause: error })
+      }
+    },
+  })
 }
 
 /** Whether the singleton CJS `_compile` wrapper is installed. */

@@ -134,6 +134,19 @@
         "packages/*/src/**/*.{ts,tsx}"
       ],
       "rules": {
+        "eslint/max-lines-per-function": [
+          "error",
+          {
+            "IIFEs": true,
+            "max": 120,
+            "skipBlankLines": false,
+            "skipComments": false
+          }
+        ],
+        "eslint/max-statements": [
+          "error",
+          60
+        ],
         "typescript/no-non-null-assertion": "error",
         "typescript/no-unnecessary-condition": [
           "error",

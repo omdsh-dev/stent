@@ -96,19 +96,20 @@ export function serveBrowserTransform(
   }
   const fallback = options.fallback ?? 'error'
   const patches = [...options.patches]
-  if (patches.length === 0) {
+  const firstPatch = patches.at(0)
+  if (firstPatch === undefined) {
     throw new Error('stent: serveBrowserTransform requires at least one patch')
   }
   // Every patch must rewrite the SAME file the route serves: the bundle
   // path comes from the shared module + filePath, so a divergent target
   // would silently never bind. Fail loud at registration instead.
-  const filePath = patches[0]?.target.filePath
+  const filePath = firstPatch.target.filePath
   if (filePath === undefined || filePath instanceof RegExp) {
     throw new Error(
       'stent: serveBrowserTransform needs a concrete filePath (RegExp or filePaths cannot name a file to read)',
     )
   }
-  const moduleName = patches[0]?.target.module
+  const moduleName = firstPatch.target.module
   for (const patch of patches) {
     if (
       patch.target.module !== moduleName
@@ -138,32 +139,61 @@ export function serveBrowserTransform(
     patches,
     resolve: resolvePackageIdentity,
   })
-  let cached: { source: string; code: string } | undefined
 
-  /** The bytes to serve: the transformed bundle, cached per source content. */
-  const bundleCode = (): string => {
-    const path = bundlePath
+  const bundleCode = createBundleCode(
+    bundlePath,
+    transform,
+    patchIds,
+    fallback,
+    moduleName,
+    filePath,
+  )
+
+  const handler = createBundleHandler(bundleCode)
+
+  const route = { kind: 'exact' as const, path: options.route, handler }
+  let removeRoute: (() => void) | undefined
+  ctx.effect(() => {
+    removeRoute = httpServer.register(route)
+    return () => {
+      removeRoute?.()
+    }
+  }, `stent:serveBrowserTransform(${options.route})`)
+  return () => {
+    removeRoute?.()
+  }
+}
+
+type BundleTransform = (code: string, id: string) => TransformOutput | null
+
+type BundleCode = () => string
+
+/** Build a cached bundle reader and transformer. */
+function createBundleCode(
+  bundlePath: string,
+  transform: BundleTransform,
+  patchIds: string[],
+  fallback: 'raw' | 'error',
+  moduleName: string,
+  filePath: string,
+): BundleCode {
+  let cached: { source: string; code: string } | undefined
+  return () => {
     let source: string
     try {
-      source = readFileSync(path, 'utf8')
+      source = readFileSync(bundlePath, 'utf8')
     } catch {
       throw new BundleUnreadableError()
     }
     if (cached !== undefined && cached.source === source) {
       return cached.code
     }
-    // The upstream transformer throws when the selector finds no injection
-    // points — its miss signal, like a null return for a non-matching file.
     let output: TransformOutput | null
     try {
-      output = transform(source, path)
+      output = transform(source, bundlePath)
     } catch {
       output = null
     }
-    // A patch is bound when its id appears in the output's binding reports;
-    // any patch that rewrote nothing is a misconfiguration (wrong launch
-    // form or moved function) that must not ship silently as an inert
-    // bundle — even when the other patches bound.
     const bound = new Set(
       (output?.bindings ?? []).map((record) => record.patchId),
     )
@@ -182,15 +212,16 @@ export function serveBrowserTransform(
     cached = { source, code: output.code }
     return output.code
   }
+}
 
-  const handler = (req: IncomingMessage, res: ServerResponse): void => {
+/** Create the HTTP handler for a transformed bundle route. */
+function createBundleHandler(bundleCode: BundleCode) {
+  return (req: IncomingMessage, res: ServerResponse): void => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405)
       res.end()
       return
     }
-    // Compute the body before writing headers: a failure must answer with
-    // its own status, never after 200 was already sent.
     let body: string
     try {
       body = bundleCode()
@@ -209,17 +240,5 @@ export function serveBrowserTransform(
       'cache-control': 'no-cache',
     })
     res.end(body)
-  }
-
-  const route = { kind: 'exact' as const, path: options.route, handler }
-  let removeRoute: (() => void) | undefined
-  ctx.effect(() => {
-    removeRoute = httpServer.register(route)
-    return () => {
-      removeRoute?.()
-    }
-  }, `stent:serveBrowserTransform(${options.route})`)
-  return () => {
-    removeRoute?.()
   }
 }
