@@ -1,6 +1,6 @@
 import { RuleTester } from 'oxlint/plugins-dev'
 import { describe, it } from 'vitest'
-import { minFunctionLines } from '../../tools/oxlint/stent-plugin.ts'
+import { minFunctionLines } from '../../tools/oxlint/rules/min-function-lines.ts'
 
 RuleTester.describe = describe
 RuleTester.it = it
