@@ -159,9 +159,14 @@
         "stent/min-function-lines": [
           "error",
           {
-            "minLines": 3,
+            "minLines": 5,
+            "minimums": {
+              "declaration": 5,
+              "expression": 3,
+              "method": 2,
+              "arrow": 3
+            },
             "includeAnonymous": false,
-            "includeExpressionBodies": true,
             "skipBlankLines": true,
             "skipComments": true
           }

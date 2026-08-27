@@ -139,7 +139,7 @@ window.__ModuleLoader__.load({ id: "@oh-my-dsh/stent", factory: (require) => { .
 
 每个包从自己的包根目录运行 Oxlint，使用固定的 DSH 工具链（`oxlint` 与 `oxlint-tsgolint`）和选定的 TypeScript 类型感知规则；根包与子包配置共享一份纳入版本控制的基线。warning 视为失败。生成的 `lib/` 产物、JavaScript fixture launcher 和构建配置不属于本 TypeScript lint 面。
 
-共享的源码 override 还会加载 `tools/oxlint/stent-plugin.ts` 并启用 `stent/min-function-lines`。具名函数（函数声明、绑定到变量的函数和 class 方法）至少需要三行有效源码；空行和仅包含注释的行不计入。匿名 callback 与对象字面量 callback 有意排除，但具名的简写箭头函数会检查。确实需要保留的短适配函数必须使用 `// oxlint-disable-next-line stent/min-function-lines -- reason` 并说明原因。
+共享的源码 override 还会加载 `tools/oxlint/stent-plugin.ts` 并启用 `stent/min-function-lines`。默认策略按有效源码行数计算，并包含函数定义行；空行和仅包含注释的行不计入。当前基线阈值为 `declaration: 5`、`expression: 3`、`method: 2`、`arrow: 3`。`minimums` 选项可以分别配置 `declaration`、`expression`、`method` 和 `arrow` 这几种写法：填写整数即可设置该写法的最小行数，填写 `false` 则禁用该写法。匿名 callback 和对象字面量 callback 除非显式开启 `includeAnonymous`，否则不会检查。确实需要保留的短适配函数必须使用 `// oxlint-disable-next-line stent/min-function-lines -- reason` 并说明原因。
 
 Oxfmt 是本 workspace 的统一格式化器，共享策略写在 `.oxfmtrc.json`：两空格缩进、单引号、无分号、尾随逗号和 120 列宽。每个包分别拥有自己的 `fmt` 与 `fmt:check` 命令；根 carrier 的 `pack:fmt:check` 负责编排根包和全部实现包的检查。生成的 `lib/` 产物、fixture 目录、JavaScript launcher fixture 和构建配置不属于格式化范围。
 
