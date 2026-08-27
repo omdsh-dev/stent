@@ -20,7 +20,7 @@ import ts from 'typescript'
 import { detectModuleType } from './identity.ts'
 import { createStentMatcher, getStentTransformer, transformStentSource } from './matcher.ts'
 import { expandPatchStub, type StentInstrumentationConfig } from './config.ts'
-import type { StentBindingReport, StentPatchStub } from '../types.ts'
+import type { StentBindingReport, StentPatchStub } from './types.ts'
 
 /**
  * Strip TypeScript type annotations so the code transformer (a plain

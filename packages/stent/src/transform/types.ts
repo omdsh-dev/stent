@@ -1,9 +1,9 @@
 /**
- * Public Stent function-selection types.
+ * Self-contained contracts for the Stent transformation layer.
  *
- * These are Stent-owned contracts. The transform implementation converts them
- * to the internal Orchestrion query shape; consumers do not need to depend on
- * Orchestrion's package or its declarations.
+ * The transform layer owns the static patch shape it consumes and the binding
+ * reports it produces. Platform and runtime modules may import these contracts,
+ * but this directory does not depend on them.
  * @module @oh-my-dsh/stent/transform/types
  */
 
@@ -50,3 +50,57 @@ export type StentFunctionQuery =
       index?: number | null
       isExportAlias?: boolean
     }
+
+/** Stable identity of one Stent patch. */
+export type PatchId = string
+
+/** Operation applied by a transformed function call. */
+export type StentOperation = 'before' | 'after' | 'around' | 'replace'
+
+/** Static target descriptor consumed by the instrumentation builder. */
+export interface StentTarget {
+  /** npm package name matched against the resolved module's owner. */
+  module: string
+  /** semver range the owning package version must satisfy. */
+  versionRange: string
+  /** File path or pattern relative to the package root. */
+  filePath?: string | RegExp
+  /** Package-relative paths expanded into separate instrumentations. */
+  filePaths?: string[]
+  /** Name-based function query. */
+  functionQuery?: StentFunctionQuery
+  /** Raw esquery selector, taking precedence over functionQuery. */
+  astQuery?: string
+  /** Match index; null/omitted transforms every match. */
+  index?: number | null
+}
+
+/** Static patch descriptor used by Node and browser transform entry points. */
+export interface StentPatchStub {
+  /** Id stamped into transformed calls and binding reports. */
+  id: PatchId
+  /** Module and function selection metadata. */
+  target: StentTarget
+  /** Runtime operation stamped into the transformed call. */
+  operation: StentOperation
+  /** Whether startup must observe a binding for this patch. */
+  required?: boolean
+  /** Numeric ordering key for stacked instrumentations. */
+  priority?: number
+}
+
+/** One transformed file binding. */
+export interface StentBinding {
+  /** Package name of the bound module. */
+  module: string
+  /** Package-relative file path that was transformed. */
+  file: string
+  /** Function nodes rewritten in that file. */
+  nodes: number
+}
+
+/** One transformed file binding carrying its patch id. */
+export interface StentBindingReport extends StentBinding {
+  /** The patch id the node count belongs to. */
+  patchId: PatchId
+}

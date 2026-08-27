@@ -17,15 +17,9 @@
  */
 
 import { subscribeBridge, type StentBridgeCall } from './bridge.ts'
-import type {
-  StentBinding,
-  StentCall,
-  StentHandler,
-  StentOperation,
-  StentPatchInfo,
-  StentTarget,
-  PatchId,
-} from './types.ts'
+import type { StentBinding, StentCall, StentHandler, StentPatchInfo, StentTarget, PatchId } from './types.ts'
+
+export { validatePatchId, validatePatchStatic } from './transform/validation.ts'
 
 /** Runtime state of one registered patch. */
 interface PatchEntry {
@@ -59,74 +53,6 @@ export interface StentPatchChange {
 
 /** Listener notified after patch metadata changes. */
 export type StentPatchChangeListener = (change: StentPatchChange) => void
-
-/**
- * Validate a patch id for use in diagnostics and bridge dispatch.
- * @param id - the patch id to validate.
- * @throws when the id is empty, too long, or contains unsafe characters.
- */
-export function validatePatchId(id: PatchId): void {
-  if (!/^[A-Za-z0-9._:/+-]{1,120}$/.test(id)) {
-    throw new Error(`stent: patch id ${JSON.stringify(id)} must be 1-120 chars of [A-Za-z0-9._:/+-]`)
-  }
-}
-
-/**
- * Validate the static fields of a patch descriptor: the target's module,
- * version range, and file shape, plus the operation kind. Both the service
- * registration path and the loader instrumentation path enforce the same
- * checks, so a malformed descriptor fails loud no matter which plane it
- * crossed.
- * @param patch - the descriptor's static part.
- * @throws when a target field or the operation is malformed.
- */
-export function validatePatchStatic(patch: {
-  target: StentTarget
-  operation: StentOperation
-  required?: boolean
-}): void {
-  const target = patch.target
-  if (typeof target.module !== 'string' || target.module.length === 0) {
-    throw new Error('stent: patch target.module must be a non-empty string')
-  }
-  if (typeof target.versionRange !== 'string' || target.versionRange.length === 0) {
-    throw new Error('stent: patch target.versionRange must be a non-empty string')
-  }
-  const hasFilePath = typeof target.filePath === 'string' || target.filePath instanceof RegExp
-  if (!hasFilePath && target.filePaths === undefined) {
-    throw new Error('stent: patch target must carry filePath or filePaths')
-  }
-  if (hasFilePath && target.filePaths !== undefined) {
-    throw new Error('stent: patch target must carry filePath or filePaths, not both')
-  }
-  if (
-    target.filePaths !== undefined &&
-    (!Array.isArray(target.filePaths) ||
-      target.filePaths.length === 0 ||
-      target.filePaths.some(path => typeof path !== 'string' || path.length === 0))
-  ) {
-    throw new Error('stent: patch target.filePaths must be a non-empty array of non-empty strings')
-  }
-  if (patch.required !== undefined && typeof patch.required !== 'boolean') {
-    throw new Error('stent: patch.required must be a boolean when present')
-  }
-  if (!isValidIndex(target.index)) {
-    throw new Error('stent: patch target.index must be a non-negative integer or null')
-  }
-  if (!isValidIndex(target.functionQuery?.index)) {
-    throw new Error('stent: patch target functionQuery.index must be a non-negative integer or null')
-  }
-  if (!['before', 'after', 'around', 'replace'].includes(patch.operation)) {
-    throw new Error(`stent: unknown operation ${JSON.stringify(patch.operation)}`)
-  }
-}
-
-/** Whether an index field holds a valid match selector: unset, null (every match), or a non-negative integer. */
-function isValidIndex(index: number | null | undefined): boolean {
-  if (index === undefined || index === null) return true
-  if (!Number.isInteger(index)) return false
-  return index >= 0
-}
 
 /** Whether a value is a thenable (the async-target result shape). */
 function isThenable(value: unknown): value is PromiseLike<unknown> {

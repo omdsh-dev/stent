@@ -4,52 +4,18 @@
  * @module @oh-my-dsh/stent/types
  */
 
-import type { StentFunctionQuery } from './transform/types.ts'
+import type { PatchId, StentBinding, StentOperation, StentTarget } from './transform/types.ts'
 
-export type { StentFunctionKind, StentFunctionQuery } from './transform/types.ts'
-
-/** Stable identity of one Stent patch (unique within one Stent runtime). */
-export type PatchId = string
-
-/**
- * What a patch may do to its target function. `before` mutates arguments
- * before the original body runs, `after` mutates the successful result,
- * `around` decides whether the original body runs and may replace the result,
- * and `replace` owns the call entirely.
- */
-export type StentOperation = 'before' | 'after' | 'around' | 'replace'
-
-/**
- * Target of one Stent patch: the npm package, version range, package-relative
- * file, and the function or AST query selecting the injection point.
- */
-export interface StentTarget {
-  /** npm package name matched against the resolved module's owner. */
-  module: string
-  /** semver range the owning package version must satisfy. */
-  versionRange: string
-  /** File path or pattern relative to the package root. */
-  filePath?: string | RegExp
-  /**
-   * Convenience for the dual-form idiom: every package-relative file path in
-   * this list matches under one patch id (each entry expands into its own
-   * instrumentation sharing the id, with one binding record per matched
-   * file). Mutually exclusive with `filePath`.
-   */
-  filePaths?: string[]
-  /** Name-based function query (function, method, class, private method…). */
-  functionQuery?: StentFunctionQuery
-  /** Raw esquery selector; when set it takes precedence over name matching. */
-  astQuery?: string
-  /**
-   * Which match to transform when the selector picks several functions in
-   * one file: a zero-based index, or null/omitted to transform every match.
-   * Read for raw `astQuery` targets (forwarded as the behavior `index`);
-   * name-based `functionQuery` targets carry their own `index` with the
-   * same default.
-   */
-  index?: number | null
-}
+export type {
+  PatchId,
+  StentBinding,
+  StentBindingReport,
+  StentFunctionKind,
+  StentFunctionQuery,
+  StentOperation,
+  StentPatchStub,
+  StentTarget,
+} from './transform/types.ts'
 
 /** Runtime call record published to a patch's tracing channel. */
 export interface StentCall {
@@ -135,23 +101,6 @@ export interface StentPatch {
   handler: StentHandler
 }
 
-/** One load-time binding of a patch: a file its transform actually rewrote. */
-export interface StentBinding {
-  /** Package name of the bound module. */
-  module: string
-  /** Package-relative file path that was transformed. */
-  file: string
-  /** Function nodes rewritten in that file. */
-  nodes: number
-}
-
-/** One file's binding record with its patch id — the shape the browser
- * transform attaches to its output and the loader-thread channel forwards. */
-export interface StentBindingReport extends StentBinding {
-  /** The patch id the node count belongs to. */
-  patchId: PatchId
-}
-
 /** Immutable diagnostic snapshot of one registered patch (no handler functions). */
 export interface StentPatchInfo {
   /** Patch id. */
@@ -172,8 +121,3 @@ export interface StentPatchInfo {
    */
   bindings?: readonly StentBinding[]
 }
-
-/** A patch descriptor without a runtime handler — the static shape
- * configuration may carry (handlers are trusted code bound at registration).
- */
-export type StentPatchStub = Omit<StentPatch, 'handler'>

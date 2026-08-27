@@ -6,9 +6,8 @@
  */
 
 import type { InstrumentationConfig } from './orchestrion.ts'
-
-import { validatePatchId, validatePatchStatic } from '../runtime.ts'
-import type { StentPatchStub } from '../types.ts'
+import { validatePatchId, validatePatchStatic } from './validation.ts'
+import type { StentPatchStub } from './types.ts'
 
 /** Orchestrion config extended with Stent's bridge metadata. */
 export type StentInstrumentationConfig = InstrumentationConfig & {

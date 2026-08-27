@@ -13,9 +13,9 @@
  */
 
 import type { StentOperation, PatchId } from './types.ts'
+import { GLOBAL_BRIDGE_KEY } from './transform/protocol.ts'
 
-/** Global handle under which the bootstrap installs the bridge. */
-export const GLOBAL_BRIDGE_KEY = '__stentBridge'
+export { GLOBAL_BRIDGE_KEY }
 
 /** Call record published by transformed code and consumed by the runtime. */
 export interface StentBridgeCall {

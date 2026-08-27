@@ -40,7 +40,7 @@ import type {
   SpreadElement,
   Statement,
 } from 'estree'
-import { GLOBAL_BRIDGE_KEY } from '../bridge.ts'
+import { GLOBAL_BRIDGE_KEY } from './protocol.ts'
 
 /** Identifier prefixes injected by this transform. */
 const ARGS = 'stentArguments'
