@@ -275,5 +275,9 @@ export const name = 'stent-dsh'
  * @param ctx - Cordis context that owns the service.
  */
 export async function apply(ctx: Context): Promise<void> {
-  await ctx.plugin(StentClientService)
+  const clientFiber = ctx.plugin(StentClientService)
+  await clientFiber
+  if (ctx.get('stentClient') === undefined) {
+    throw new Error('stent-dsh: browser client service failed to mount')
+  }
 }

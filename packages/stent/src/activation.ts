@@ -37,5 +37,8 @@ export function markStentDshLaunch(globalObject: object = globalThis): void {
  * @returns Whether the Stent DSH launch marker is present.
  */
 export function isStentDshLaunch(globalObject: object = globalThis): boolean {
-  return Reflect.get(globalObject, STENT_DSH_LAUNCH_KEY) === true
+  const target = globalObject as Record<PropertyKey, unknown>
+  const marker = target[STENT_DSH_LAUNCH_KEY]
+  const active = marker === true
+  return active
 }

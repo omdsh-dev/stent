@@ -46,7 +46,9 @@ export function parseOpt(
 }
 
 function collect(value: string, previous: string[]): string[] {
-  return [...previous, value]
+  const next = [...previous]
+  next.push(value)
+  return next
 }
 
 export function buildCliArgs(

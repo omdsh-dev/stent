@@ -49,15 +49,21 @@ interface ProfileManifest {
 }
 
 function isRecord(value: unknown): value is RecordValue {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
+  if (value === null) return false
+  if (typeof value !== 'object') return false
+  return !Array.isArray(value)
 }
 
 function childPath(base: URL, ...parts: string[]): URL {
-  return pathToFileURL(join(fileURLToPath(base), ...parts))
+  const basePath = fileURLToPath(base)
+  const joinedPath = join(basePath, ...parts)
+  return pathToFileURL(joinedPath)
 }
 
 function homeUrl(): URL {
-  return pathToFileURL(join(homedir(), '.dsh'))
+  const homePath = homedir()
+  const dshPath = join(homePath, '.dsh')
+  return pathToFileURL(dshPath)
 }
 
 interface InstalledProfile {

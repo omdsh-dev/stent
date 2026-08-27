@@ -36,7 +36,6 @@ import { retransformCommonJs as reloadCommonJs, retransformEsm as reloadEsm, loa
 import { expandPatchStub, type StentInstrumentationConfig } from '../transform/config.ts'
 import {
   createStentMatcher,
-  freeStentTransformer,
   getStentTransformer,
   orderStentInstrumentations,
   transformStentSource,
@@ -156,7 +155,8 @@ function patchShapeKey(info: StentPatchInfo): string {
 /** Build the current instrumentation snapshot from the live runtime registry. */
 function currentInstrumentations(): StentInstrumentationConfig[] {
   const runtimePatches = runtime.list().flatMap(info => expandPatchStub(patchStubFromInfo(info)))
-  return orderStentInstrumentations(runtimePatches)
+  const orderedPatches = orderStentInstrumentations(runtimePatches)
+  return orderedPatches
 }
 
 /** Construct a matcher and attach its Stent transform callback. */
@@ -168,15 +168,17 @@ function createMatcher(state: LoaderState, instrumentations: StentInstrumentatio
 
 /** Clear per-installation transform marks for a reloaded module. */
 function clearSeen(filename: string): void {
-  for (const installation of states) installation.seen.delete(filename)
+  for (const installation of states) {
+    installation.seen.delete(filename)
+  }
 }
 /** Whether a matcher selects a loaded module identity. */
 function matcherSelects(matcher: StentMatcher, path: string): boolean {
-  const identity = moduleIdentity(path)
+  const identity = resolvePackageIdentity(path)
   if (identity === undefined) return false
   const transformer = getStentTransformer(matcher, identity.name, identity.version, identity.path)
   if (transformer === undefined) return false
-  freeStentTransformer(transformer)
+  transformer.free()
   return true
 }
 
@@ -229,24 +231,13 @@ function refreshDynamicState(state: LoaderState): void {
   const previousMatcher = state.matcher
   for (const path of Object.keys(nodeRequire.cache)) state.pendingLoadedModules.add(path)
   if (state.syncHooks) for (const url of loadedEsmUrls()) state.pendingLoadedModules.add(url)
-  for (const transformer of state.transformers.values()) freeStentTransformer(transformer)
+  for (const transformer of state.transformers.values()) transformer.free()
   state.transformers.clear()
   state.instrumentations = currentInstrumentations()
   state.matcher = createMatcher(state, state.instrumentations)
   state.pendingPreviousMatchers.push(previousMatcher)
   writeAsyncConfig()
   queueLoadedRetransform(state)
-}
-
-/**
- * Resolve a loaded module's package identity from its nearest package.json.
- * This works for both installed packages and workspace realpaths, including
- * pnpm's isolated node_modules layout.
- * @param urlOrPath - the module URL or filesystem path.
- * @returns the identity for the matcher, or undefined outside any package.
- */
-function moduleIdentity(urlOrPath: string): PackageIdentity | undefined {
-  return resolvePackageIdentity(urlOrPath)
 }
 
 /**
@@ -483,7 +474,7 @@ export function installStentHooks(): () => void {
       resolve: (specifier, context, nextResolve) => {
         const resolved = nextResolve(specifier, context)
         if (!state.active) return resolved
-        const identity = moduleIdentity(resolved.url)
+        const identity = resolvePackageIdentity(resolved.url)
         if (identity === undefined) return resolved
         const transformer = getStentTransformer(state.matcher, identity.name, identity.version, identity.path)
         if (transformer) state.transformers.set(resolved.url, transformer)
@@ -505,7 +496,7 @@ export function installStentHooks(): () => void {
           const source = readSource(result, url)
           const moduleType = context.format === 'module' ? 'esm' : 'cjs'
           const transformed = transformStentSource(transformer, source, moduleType)
-          const identity = moduleIdentity(path)
+          const identity = resolvePackageIdentity(path)
           if (identity !== undefined) flushBindings(stateRef, identity)
           return { ...result, source: transformed.code, shortCircuit: true }
         } catch (error) {
@@ -531,7 +522,7 @@ export function installStentHooks(): () => void {
     state.pendingLoadedModules.clear()
     const index = states.indexOf(state)
     if (index >= 0) states.splice(index, 1)
-    for (const transformer of state.transformers.values()) freeStentTransformer(transformer)
+    for (const transformer of state.transformers.values()) transformer.free()
     state.transformers.clear()
     writeAsyncConfig()
   }
@@ -553,7 +544,7 @@ function installCompileWrapper(): void {
   const compileKey = '_compile'
   const originalCompile = modulePrototype[compileKey] as CompileFn
   modulePrototype[compileKey] = function (this: Module, content: string, filename: string) {
-    const identity = moduleIdentity(filename)
+    const identity = resolvePackageIdentity(filename)
     if (identity !== undefined) {
       for (const state of states) {
         if (!state.active) continue

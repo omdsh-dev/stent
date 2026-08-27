@@ -44,5 +44,7 @@ if (result.error !== undefined) throw result.error
 process.exit(result.status ?? 0)
 
 function appendNodeImports(existing: string | undefined, imports: readonly string[]): string {
-  return [existing, ...imports.map(value => `--import ${JSON.stringify(value)}`)].filter(Boolean).join(' ')
+  const flags = imports.map(value => `--import ${JSON.stringify(value)}`)
+  const values = existing === undefined ? flags : [existing, ...flags]
+  return values.filter(Boolean).join(' ')
 }

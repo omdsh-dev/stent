@@ -165,7 +165,9 @@ export function createInstrumentedTransform(
  * @returns a transform function `(code, id) => output | null`.
  */
 export function createBrowserTransform({ patches, resolve }: BrowserTransformOptions): BrowserTransform {
-  return createInstrumentedTransform(patches.flatMap(expandPatchStub), resolve)
+  const instrumentations = patches.flatMap(expandPatchStub)
+  const transform = createInstrumentedTransform(instrumentations, resolve)
+  return transform
 }
 
 /**

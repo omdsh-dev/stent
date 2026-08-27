@@ -123,12 +123,16 @@ export function validatePatchStatic(patch: {
 
 /** Whether an index field holds a valid match selector: unset, null (every match), or a non-negative integer. */
 function isValidIndex(index: number | null | undefined): boolean {
-  return index === undefined || index === null || (Number.isInteger(index) && index >= 0)
+  if (index === undefined || index === null) return true
+  if (!Number.isInteger(index)) return false
+  return index >= 0
 }
 
 /** Whether a value is a thenable (the async-target result shape). */
 function isThenable(value: unknown): value is PromiseLike<unknown> {
-  return typeof value === 'object' && value !== null && 'then' in value && typeof value.then === 'function'
+  if (typeof value !== 'object' || value === null) return false
+  if (!('then' in value)) return false
+  return typeof value.then === 'function'
 }
 
 /**
@@ -357,8 +361,7 @@ function dispatch(entry: PatchEntry, call: StentBridgeCall): unknown {
     arguments: call.arguments,
     self: call.self,
   }
-  // oxlint-disable-next-line stent/min-function-lines -- direct adapter for the active traced call.
-  const invoke = (): unknown => call.traced()
+  const invoke = call.traced.bind(call)
 
   switch (entry.info.operation) {
     case 'before': {

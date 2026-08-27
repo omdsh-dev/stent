@@ -42,11 +42,6 @@ export function getStentTransformer(
   return matcher.getTransformer(moduleName, version, filePath)
 }
 
-/** Release one module transformer. */
-export function freeStentTransformer(transformer: StentTransformer): void {
-  transformer.free()
-}
-
 /** Transform source with a selected module transformer. */
 export function transformStentSource(
   transformer: StentTransformer,

@@ -419,10 +419,9 @@ function createStentTransform(
  * @returns true when the match targets a constructor.
  */
 function isConstructorTarget(node: Node, parent: Node): boolean {
-  // oxlint-disable-next-line stent/min-function-lines -- local predicate keeps constructor detection isolated.
-  const kindOf = (candidate: Node): unknown =>
-    candidate.type === 'MethodDefinition' ? (candidate as { kind?: unknown }).kind : undefined
-  return kindOf(node) === 'constructor' || kindOf(parent) === 'constructor'
+  const nodeKind = node.type === 'MethodDefinition' ? (node as { kind?: unknown }).kind : undefined
+  const parentKind = parent.type === 'MethodDefinition' ? (parent as { kind?: unknown }).kind : undefined
+  return nodeKind === 'constructor' || parentKind === 'constructor'
 }
 
 /**
