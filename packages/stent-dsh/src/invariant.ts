@@ -15,13 +15,8 @@ export const name = 'stent-dsh-invariant'
 export const inject = ['invariants']
 
 /**
- * No runtime invariant: the low-level Stent registry is process-local
- * machinery whose lifecycle relations are owned by the Cordis service and
- * the transform hooks; every DSH-facing facade delegates to its
- * authoritative domain owner (tools, systemPrompt, commands, agent events,
- * browser command/slot services), which owns the checked relationships.
- * Facade conformance tests and the launcher bootstrap spec pin the
- * delegation instead.
+ * This package delegates invariant ownership to the authoritative DSH services;
+ * its companion only reserves the package registration.
  */
 const install: InvariantInstaller = () => {
   return undefined

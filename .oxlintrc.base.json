@@ -156,6 +156,14 @@
             "considerDefaultExhaustiveForUnions": true
           }
         ],
+        "stent/comment-shorter-than-function": [
+          "error",
+          {
+            "includeAnonymous": false,
+            "includeExported": false,
+            "countCommentDelimiters": false
+          }
+        ],
         "stent/min-function-lines": [
           "error",
           {

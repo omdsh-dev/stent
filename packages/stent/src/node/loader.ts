@@ -241,21 +241,11 @@ function refreshDynamicState(state: LoaderState): void {
 }
 
 /**
- * Whether this Node version exposes a reliable synchronous `registerHooks`
- * API. The function exists from 22.19.0, but before 22.22.3 / 24.11.1 its
- * synchronous load chain returns no source for CommonJS modules when
- * loader-thread hooks (`module.register`, e.g. tsx on those versions) are
- * also present, which crashes Node's load validation; the stable API lands
- * in 22.22.3 and 24.11.1. Below those, the async fallback keeps every hook
- * on one loader-thread chain.
- *
- * Bug sources: the CJS/loader-hook coexistence crash is tracked in
- * https://github.com/nodejs/node/issues/63060 ("CJS module customized by
- * synchronous customization hooks uses synthetic `require` with any use of
- * `--loader`"); the registerHooks API's known caveats and the
- * 22.22.3/24.11.1 stabilization boundary are tracked in
- * https://github.com/nodejs/node/issues/56241 (module.registerHooks()
- * tracking issue).
+ * Whether this Node version exposes reliable synchronous `registerHooks`.
+ * The API is stable from 22.22.3 / 24.11.1; earlier versions can fail when
+ * loader-thread hooks coexist with CommonJS. See
+ * https://github.com/nodejs/node/issues/63060 and
+ * https://github.com/nodejs/node/issues/56241.
  */
 function supportsSyncHooks(): boolean {
   // STENT_FORCE_ASYNC_HOOKS exercises the async `module.register`

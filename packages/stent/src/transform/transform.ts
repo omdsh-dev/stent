@@ -410,14 +410,7 @@ function createStentTransform(
   }
 }
 
-/**
- * Whether the matched node selects a class constructor: either the match is
- * the MethodDefinition itself (a raw `astQuery` naming it) or it is the
- * method's function value (name-based queries and `> [async]` selectors).
- * @param node - the matched AST node.
- * @param parent - the matched node's parent.
- * @returns true when the match targets a constructor.
- */
+/** Whether the matched node selects a class constructor. */
 function isConstructorTarget(node: Node, parent: Node): boolean {
   const nodeKind = node.type === 'MethodDefinition' ? (node as { kind?: unknown }).kind : undefined
   const parentKind = parent.type === 'MethodDefinition' ? (parent as { kind?: unknown }).kind : undefined

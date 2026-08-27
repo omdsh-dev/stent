@@ -6,6 +6,7 @@
  * @module stent/oxlint-plugin
  */
 
+import { commentShorterThanFunction } from './rules/comment-shorter-than-function.ts'
 import { minFunctionLines } from './rules/min-function-lines.ts'
 
 type Rule = typeof minFunctionLines
@@ -21,6 +22,7 @@ const plugin: OxlintPlugin = {
     name: 'stent',
   },
   rules: {
+    'comment-shorter-than-function': commentShorterThanFunction,
     'min-function-lines': minFunctionLines,
   },
 }

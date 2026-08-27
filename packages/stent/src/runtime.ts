@@ -256,47 +256,25 @@ class StentRuntime {
     this.notifyPatchChange({ type: 'remove', id, previous: previous.info })
   }
 
-  /**
-   * Whether the given fiber still owns the entry — the identity check a
-   * registration disposer runs before removing, so a stale generation's
-   * cleanup cannot unregister a newer registration that took the entry over.
-   * @param id - the patch id.
-   * @param fiber - the fiber token the registering service passed.
-   * @returns true while the entry exists and is owned by that fiber.
-   */
+  /** Whether the given fiber still owns the entry. */
   isOwnedBy(id: PatchId, fiber: unknown): boolean {
     const entry = this.entries.get(id)
     return entry !== undefined && entry.fiber === fiber
   }
 
-  /**
-   * Whether a patch is currently registered and enabled.
-   * @param id - the patch id.
-   * @returns true when the patch has an active handler.
-   */
+  /** Whether a patch is currently registered and enabled. */
   isEnabled(id: PatchId): boolean {
     return this.entries.get(id)?.handler !== undefined
   }
 
-  /**
-   * Record load-time bindings for a patch: the files its transform actually
-   * rewrote. The transformation hooks call this once per transformed file;
-   * records append, so one patch accumulates one entry per file across the
-   * process lifetime (re-transforms of the same file append again).
-   * @param id - the patch id the bindings belong to.
-   * @param records - per-file binding records.
-   */
+  /** Record the load-time bindings for a patch. */
   recordBindings(id: PatchId, records: readonly StentBinding[]): void {
     const existing = this.bindings.get(id)
     if (existing) existing.push(...records)
     else this.bindings.set(id, [...records])
   }
 
-  /**
-   * Snapshot of a patch's recorded load-time bindings.
-   * @param id - the patch id.
-   * @returns the recorded bindings, or an empty array when none were recorded.
-   */
+  /** Return the recorded load-time bindings for a patch. */
   bindingsOf(id: PatchId): readonly StentBinding[] {
     return this.bindings.get(id) ?? []
   }
