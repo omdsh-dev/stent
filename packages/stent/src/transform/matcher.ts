@@ -1,12 +1,20 @@
 /**
- * Orchestrion matcher operations shared by the Node and browser adapters.
- * All creation, lookup, transform, and disposal calls into the third-party
- * matcher stay in this module.
+ * Orchestrion matcher operations shared by the Node and browser adapters. All
+ * creation, lookup, transform, and disposal calls into the third-party matcher
+ * stay in this module.
+ *
  * @module @oh-my-dsh/stent/transform/matcher
  */
 
-import { createOrchestrion, type InstrumentationMatcher, type Transformer } from './orchestrion.ts'
-import { orderInstrumentations, type StentInstrumentationConfig } from './config.ts'
+import {
+  orderInstrumentations,
+  type StentInstrumentationConfig,
+} from './config.ts'
+import {
+  createOrchestrion,
+  type InstrumentationMatcher,
+  type Transformer,
+} from './orchestrion.ts'
 import { registerStentTransform } from './transform.ts'
 
 /** Matcher with the Stent custom transform registered. */
@@ -27,7 +35,9 @@ export function createStentMatcher(
   instrumentations: readonly StentInstrumentationConfig[],
   onMatch?: (patchId: string) => void,
 ): StentMatcher {
-  const matcher = createOrchestrion(orderStentInstrumentations(instrumentations))
+  const matcher = createOrchestrion(
+    orderStentInstrumentations(instrumentations),
+  )
   registerStentTransform(matcher, onMatch)
   return matcher
 }
@@ -49,5 +59,7 @@ export function transformStentSource(
   moduleType: 'esm' | 'cjs',
 ): { code: string; map?: string } {
   const result = transformer.transform(source, moduleType)
-  return result.map === undefined ? { code: result.code } : { code: result.code, map: result.map }
+  return result.map === undefined
+    ? { code: result.code }
+    : { code: result.code, map: result.map }
 }

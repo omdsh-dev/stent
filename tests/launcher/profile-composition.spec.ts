@@ -1,9 +1,17 @@
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { createRequire } from 'node:module'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
+
 import { composeStentConfig } from '../../src/stent-dsh/profile.ts'
 
 class FakeYamlType {
@@ -22,8 +30,8 @@ function createYaml(): {
   return {
     Type: FakeYamlType,
     DEFAULT_SCHEMA: { extend: (_types: unknown[]) => ({}) },
-    load: text => JSON.parse(text) as unknown,
-    dump: value => JSON.stringify(value),
+    load: (text) => JSON.parse(text) as unknown,
+    dump: (value) => JSON.stringify(value),
   }
 }
 
@@ -48,10 +56,17 @@ function compose(
             id: 'stent',
             name: '@oh-my-dsh/stent',
             disabled: true,
-            config: legacyPatchConfig ? { stent: { patches: [{ id: 'legacy/patch' }] } } : { stent: { dynamic: true } },
+            config: legacyPatchConfig
+              ? { stent: { patches: [{ id: 'legacy/patch' }] } }
+              : { stent: { dynamic: true } },
           },
           { id: 'stent-dsh', name: '@oh-my-dsh/stent-dsh', disabled: true },
-          { id: 'dynamic-plugin', name: '@example/dynamic-plugin', disabled: true, config: { stent: true } },
+          {
+            id: 'dynamic-plugin',
+            name: '@example/dynamic-plugin',
+            disabled: true,
+            config: { stent: true },
+          },
         ],
       },
     ]),
@@ -73,7 +88,9 @@ function compose(
       },
       dshHome: pathToFileURL(join(root, 'home')),
       profileDir: pathToFileURL(profileDir),
-      requireFromProfile: createRequire(pathToFileURL(join(profileDir, 'package.json'))),
+      requireFromProfile: createRequire(
+        pathToFileURL(join(profileDir, 'package.json')),
+      ),
       yaml: createYaml(),
     })
   } catch (error) {
@@ -99,7 +116,9 @@ describe('stent profile composition', () => {
         { id: 'dynamic-plugin', disabled: false },
         { id: 'stent-dsh', disabled: false },
       ])
-      expect(JSON.parse(readFileSync(composed.result.enablePath, 'utf8'))).toEqual([
+      expect(
+        JSON.parse(readFileSync(composed.result.enablePath, 'utf8')),
+      ).toEqual([
         { id: 'dynamic-plugin', disabled: false },
         { id: 'stent-dsh', disabled: false },
       ])
@@ -129,6 +148,8 @@ describe('stent profile composition', () => {
   })
 
   it('rejects legacy YAML patch descriptors instead of silently ignoring them', () => {
-    expect(() => compose('web', true)).toThrow(/config\.stent\.patches.*register patch metadata in plugin code/)
+    expect(() => compose('web', true)).toThrow(
+      /config\.stent\.patches.*register patch metadata in plugin code/,
+    )
   })
 })

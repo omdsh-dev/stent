@@ -1,13 +1,14 @@
-import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import CommandService from '@deepseek-ai/dsh-commands'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRegistry from '@deepseek-ai/dsh-tools'
-import CommandService from '@deepseek-ai/dsh-commands'
-import * as api from '../../src/index.ts'
+import { describe, expect, it } from 'vitest'
+
 import { StentAgentService } from '../../src/host/agent.ts'
-import { StentToolsService } from '../../src/host/tools.ts'
-import { StentPromptService } from '../../src/host/prompt.ts'
 import { StentCommandsService } from '../../src/host/commands.ts'
+import { StentPromptService } from '../../src/host/prompt.ts'
+import { StentToolsService } from '../../src/host/tools.ts'
+import * as api from '../../src/index.ts'
 
 describe('stent-dsh Host bundle', () => {
   it('mounts all four Host modules with the declared injections', async () => {

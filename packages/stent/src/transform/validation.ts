@@ -3,6 +3,7 @@
  *
  * The runtime and platform adapters may reuse these guards, but the
  * transformation layer never imports those modules.
+ *
  * @module @oh-my-dsh/stent/transform/validation
  */
 
@@ -11,51 +12,77 @@ import type { PatchId, StentPatchStub } from './types.ts'
 /** Validate a patch id for diagnostics and generated bridge calls. */
 export function validatePatchId(id: PatchId): void {
   if (!/^[A-Za-z0-9._:/+-]{1,120}$/.test(id)) {
-    throw new Error(`stent: patch id ${JSON.stringify(id)} must be 1-120 chars of [A-Za-z0-9._:/+-]`)
+    throw new Error(
+      `stent: patch id ${JSON.stringify(id)} must be 1-120 chars of [A-Za-z0-9._:/+-]`,
+    )
   }
 }
 
 /** Validate static patch fields before an instrumentation is built. */
-export function validatePatchStatic(patch: Pick<StentPatchStub, 'target' | 'operation' | 'required'>): void {
+export function validatePatchStatic(
+  patch: Pick<StentPatchStub, 'target' | 'operation' | 'required'>,
+): void {
   const target = patch.target
   if (typeof target.module !== 'string' || target.module.length === 0) {
     throw new Error('stent: patch target.module must be a non-empty string')
   }
-  if (typeof target.versionRange !== 'string' || target.versionRange.length === 0) {
-    throw new Error('stent: patch target.versionRange must be a non-empty string')
+  if (
+    typeof target.versionRange !== 'string'
+    || target.versionRange.length === 0
+  ) {
+    throw new Error(
+      'stent: patch target.versionRange must be a non-empty string',
+    )
   }
-  const hasFilePath = typeof target.filePath === 'string' || target.filePath instanceof RegExp
+  const hasFilePath =
+    typeof target.filePath === 'string' || target.filePath instanceof RegExp
   if (!hasFilePath && target.filePaths === undefined) {
     throw new Error('stent: patch target must carry filePath or filePaths')
   }
   if (hasFilePath && target.filePaths !== undefined) {
-    throw new Error('stent: patch target must carry filePath or filePaths, not both')
+    throw new Error(
+      'stent: patch target must carry filePath or filePaths, not both',
+    )
   }
   if (
-    target.filePaths !== undefined &&
-    (!Array.isArray(target.filePaths) ||
-      target.filePaths.length === 0 ||
-      target.filePaths.some(path => typeof path !== 'string' || path.length === 0))
+    target.filePaths !== undefined
+    && (!Array.isArray(target.filePaths)
+      || target.filePaths.length === 0
+      || target.filePaths.some(
+        (path) => typeof path !== 'string' || path.length === 0,
+      ))
   ) {
-    throw new Error('stent: patch target.filePaths must be a non-empty array of non-empty strings')
+    throw new Error(
+      'stent: patch target.filePaths must be a non-empty array of non-empty strings',
+    )
   }
   if (patch.required !== undefined && typeof patch.required !== 'boolean') {
     throw new Error('stent: patch.required must be a boolean when present')
   }
   if (!isValidIndex(target.index)) {
-    throw new Error('stent: patch target.index must be a non-negative integer or null')
+    throw new Error(
+      'stent: patch target.index must be a non-negative integer or null',
+    )
   }
   if (!isValidIndex(target.functionQuery?.index)) {
-    throw new Error('stent: patch target functionQuery.index must be a non-negative integer or null')
+    throw new Error(
+      'stent: patch target functionQuery.index must be a non-negative integer or null',
+    )
   }
   if (!['before', 'after', 'around', 'replace'].includes(patch.operation)) {
-    throw new Error(`stent: unknown operation ${JSON.stringify(patch.operation)}`)
+    throw new Error(
+      `stent: unknown operation ${JSON.stringify(patch.operation)}`,
+    )
   }
 }
 
 /** Whether an index is unset, null, or a non-negative integer. */
 function isValidIndex(index: number | null | undefined): boolean {
-  if (index === undefined || index === null) return true
-  if (!Number.isInteger(index)) return false
+  if (index === undefined || index === null) {
+    return true
+  }
+  if (!Number.isInteger(index)) {
+    return false
+  }
   return index >= 0
 }

@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import CommandService from '@deepseek-ai/dsh-commands'
+import { describe, expect, it } from 'vitest'
+
 import { StentCommandsService } from '../../src/host/commands.ts'
 
 const fakeAgent = {} as Agent
@@ -21,9 +22,13 @@ describe('StentCommandsService', () => {
       description: 'mod status',
       handler: () => ({ kind: 'success' as const, text: 'ok' }),
     })
-    expect(ctx.stentCommands.list(fakeAgent).map(c => c.name)).toContain('modstatus')
+    expect(ctx.stentCommands.list(fakeAgent).map((c) => c.name)).toContain(
+      'modstatus',
+    )
     dispose()
-    expect(ctx.stentCommands.list(fakeAgent).map(c => c.name)).not.toContain('modstatus')
+    expect(ctx.stentCommands.list(fakeAgent).map((c) => c.name)).not.toContain(
+      'modstatus',
+    )
   })
 
   it('removes a command when its contributing fiber disposes (HMR safety)', async () => {
@@ -39,9 +44,13 @@ describe('StentCommandsService', () => {
         })
       },
     })
-    expect(ctx.stentCommands.list(fakeAgent).map(c => c.name)).toContain('modscoped')
+    expect(ctx.stentCommands.list(fakeAgent).map((c) => c.name)).toContain(
+      'modscoped',
+    )
     await mod.dispose()
-    expect(ctx.stentCommands.list(fakeAgent).map(c => c.name)).not.toContain('modscoped')
+    expect(ctx.stentCommands.list(fakeAgent).map((c) => c.name)).not.toContain(
+      'modscoped',
+    )
   })
 
   it('inherits authoritative duplicate-name failures', async () => {
@@ -52,6 +61,8 @@ describe('StentCommandsService', () => {
       handler: () => ({ kind: 'success' as const }),
     }
     ctx.stentCommands.register(definition)
-    expect(() => ctx.stentCommands.register(definition)).toThrow(/already registered/)
+    expect(() => ctx.stentCommands.register(definition)).toThrow(
+      /already registered/,
+    )
   })
 })

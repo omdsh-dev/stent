@@ -8,6 +8,7 @@
  * callbacks receive the live Agent only where the owning event already does,
  * and every registration returns the exact disposer of the underlying
  * `ctx.on()` effect, so disposal and scope semantics are inherited unchanged.
+ *
  * @module @oh-my-dsh/stent-dsh/host/agent
  */
 
@@ -37,6 +38,7 @@ export class StentAgentService extends Service {
 
   /**
    * Create and install the Agent API.
+   *
    * @param ctx - Cordis context that owns the service.
    */
   constructor(ctx: Context) {
@@ -45,33 +47,38 @@ export class StentAgentService extends Service {
 
   /**
    * Observe a live agent being created.
-   * @param listener - called with the created agent.
-   * @returns the exact `ctx.on()` disposer removing this listener.
+   *
+   * @param listener - Called with the created agent.
+   * @returns The exact `ctx.on()` disposer removing this listener.
    */
   onCreated(listener: (agent: Agent) => void): () => boolean {
-    return this.ctx.on('agent/created', payload => {
+    return this.ctx.on('agent/created', (payload) => {
       listener(payload.agent)
     })
   }
 
   /**
    * Observe a live agent being disposed.
-   * @param listener - called with the disposed agent.
-   * @returns the exact `ctx.on()` disposer removing this listener.
+   *
+   * @param listener - Called with the disposed agent.
+   * @returns The exact `ctx.on()` disposer removing this listener.
    */
   onDisposed(listener: (agent: Agent) => void): () => boolean {
-    return this.ctx.on('agent/disposed', payload => {
+    return this.ctx.on('agent/disposed', (payload) => {
       listener(payload.agent)
     })
   }
 
   /**
    * Observe an agent's idle/running status transitions.
-   * @param listener - called with the agent and its new status.
-   * @returns the exact `ctx.on()` disposer removing this listener.
+   *
+   * @param listener - Called with the agent and its new status.
+   * @returns The exact `ctx.on()` disposer removing this listener.
    */
-  onStatus(listener: (agent: Agent, status: AgentStatus) => void): () => boolean {
-    return this.ctx.on('agent/status', payload => {
+  onStatus(
+    listener: (agent: Agent, status: AgentStatus) => void,
+  ): () => boolean {
+    return this.ctx.on('agent/status', (payload) => {
       listener(payload.agent, payload.status)
     })
   }
@@ -83,8 +90,9 @@ export class StentAgentService extends Service {
    * injection path: anything this API contributes to a model request is
    * reconstructable from the session log. No provider request is assembled
    * here.
-   * @param agent - the live agent to inject into.
-   * @param message - the sourced user message to append.
+   *
+   * @param agent - The live agent to inject into.
+   * @param message - The sourced user message to append.
    */
   inject(agent: Agent, message: UserMessage): void {
     agent.inject(message)

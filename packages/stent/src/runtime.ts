@@ -2,22 +2,30 @@
  * Process-local Stent runtime: owns patch lifecycle state and dispatches
  * transformed calls published through the shared bridge.
  *
- * The runtime is intentionally Cordis-free. Transformed target code runs
- * before any Cordis context exists and must never receive a `Context`;
- * dispatch happens through the bridge's in-memory listener set, keyed by
- * patch id. The Cordis service attaches and detaches handlers here.
+ * The runtime is intentionally Cordis-free. Transformed target code runs before
+ * any Cordis context exists and must never receive a `Context`; dispatch
+ * happens through the bridge's in-memory listener set, keyed by patch id. The
+ * Cordis service attaches and detaches handlers here.
  *
- * The subscription is installed on first enable and intentionally never
- * removed while the process lives: transformed modules are already evaluated
- * and keep publishing to the bridge, and removing the subscription would
- * strand them with a dead slot across fiber reloads. Disabling a patch
- * removes its handler, so transformed code then delegates to the original
- * body through the no-listener path in the bridge.
+ * The subscription is installed on first enable and intentionally never removed
+ * while the process lives: transformed modules are already evaluated and keep
+ * publishing to the bridge, and removing the subscription would strand them
+ * with a dead slot across fiber reloads. Disabling a patch removes its handler,
+ * so transformed code then delegates to the original body through the
+ * no-listener path in the bridge.
+ *
  * @module @oh-my-dsh/stent/runtime
  */
 
 import { subscribeBridge, type StentBridgeCall } from './bridge.ts'
-import type { StentBinding, StentCall, StentHandler, StentPatchInfo, StentTarget, PatchId } from './types.ts'
+import type {
+  StentBinding,
+  StentCall,
+  StentHandler,
+  StentPatchInfo,
+  StentTarget,
+  PatchId,
+} from './types.ts'
 
 export { validatePatchId, validatePatchStatic } from './transform/validation.ts'
 
@@ -28,11 +36,11 @@ interface PatchEntry {
   /** Currently installed handler, when the patch is enabled. */
   handler: StentHandler | undefined
   /**
-   * Identity of the registration owner: a patch id is exclusive to one
-   * owner, and only the same owner may re-register it (an HMR generation
-   * replaces its plugin's own patch; a different plugin's same-id claim is
-   * rejected). The Cordis service resolves the owner from the registering
-   * fiber (loader entry, plugin callback, or the fiber itself).
+   * Identity of the registration owner: a patch id is exclusive to one owner,
+   * and only the same owner may re-register it (an HMR generation replaces its
+   * plugin's own patch; a different plugin's same-id claim is rejected). The
+   * Cordis service resolves the owner from the registering fiber (loader entry,
+   * plugin callback, or the fiber itself).
    */
   owner: unknown
   /**
@@ -56,14 +64,16 @@ export type StentPatchChangeListener = (change: StentPatchChange) => void
 
 /** Whether a value is a thenable (the async-target result shape). */
 function isThenable(value: unknown): value is PromiseLike<unknown> {
-  if (typeof value !== 'object' || value === null) return false
-  if (!('then' in value)) return false
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  if (!('then' in value)) {
+    return false
+  }
   return typeof value.then === 'function'
 }
 
-/**
- * Registry of enabled Stent patches with the shared bridge subscription.
- */
+/** Registry of enabled Stent patches with the shared bridge subscription. */
 class StentRuntime {
   private readonly entries = new Map<PatchId, PatchEntry>()
   /** Load-time bindings per patch, recorded by the transformation hooks. */
@@ -76,8 +86,8 @@ class StentRuntime {
    * Subscribe to patch metadata changes.
    *
    * The Node loader uses this to rebuild its instrumentation matcher when a
-   * plugin registers or removes a patch. Handler enable/disable changes do
-   * not emit events because transformed code dispatches through the runtime.
+   * plugin registers or removes a patch. Handler enable/disable changes do not
+   * emit events because transformed code dispatches through the runtime.
    */
   onPatchChange(listener: StentPatchChangeListener): () => void {
     this.patchListeners.add(listener)
@@ -88,31 +98,38 @@ class StentRuntime {
 
   /** Notify all loader subscribers after the registry has changed. */
   private notifyPatchChange(change: StentPatchChange): void {
-    for (const listener of this.patchListeners) listener(change)
+    for (const listener of this.patchListeners) {
+      listener(change)
+    }
   }
 
   /**
    * Register patch metadata; the patch stays disabled until
    * {@link StentRuntime.enable} installs its handler.
-   * @param info - validated patch metadata.
-   * @param owner - identity of the registration owner; defaults to the patch
-   * id for raw-runtime callers. Re-registering an id owned by a different
-   * owner fails loud — a patch id is exclusive to one plugin — while the same
-   * owner may re-register (an HMR generation takes its plugin's patch back)
-   * and transfer {@link PatchEntry.fiber fiber} ownership.
-   * @param fiber - the fiber whose disposal owns the entry's removal; the
-   * Cordis service passes the registering fiber so its disposer can check
-   * {@link StentRuntime.isOwnedBy}.
-   * @returns whether the id was newly registered (false re-registers metadata).
-   * @throws when another `replace` patch already claims the same target, or
-   * when the id is already registered by a different owner.
+   *
+   * @param info - Validated patch metadata.
+   * @param owner - Identity of the registration owner; defaults to the patch id
+   *   for raw-runtime callers. Re-registering an id owned by a different owner
+   *   fails loud — a patch id is exclusive to one plugin — while the same owner
+   *   may re-register (an HMR generation takes its plugin's patch back) and
+   *   transfer {@link PatchEntry.fiber fiber} ownership.
+   * @param fiber - The fiber whose disposal owns the entry's removal; the
+   *   Cordis service passes the registering fiber so its disposer can check
+   *   {@link StentRuntime.isOwnedBy}.
+   * @returns Whether the id was newly registered (false re-registers metadata).
+   * @throws When another `replace` patch already claims the same target, or
+   *   when the id is already registered by a different owner.
    */
-  register(info: StentPatchInfo, owner: unknown = info.id, fiber?: unknown): boolean {
+  register(
+    info: StentPatchInfo,
+    owner: unknown = info.id,
+    fiber?: unknown,
+  ): boolean {
     const previous = this.entries.get(info.id)
     if (previous && previous.owner !== owner) {
       throw new Error(
-        `stent: patch ${JSON.stringify(info.id)} is already registered by another owner; ` +
-          'a patch id is exclusive to one plugin (HMR re-registration reuses the same owner)',
+        `stent: patch ${JSON.stringify(info.id)} is already registered by another owner; `
+          + 'a patch id is exclusive to one plugin (HMR re-registration reuses the same owner)',
       )
     }
     if (info.operation === 'replace') {
@@ -122,38 +139,63 @@ class StentRuntime {
       // pass the exclusive-target scan (a first registration as `before`
       // must not be able to re-register into an already-claimed replace
       // target by bypassing the check).
-      const selfClaim = previous?.info.operation === 'replace' && targetKey(previous.info.target) === key
+      const selfClaim =
+        previous?.info.operation === 'replace'
+        && targetKey(previous.info.target) === key
       if (!selfClaim) {
         for (const [id, existing] of this.entries) {
-          if (id === info.id) continue
-          if (existing.info.operation === 'replace' && targetKey(existing.info.target) === key) {
+          if (id === info.id) {
+            continue
+          }
+          if (
+            existing.info.operation === 'replace'
+            && targetKey(existing.info.target) === key
+          ) {
             throw new Error(
-              `stent: replace patch ${JSON.stringify(info.id)} conflicts with existing ` +
-                `replace patch ${JSON.stringify(existing.info.id)} on the same target`,
+              `stent: replace patch ${JSON.stringify(info.id)} conflicts with existing `
+                + `replace patch ${JSON.stringify(existing.info.id)} on the same target`,
             )
           }
         }
       }
     }
-    this.entries.set(info.id, { info, handler: previous?.handler, owner, fiber })
-    const change: StentPatchChange = { type: 'register', id: info.id, current: info }
-    if (previous !== undefined) change.previous = previous.info
+    this.entries.set(info.id, {
+      info,
+      handler: previous?.handler,
+      owner,
+      fiber,
+    })
+    const change: StentPatchChange = {
+      type: 'register',
+      id: info.id,
+      current: info,
+    }
+    if (previous !== undefined) {
+      change.previous = previous.info
+    }
     this.notifyPatchChange(change)
     return previous === undefined
   }
 
   /**
    * Install a patch's handler and ensure the bridge subscription exists.
-   * @param id - the patch id.
-   * @param handler - the trusted runtime handler.
+   *
+   * @param id - The patch id.
+   * @param handler - The trusted runtime handler.
    */
   enable(id: PatchId, handler: StentHandler): void {
     const entry = this.entries.get(id)
-    if (!entry) throw new Error(`stent: cannot enable unregistered patch ${JSON.stringify(id)}`)
+    if (!entry) {
+      throw new Error(
+        `stent: cannot enable unregistered patch ${JSON.stringify(id)}`,
+      )
+    }
     if (typeof handler !== 'function') {
       // Fail loud at enable (the earliest resolvable point) instead of
       // crashing inside a transformed call when dispatch tries to run it.
-      throw new Error(`stent: handler for patch ${JSON.stringify(id)} must be a function`)
+      throw new Error(
+        `stent: handler for patch ${JSON.stringify(id)} must be a function`,
+      )
     }
     entry.handler = handler
     this.subscribe()
@@ -161,23 +203,29 @@ class StentRuntime {
 
   /**
    * Remove a patch's handler; the bridge subscription (if any) stays alive.
-   * @param id - the patch id.
+   *
+   * @param id - The patch id.
    */
   disable(id: PatchId): void {
     const entry = this.entries.get(id)
-    if (!entry) return
+    if (!entry) {
+      return
+    }
     entry.handler = undefined
   }
 
   /**
    * Remove a patch entirely. The bridge subscription stays alive so any
-   * transformed module already evaluated keeps delegating to the original
-   * body rather than publishing into a dead slot.
-   * @param id - the patch id.
+   * transformed module already evaluated keeps delegating to the original body
+   * rather than publishing into a dead slot.
+   *
+   * @param id - The patch id.
    */
   remove(id: PatchId): void {
     const previous = this.entries.get(id)
-    if (previous === undefined) return
+    if (previous === undefined) {
+      return
+    }
     this.entries.delete(id)
     this.notifyPatchChange({ type: 'remove', id, previous: previous.info })
   }
@@ -196,8 +244,11 @@ class StentRuntime {
   /** Record the load-time bindings for a patch. */
   recordBindings(id: PatchId, records: readonly StentBinding[]): void {
     const existing = this.bindings.get(id)
-    if (existing) existing.push(...records)
-    else this.bindings.set(id, [...records])
+    if (existing) {
+      existing.push(...records)
+    } else {
+      this.bindings.set(id, [...records])
+    }
   }
 
   /** Return the recorded load-time bindings for a patch. */
@@ -207,7 +258,8 @@ class StentRuntime {
 
   /**
    * Snapshot of every recorded binding, flattened in patch-id order.
-   * @returns all recorded bindings across patches.
+   *
+   * @returns All recorded bindings across patches.
    */
   allBindings(): readonly StentBinding[] {
     return [...this.bindings.entries()]
@@ -217,21 +269,33 @@ class StentRuntime {
 
   /**
    * Ordered diagnostic snapshot of all registered patches.
-   * @returns the patch infos sorted by priority then id, each carrying its
-   * recorded load-time bindings.
+   *
+   * @returns The patch infos sorted by priority then id, each carrying its
+   *   recorded load-time bindings.
    */
   list(): StentPatchInfo[] {
     return [...this.entries.values()]
-      .map(entry => ({ ...entry.info, enabled: entry.handler !== undefined, bindings: this.bindingsOf(entry.info.id) }))
-      .sort((a, b) => a.priority - b.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((entry) => ({
+        ...entry.info,
+        enabled: entry.handler !== undefined,
+        bindings: this.bindingsOf(entry.info.id),
+      }))
+      .sort(
+        (a, b) =>
+          a.priority - b.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+      )
   }
 
   private subscribe(): void {
-    if (this.subscribed) return
+    if (this.subscribed) {
+      return
+    }
     this.subscribed = true
-    subscribeBridge(call => {
+    subscribeBridge((call) => {
       const entry = this.entries.get(call.id)
-      if (!entry) return call.traced()
+      if (!entry) {
+        return call.traced()
+      }
       return dispatch(entry, call)
     })
   }
@@ -239,24 +303,30 @@ class StentRuntime {
 
 /** Stable identity of a patch target for conflict detection. */
 function targetKey(target: StentTarget): string {
-  const selector = target.astQuery ?? JSON.stringify(target.functionQuery ?? null)
-  const files = target.filePath ?? (target.filePaths === undefined ? null : target.filePaths.join('|'))
+  const selector =
+    target.astQuery ?? JSON.stringify(target.functionQuery ?? null)
+  const files =
+    target.filePath
+    ?? (target.filePaths === undefined ? null : target.filePaths.join('|'))
   return [target.module, target.versionRange, String(files), selector].join('|')
 }
 
 /**
- * Run the enabled handler for one transformed call. `before` mutates
- * arguments then delegates; `after` delegates then mutates the result;
- * `around` and `replace` decide whether the original body runs and may
- * supply their own result.
- * @param entry - the patch's runtime state.
- * @param call - the call record published by the transform.
- * @returns the value the wrapped function should return: the handler's
- * result for `around`/`replace`, the traced body's result otherwise.
+ * Run the enabled handler for one transformed call. `before` mutates arguments
+ * then delegates; `after` delegates then mutates the result; `around` and
+ * `replace` decide whether the original body runs and may supply their own
+ * result.
+ *
+ * @param entry - The patch's runtime state.
+ * @param call - The call record published by the transform.
+ * @returns The value the wrapped function should return: the handler's result
+ *   for `around`/`replace`, the traced body's result otherwise.
  */
 function dispatch(entry: PatchEntry, call: StentBridgeCall): unknown {
   const handler = entry.handler
-  if (!handler) return call.traced()
+  if (!handler) {
+    return call.traced()
+  }
   // The handler union's members are distinguished only by their arity; the
   // operation switch selects the calling convention at runtime.
   const observe = handler as (call: StentCall) => unknown
@@ -280,7 +350,7 @@ function dispatch(entry: PatchEntry, call: StentBridgeCall): unknown {
         // and the caller's await resolves to the final value. A handler that
         // returns `undefined` keeps the (possibly in-place mutated)
         // `record.result`, mirroring the sync branch below.
-        return result.then(value => {
+        return result.then((value) => {
           record.result = value
           const rewritten = observe(record)
           return rewritten === undefined ? record.result : rewritten

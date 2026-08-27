@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
 
 const runner = fileURLToPath(new URL('./child-runner.mjs', import.meta.url))
@@ -9,22 +10,37 @@ function runCase(name: string): string {
   // tsconfig (whose paths lack these packages); children must resolve
   // against this repo's own tsconfig so source-mode imports stay on src.
   const childEnv = { ...process.env }
-  const result = spawnSync(process.execPath, ['--import', 'tsx/esm', runner, name], {
-    cwd: fileURLToPath(new URL('../../..', import.meta.url)),
-    encoding: 'utf8',
-    env: childEnv,
-  })
-  expect(result.status, `child ${name} exited 0\n${result.stdout}\n${result.stderr}`).toBe(0)
+  const result = spawnSync(
+    process.execPath,
+    ['--import', 'tsx/esm', runner, name],
+    {
+      cwd: fileURLToPath(new URL('../../..', import.meta.url)),
+      encoding: 'utf8',
+      env: childEnv,
+    },
+  )
+  expect(
+    result.status,
+    `child ${name} exited 0\n${result.stdout}\n${result.stderr}`,
+  ).toBe(0)
   return result.stdout
 }
 
 describe('stent load-time transformation (child processes)', () => {
   it('rejects calls with legacy installation arguments and accepts installStentHooks()', () => {
     const out = runCase('installGuard')
-    expect(out).toContain('PASS installGuard rejects every call with arguments: 3')
-    expect(out).toContain('PASS installGuard explains the no-argument form: true')
-    expect(out).toContain('PASS installGuard accepts installStentHooks: "function"')
-    expect(out).toContain('PASS installGuard rejects duplicate active installation: true')
+    expect(out).toContain(
+      'PASS installGuard rejects every call with arguments: 3',
+    )
+    expect(out).toContain(
+      'PASS installGuard explains the no-argument form: true',
+    )
+    expect(out).toContain(
+      'PASS installGuard accepts installStentHooks: "function"',
+    )
+    expect(out).toContain(
+      'PASS installGuard rejects duplicate active installation: true',
+    )
   })
 
   it('adds plugin-registered metadata before a target module is loaded', () => {
@@ -41,7 +57,9 @@ describe('stent load-time transformation (child processes)', () => {
 
   it('coalesces rapid runtime registration and removal changes', () => {
     const out = runCase('dynamicBurst')
-    expect(out).toContain('PASS dynamicBurst final patch after register/remove burst: 203')
+    expect(out).toContain(
+      'PASS dynamicBurst final patch after register/remove burst: 203',
+    )
     expect(out).toContain('PASS dynamicBurst original after removal burst: 5')
   })
 
@@ -99,7 +117,9 @@ describe('stent load-time transformation (child processes)', () => {
 
   it('transforms async generator functions with preserved iteration semantics', () => {
     const out = runCase('asyncGenerator')
-    expect(out).toContain('PASS asyncGenerator patched asyncCounter(3): "[0,1,2,3,4,5]"')
+    expect(out).toContain(
+      'PASS asyncGenerator patched asyncCounter(3): "[0,1,2,3,4,5]"',
+    )
   })
 
   it('transforms arrow functions with plain identifier parameters', () => {
@@ -188,7 +208,9 @@ describe('stent load-time transformation (child processes)', () => {
     const out = runCase('retransformEsmRollback')
     expect(out).toContain('PASS retransformEsmRollback initial value: 1')
     expect(out).toContain('PASS retransformEsmRollback re-import fails: true')
-    expect(out).toContain('PASS retransformEsmRollback restores cached instance: true')
+    expect(out).toContain(
+      'PASS retransformEsmRollback restores cached instance: true',
+    )
   })
 
   it('invalidates both the require cache and the ESM load cache for CommonJS', () => {
@@ -197,14 +219,18 @@ describe('stent load-time transformation (child processes)', () => {
     expect(out).toContain('PASS retransformCjsDual v1 add(2,3): 23')
     expect(out).toContain('PASS retransformCjsDual reloaded add(2,3): 203')
     expect(out).toContain('PASS retransformCjsDual old instance detached: true')
-    expect(out).toContain('PASS retransformCjsDual esm re-import shares reload: true')
+    expect(out).toContain(
+      'PASS retransformCjsDual esm re-import shares reload: true',
+    )
     expect(out).toContain('PASS retransformCjsDual esm add(2,3): 203')
   })
 
   it('records load-time bindings for the files a transform actually rewrote', () => {
     const out = runCase('bindingsReported')
     expect(out).toContain('PASS bindingsReported one record: 1')
-    expect(out).toContain('PASS bindingsReported module: "stent-target-fixture"')
+    expect(out).toContain(
+      'PASS bindingsReported module: "stent-target-fixture"',
+    )
     expect(out).toContain('PASS bindingsReported file: "index.mjs"')
     expect(out).toContain('PASS bindingsReported nodes: 1')
     expect(out).toContain('PASS bindingsReported list() summary: 1')

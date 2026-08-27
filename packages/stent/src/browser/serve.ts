@@ -1,27 +1,29 @@
 /**
- * Runtime browser-bundle serving for Stent: serve a browser bundle with a
- * Stent transform applied, through the webserver's exact route table — the
- * runtime counterpart of {@link createBrowserTransform} for compositions
- * whose target bundle cannot be transformed at build time.
+ * Runtime browser-bundle serving for Stent: serve a browser bundle with a Stent
+ * transform applied, through the webserver's exact route table — the runtime
+ * counterpart of {@link createBrowserTransform} for compositions whose target
+ * bundle cannot be transformed at build time.
  *
- * The exact route outranks the module host's `/plugins` prefix (the exact
- * table wins before longest-prefix), so one package can own a single
- * bundle path without a route conflict. The served bytes are cached per
- * source content; only GET/HEAD are served (405 otherwise); an unreadable
- * bundle is 404; a transform that matches nothing or fails is loud by
- * default (500 naming the patch id) and serves the raw bundle only with
- * `fallback: 'raw'`.
+ * The exact route outranks the module host's `/plugins` prefix (the exact table
+ * wins before longest-prefix), so one package can own a single bundle path
+ * without a route conflict. The served bytes are cached per source content;
+ * only GET/HEAD are served (405 otherwise); an unreadable bundle is 404; a
+ * transform that matches nothing or fails is loud by default (500 naming the
+ * patch id) and serves the raw bundle only with `fallback: 'raw'`.
+ *
  * @module @oh-my-dsh/stent/browser/internal-serve
  */
 
 import { readFileSync } from 'node:fs'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import type { IncomingMessage, ServerResponse } from 'node:http'
+
 import type { Context } from '@deepseek-ai/cordis'
+
 import { createBrowserTransform } from '../transform/browser.ts'
-import { resolvePackageIdentity } from '../transform/identity.ts'
 import type { TransformOutput } from '../transform/browser.ts'
+import { resolvePackageIdentity } from '../transform/identity.ts'
 import type { StentPatchStub } from '../types.ts'
 
 /** Options for {@link serveBrowserTransform}. */
@@ -41,9 +43,8 @@ export interface ServeBrowserTransformOptions {
   patches: readonly StentPatchStub[]
   /**
    * Degradation when the transform matches nothing or fails: `'error'`
-   * (default) fails the request loud with a 500 naming the patch id;
-   * `'raw'` serves the bundle untouched (the app keeps working, the
-   * feature degrades).
+   * (default) fails the request loud with a 500 naming the patch id; `'raw'`
+   * serves the bundle untouched (the app keeps working, the feature degrades).
    */
   fallback?: 'raw' | 'error'
 }
@@ -57,23 +58,28 @@ class BundleUnreadableError extends Error {
 }
 
 /**
- * Serve a browser bundle with one or more Stent transforms applied,
- * through an exact webserver route owned by the calling fiber.
+ * Serve a browser bundle with one or more Stent transforms applied, through an
+ * exact webserver route owned by the calling fiber.
  *
- * The route is registered as a fiber effect: disposing the fiber removes
- * it. The returned disposer removes it immediately (idempotent with the
- * fiber cleanup). The bundle path is resolved from the patches' `module`
- * package through the Loader composition anchor (`ctx.baseUrl`), not through
- * Stent's own dependency tree; the transforms and matcher are built once at
+ * The route is registered as a fiber effect: disposing the fiber removes it.
+ * The returned disposer removes it immediately (idempotent with the fiber
+ * cleanup). The bundle path is resolved from the patches' `module` package
+ * through the Loader composition anchor (`ctx.baseUrl`), not through Stent's
+ * own dependency tree; the transforms and matcher are built once at
  * registration, and the served bytes are cached per source content.
- * @param ctx - the Host context providing the webserver and composition base URL.
- * @param options - route, patches, and degradation policy.
- * @returns a disposer removing the route.
- * @throws when the context has no `webServer` service or composition base URL,
- * the target package cannot resolve, a descriptor is malformed, or the patches
- * do not all target the same bundle file.
+ *
+ * @param ctx - The Host context providing the webserver and composition base
+ *   URL.
+ * @param options - Route, patches, and degradation policy.
+ * @returns A disposer removing the route.
+ * @throws When the context has no `webServer` service or composition base URL,
+ *   the target package cannot resolve, a descriptor is malformed, or the
+ *   patches do not all target the same bundle file.
  */
-export function serveBrowserTransform(ctx: Context, options: ServeBrowserTransformOptions): () => void {
+export function serveBrowserTransform(
+  ctx: Context,
+  options: ServeBrowserTransformOptions,
+): () => void {
   const httpServer = ctx.get('webServer') as
     | {
         register(route: {
@@ -84,7 +90,9 @@ export function serveBrowserTransform(ctx: Context, options: ServeBrowserTransfo
       }
     | undefined
   if (httpServer === undefined) {
-    throw new Error('stent: serveBrowserTransform requires the webServer service on the context')
+    throw new Error(
+      'stent: serveBrowserTransform requires the webServer service on the context',
+    )
   }
   const fallback = options.fallback ?? 'error'
   const patches = [...options.patches]
@@ -102,14 +110,17 @@ export function serveBrowserTransform(ctx: Context, options: ServeBrowserTransfo
   }
   const moduleName = patches[0]?.target.module
   for (const patch of patches) {
-    if (patch.target.module !== moduleName || patch.target.filePath !== filePath) {
+    if (
+      patch.target.module !== moduleName
+      || patch.target.filePath !== filePath
+    ) {
       throw new Error(
-        'stent: serveBrowserTransform patches must all target the same file ' +
-          `(${moduleName} ${filePath}); ${patch.id} targets ${patch.target.module} ${String(patch.target.filePath)}`,
+        'stent: serveBrowserTransform patches must all target the same file '
+          + `(${moduleName} ${filePath}); ${patch.id} targets ${patch.target.module} ${String(patch.target.filePath)}`,
       )
     }
   }
-  const patchIds = [...new Set(patches.map(patch => patch.id))]
+  const patchIds = [...new Set(patches.map((patch) => patch.id))]
   // The target is a sibling in the assembled composition, not a dependency of
   // Stent itself. Resolve through the Loader's config-tree anchor, whose
   // package manifest owns the composed plugin dependencies.
@@ -123,7 +134,10 @@ export function serveBrowserTransform(ctx: Context, options: ServeBrowserTransfo
   const bundlePath = join(pkgDir, filePath)
   // Validation and matcher construction happen once: a malformed descriptor
   // fails at registration, and every request reuses the same matcher.
-  const transform = createBrowserTransform({ patches, resolve: resolvePackageIdentity })
+  const transform = createBrowserTransform({
+    patches,
+    resolve: resolvePackageIdentity,
+  })
   let cached: { source: string; code: string } | undefined
 
   /** The bytes to serve: the transformed bundle, cached per source content. */
@@ -135,7 +149,9 @@ export function serveBrowserTransform(ctx: Context, options: ServeBrowserTransfo
     } catch {
       throw new BundleUnreadableError()
     }
-    if (cached !== undefined && cached.source === source) return cached.code
+    if (cached !== undefined && cached.source === source) {
+      return cached.code
+    }
     // The upstream transformer throws when the selector finds no injection
     // points — its miss signal, like a null return for a non-matching file.
     let output: TransformOutput | null
@@ -148,17 +164,19 @@ export function serveBrowserTransform(ctx: Context, options: ServeBrowserTransfo
     // any patch that rewrote nothing is a misconfiguration (wrong launch
     // form or moved function) that must not ship silently as an inert
     // bundle — even when the other patches bound.
-    const bound = new Set((output?.bindings ?? []).map(record => record.patchId))
-    const missing = patchIds.filter(id => !bound.has(id))
+    const bound = new Set(
+      (output?.bindings ?? []).map((record) => record.patchId),
+    )
+    const missing = patchIds.filter((id) => !bound.has(id))
     if (output === null || missing.length > 0) {
       if (fallback === 'raw') {
         cached = { source, code: source }
         return source
       }
       throw new Error(
-        `stent: serveBrowserTransform patch(es) ${missing.join(', ')} rewrote nothing in ` +
-          `${moduleName} ${filePath}; ` +
-          'the selector may miss the function or the file may be the wrong launch form',
+        `stent: serveBrowserTransform patch(es) ${missing.join(', ')} rewrote nothing in `
+          + `${moduleName} ${filePath}; `
+          + 'the selector may miss the function or the file may be the wrong launch form',
       )
     }
     cached = { source, code: output.code }

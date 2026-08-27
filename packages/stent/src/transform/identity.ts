@@ -4,6 +4,7 @@
  * The nearest package.json identifies both installed and workspace modules.
  * This avoids relying on npm-layout path parsing and keeps the identity lookup
  * independent of package module format.
+ *
  * @module @oh-my-dsh/stent/transform/identity
  */
 
@@ -13,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 
 /** One module's package identity: name, version, and package-relative path. */
 export interface PackageIdentity {
-  /** npm package name from the owning manifest. */
+  /** Npm package name from the owning manifest. */
   name: string
   /** Version from the owning manifest. */
   version: string
@@ -25,9 +26,13 @@ export interface PackageIdentity {
 function findPackageRoot(filename: string): string | undefined {
   let dir = dirname(filename)
   for (;;) {
-    if (existsSync(join(dir, 'package.json'))) return dir
+    if (existsSync(join(dir, 'package.json'))) {
+      return dir
+    }
     const parent = dirname(dir)
-    if (parent === dir) return undefined
+    if (parent === dir) {
+      return undefined
+    }
     dir = parent
   }
 }
@@ -37,17 +42,26 @@ const manifestCache = new Map<string, { name: string; version: string }>()
 
 /**
  * Resolve the package identity of a module from its filesystem path or URL.
- * @param urlOrPath - an absolute path or file URL.
- * @returns the owning package identity, or undefined outside any package.
+ *
+ * @param urlOrPath - An absolute path or file URL.
+ * @returns The owning package identity, or undefined outside any package.
  */
-export function resolvePackageIdentity(urlOrPath: string): PackageIdentity | undefined {
-  const filename = urlOrPath.startsWith('file:') ? fileURLToPath(urlOrPath) : urlOrPath
+export function resolvePackageIdentity(
+  urlOrPath: string,
+): PackageIdentity | undefined {
+  const filename = urlOrPath.startsWith('file:')
+    ? fileURLToPath(urlOrPath)
+    : urlOrPath
   const root = findPackageRoot(filename)
-  if (root === undefined) return undefined
+  if (root === undefined) {
+    return undefined
+  }
   let manifest = manifestCache.get(root)
   if (manifest === undefined) {
     try {
-      const parsed = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+      const parsed = JSON.parse(
+        readFileSync(join(root, 'package.json'), 'utf8'),
+      ) as {
         name?: unknown
         version?: unknown
       }
@@ -60,7 +74,9 @@ export function resolvePackageIdentity(urlOrPath: string): PackageIdentity | und
     }
     manifestCache.set(root, manifest)
   }
-  if (manifest.name === '') return undefined
+  if (manifest.name === '') {
+    return undefined
+  }
   return {
     name: manifest.name,
     version: manifest.version,
@@ -71,6 +87,8 @@ export function resolvePackageIdentity(urlOrPath: string): PackageIdentity | und
 /** Detect the module kind of a source file from its extension. */
 export function detectModuleType(id: string): 'esm' | 'cjs' {
   const commonJs = id.endsWith('.cjs')
-  if (commonJs) return 'cjs'
+  if (commonJs) {
+    return 'cjs'
+  }
   return 'esm'
 }

@@ -4,14 +4,24 @@
 // path to the fallback or a prefix route, rejects non-GET methods, and is
 // loud by default when the selector rewrites nothing.
 
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+
 import { Context } from '@deepseek-ai/cordis'
-import { serveBrowserTransform, type ServeBrowserTransformOptions } from '../../src/browser/index.ts'
+import { afterEach, describe, expect, it } from 'vitest'
+
+import {
+  serveBrowserTransform,
+  type ServeBrowserTransformOptions,
+} from '../../src/browser/index.ts'
 
 type TestRoute = {
   kind: 'exact' | 'prefix'
@@ -35,15 +45,24 @@ async function createTestWebServer(): Promise<TestWebServer> {
   const prefixes = new Map<string, TestRoute>()
   const match = (pathname: string): TestRoute | undefined => {
     const exactRoute = exact.get(pathname)
-    if (exactRoute !== undefined) return exactRoute
+    if (exactRoute !== undefined) {
+      return exactRoute
+    }
     let best: TestRoute | undefined
     for (const [prefix, route] of prefixes) {
-      if (pathname !== prefix && !pathname.startsWith(`${prefix}/`)) continue
-      if (best === undefined || prefix.length > best.path.length) best = route
+      if (pathname !== prefix && !pathname.startsWith(`${prefix}/`)) {
+        continue
+      }
+      if (best === undefined || prefix.length > best.path.length) {
+        best = route
+      }
     }
     return best
   }
-  const dispatch = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+  const dispatch = async (
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> => {
     const route = match(new URL(req.url ?? '/', 'http://test').pathname)
     if (route === undefined) {
       res.writeHead(404)
@@ -70,22 +89,33 @@ async function createTestWebServer(): Promise<TestWebServer> {
     })
   })
   const address = httpServer.address()
-  if (address === null || typeof address === 'string') throw new Error('test webserver did not expose a TCP address')
+  if (address === null || typeof address === 'string') {
+    throw new Error('test webserver did not expose a TCP address')
+  }
   return {
     port: address.port,
     register(route) {
       const routes = route.kind === 'exact' ? exact : prefixes
-      if (routes.has(route.path)) throw new Error(`test webserver: duplicate ${route.kind} route "${route.path}"`)
+      if (routes.has(route.path)) {
+        throw new Error(
+          `test webserver: duplicate ${route.kind} route "${route.path}"`,
+        )
+      }
       routes.set(route.path, route)
       return () => {
-        if (routes.get(route.path) === route) routes.delete(route.path)
+        if (routes.get(route.path) === route) {
+          routes.delete(route.path)
+        }
       }
     },
     close: () =>
       new Promise<void>((resolve, reject) => {
-        httpServer.close(error => {
-          if (error === undefined) resolve()
-          else reject(error)
+        httpServer.close((error) => {
+          if (error === undefined) {
+            resolve()
+          } else {
+            reject(error)
+          }
         })
       }),
   }
@@ -99,7 +129,10 @@ async function provideTestWebServer(ctx: Context): Promise<TestWebServer> {
 }
 
 /** Boot a test HTTP server plus one served transform. */
-async function boot(options: ServeBrowserTransformOptions, baseUrl = import.meta.url) {
+async function boot(
+  options: ServeBrowserTransformOptions,
+  baseUrl = import.meta.url,
+) {
   const ctx = new Context()
   ctx.baseUrl = baseUrl
   contexts.push(ctx)
@@ -201,7 +234,10 @@ describe('serveBrowserTransform', () => {
       },
       operation: 'around',
     } as const
-    const { port } = await boot({ route: ROUTE, patches: [patch] }, pathToFileURL(configPath).href)
+    const { port } = await boot(
+      { route: ROUTE, patches: [patch] },
+      pathToFileURL(configPath).href,
+    )
     const res = await fetch(`http://127.0.0.1:${port}${ROUTE}`)
     expect(res.status).toBe(200)
     expect(await res.text()).toContain('__stentBridge')
@@ -229,12 +265,17 @@ describe('serveBrowserTransform', () => {
 
   it('leaves every other /plugins path to the fallback', async () => {
     const { port } = await boot({ route: ROUTE, patches: [neutralizer] })
-    const res = await fetch(`http://127.0.0.1:${port}/plugins/@example/client-connection/client.js`)
+    const res = await fetch(
+      `http://127.0.0.1:${port}/plugins/@example/client-connection/client.js`,
+    )
     expect(res.status).toBe(404)
   })
 
   it('the exact route outranks a later prefix route on the same path space', async () => {
-    const { server, port } = await boot({ route: ROUTE, patches: [neutralizer] })
+    const { server, port } = await boot({
+      route: ROUTE,
+      patches: [neutralizer],
+    })
     // A prefix route registered AFTER the exact one (the module host's shape).
     server.register({
       kind: 'prefix',
@@ -246,13 +287,17 @@ describe('serveBrowserTransform', () => {
     })
     const exact = await fetch(`http://127.0.0.1:${port}${ROUTE}`)
     expect(await exact.text()).toContain('__stentBridge')
-    const other = await fetch(`http://127.0.0.1:${port}/plugins/@example/client-connection/client.js`)
+    const other = await fetch(
+      `http://127.0.0.1:${port}/plugins/@example/client-connection/client.js`,
+    )
     expect(await other.text()).toBe('prefix-owner')
   })
 
   it('rejects non-GET methods on the exact route', async () => {
     const { port } = await boot({ route: ROUTE, patches: [neutralizer] })
-    const res = await fetch(`http://127.0.0.1:${port}${ROUTE}`, { method: 'POST' })
+    const res = await fetch(`http://127.0.0.1:${port}${ROUTE}`, {
+      method: 'POST',
+    })
     expect(res.status).toBe(405)
   })
 
@@ -264,7 +309,11 @@ describe('serveBrowserTransform', () => {
   })
 
   it('serves the raw bundle when a miss degrades with fallback raw', async () => {
-    const { port } = await boot({ route: ROUTE, patches: [missing], fallback: 'raw' })
+    const { port } = await boot({
+      route: ROUTE,
+      patches: [missing],
+      fallback: 'raw',
+    })
     const res = await fetch(`http://127.0.0.1:${port}${ROUTE}`)
     expect(res.status).toBe(200)
     const body = await res.text()
@@ -276,14 +325,25 @@ describe('serveBrowserTransform', () => {
   it('answers 404 when the bundle file cannot be read', async () => {
     const { port } = await boot({
       route: ROUTE,
-      patches: [{ ...neutralizer, target: { ...neutralizer.target, filePath: 'tests/fixtures/serve-target/nope.js' } }],
+      patches: [
+        {
+          ...neutralizer,
+          target: {
+            ...neutralizer.target,
+            filePath: 'tests/fixtures/serve-target/nope.js',
+          },
+        },
+      ],
     })
     const res = await fetch(`http://127.0.0.1:${port}${ROUTE}`)
     expect(res.status).toBe(404)
   })
 
   it('stacks several patches on the same file under one route', async () => {
-    const { port } = await boot({ route: ROUTE, patches: [neutralizer, planNeutralizer] })
+    const { port } = await boot({
+      route: ROUTE,
+      patches: [neutralizer, planNeutralizer],
+    })
     const res = await fetch(`http://127.0.0.1:${port}${ROUTE}`)
     expect(res.status).toBe(200)
     const body = await res.text()
@@ -294,7 +354,10 @@ describe('serveBrowserTransform', () => {
   })
 
   it('fails loud naming every unbound patch when only some stack', async () => {
-    const { port } = await boot({ route: ROUTE, patches: [neutralizer, missing] })
+    const { port } = await boot({
+      route: ROUTE,
+      patches: [neutralizer, missing],
+    })
     const res = await fetch(`http://127.0.0.1:${port}${ROUTE}`)
     expect(res.status).toBe(500)
     const text = await res.text()
@@ -303,7 +366,11 @@ describe('serveBrowserTransform', () => {
   })
 
   it('degrades to the raw bundle when any stacked patch misses with fallback raw', async () => {
-    const { port } = await boot({ route: ROUTE, patches: [neutralizer, missing], fallback: 'raw' })
+    const { port } = await boot({
+      route: ROUTE,
+      patches: [neutralizer, missing],
+      fallback: 'raw',
+    })
     const res = await fetch(`http://127.0.0.1:${port}${ROUTE}`)
     expect(res.status).toBe(200)
     const body = await res.text()
@@ -324,7 +391,10 @@ describe('serveBrowserTransform', () => {
           {
             ...neutralizer,
             id: 'serve-test/other-file',
-            target: { ...neutralizer.target, filePath: 'tests/fixtures/serve-target/nope.js' },
+            target: {
+              ...neutralizer.target,
+              filePath: 'tests/fixtures/serve-target/nope.js',
+            },
           },
         ],
       })
@@ -338,7 +408,7 @@ describe('serveBrowserTransform', () => {
     const server = await provideTestWebServer(ctx)
     // The route owner lives on its own plugin fiber, so disposing it removes
     // the route while the webserver keeps serving.
-    const routeFiber = await ctx.plugin(c => {
+    const routeFiber = await ctx.plugin((c) => {
       serveBrowserTransform(c, { route: ROUTE, patches: [neutralizer] })
     })
     const port = server.port

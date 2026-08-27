@@ -227,6 +227,10 @@
         "**/*.{ts,tsx}"
       ],
       "rules": {
+        "curly": [
+          "error",
+          "all"
+        ],
         "@stylistic/indent": "off",
         "@stylistic/semi": [
           "error",

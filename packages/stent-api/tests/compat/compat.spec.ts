@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
 
 const runner = fileURLToPath(new URL('./child-runner.mjs', import.meta.url))
@@ -9,12 +10,19 @@ function runCase(name: string): string {
   // The child resolves the package dependency from the API package's own
   // workspace manifest after its build prerequisite has completed.
   const childEnv = { ...process.env }
-  const result = spawnSync(process.execPath, ['--import', 'tsx/esm', runner, name], {
-    cwd: fileURLToPath(new URL('../..', import.meta.url)),
-    encoding: 'utf8',
-    env: childEnv,
-  })
-  expect(result.status, `child ${name} exited 0\n${result.stdout}\n${result.stderr}`).toBe(0)
+  const result = spawnSync(
+    process.execPath,
+    ['--import', 'tsx/esm', runner, name],
+    {
+      cwd: fileURLToPath(new URL('../..', import.meta.url)),
+      encoding: 'utf8',
+      env: childEnv,
+    },
+  )
+  expect(
+    result.status,
+    `child ${name} exited 0\n${result.stdout}\n${result.stderr}`,
+  ).toBe(0)
   return result.stdout
 }
 
@@ -42,8 +50,12 @@ describe('StentCompatService (child processes)', () => {
     expect(out).toContain('PASS registerPatch rewrites: "HELLO WORLD"')
     expect(out).toContain('PASS registerPatch target-id conflict throws: true')
     expect(out).toContain('PASS registerPatch self conflict throws: true')
-    expect(out).toContain('PASS unregister delegates to original: "hello world"')
-    expect(out).toContain('PASS re-register after unregister rewrites: "HELLO WORLD"')
+    expect(out).toContain(
+      'PASS unregister delegates to original: "hello world"',
+    )
+    expect(out).toContain(
+      'PASS re-register after unregister rewrites: "HELLO WORLD"',
+    )
   })
 
   it("a single-plugin hot reload keeps the new generation's hook after the old generation unloads", () => {
@@ -51,23 +63,33 @@ describe('StentCompatService (child processes)', () => {
     expect(out).toContain('PASS hmr gen1 rewrites: "HELLO WORLD"')
     expect(out).toContain('PASS hmr gen2 rewrites: "HELLO STENT"')
     expect(out).toContain('PASS hmr gen2 survives gen1 unload: "HELLO AFTER"')
-    expect(out).toContain('PASS hmr gen2 unload restores original: "hello again"')
+    expect(out).toContain(
+      'PASS hmr gen2 unload restores original: "hello again"',
+    )
   })
 
   it('re-applying the facade plugin leaves the new generation fully functional', () => {
     const out = runCase('compatHmr')
     expect(out).toContain('PASS compatHmr gen1 rewrites: "HELLO WORLD"')
-    expect(out).toContain('PASS compatHmr gen1 unload restores original: "hello world"')
+    expect(out).toContain(
+      'PASS compatHmr gen1 unload restores original: "hello world"',
+    )
     expect(out).toContain('PASS compatHmr gen2 rewrites: "HELLO STENT"')
-    expect(out).toContain('PASS compatHmr gen2 observed: "hello world|hello stent"')
-    expect(out).toContain('PASS compatHmr gen2 unload restores original: "hello again"')
+    expect(out).toContain(
+      'PASS compatHmr gen2 observed: "hello world|hello stent"',
+    )
+    expect(out).toContain(
+      'PASS compatHmr gen2 unload restores original: "hello again"',
+    )
   })
 
   it('rejects the same patch id claimed by a different plugin', () => {
     const out = runCase('sameId')
     expect(out).toContain('PASS sameId cross-plugin claim throws: true')
     expect(out).toContain('PASS sameId incumbent still hooks: "HELLO WORLD"')
-    expect(out).toContain('PASS sameId incumbent unload restores original: "hello world"')
+    expect(out).toContain(
+      'PASS sameId incumbent unload restores original: "hello world"',
+    )
   })
 })
 
@@ -76,7 +98,8 @@ describe('StentCompatService (unit)', () => {
     // The conflict check runs before the bridge check, so a claimed id fails
     // loud in any process; the bridge check only guards actual registration.
     const { Context } = await import('@deepseek-ai/cordis')
-    const { StentService, markStentDshLaunch } = await import('@oh-my-dsh/stent')
+    const { StentService, markStentDshLaunch } =
+      await import('@oh-my-dsh/stent')
     const { StentCompatService } = await import('../../src/compat/service.ts')
     markStentDshLaunch()
     const ctx = new Context()
@@ -116,7 +139,8 @@ describe('StentCompatService (unit)', () => {
 
   it('unregisterPatch removes the entry so a re-registration starts a fresh ownership cycle', async () => {
     const { Context } = await import('@deepseek-ai/cordis')
-    const { StentService, markStentDshLaunch } = await import('@oh-my-dsh/stent')
+    const { StentService, markStentDshLaunch } =
+      await import('@oh-my-dsh/stent')
     const { StentCompatService } = await import('../../src/compat/service.ts')
     markStentDshLaunch()
     const ctx = new Context()
@@ -137,7 +161,9 @@ describe('StentCompatService (unit)', () => {
     ctx.stentCompat.unregisterPatch('compat/cycle')
     // Unregistering removed the entry and freed the id: a re-registration
     // starts fresh instead of inheriting the first registration's disposal.
-    expect(() => ctx.stentCompat.registerPatch({ ...patch, handler: () => {} })).not.toThrow()
+    expect(() =>
+      ctx.stentCompat.registerPatch({ ...patch, handler: () => {} }),
+    ).not.toThrow()
     await ctx.fiber.dispose()
   })
 })

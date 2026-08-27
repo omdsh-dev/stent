@@ -1,5 +1,6 @@
 /**
  * Public test utilities for isolated Stent transformation scenarios.
+ *
  * @module @oh-my-dsh/stent/testing
  */
 

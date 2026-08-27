@@ -10,13 +10,14 @@
 export const STENT_DSH_LAUNCH_KEY = Symbol.for('oh-my-dsh.stent-dsh.launch')
 
 /**
- * Mark the current global object as being in the Stent-enabled DSH launch
- * path.
+ * Mark the current global object as being in the Stent-enabled DSH launch path.
  *
  * @param globalObject - Global-like object used by the runtime or a test.
  */
 export function markStentDshLaunch(globalObject: object = globalThis): void {
-  if (isStentDshLaunch(globalObject)) return
+  if (isStentDshLaunch(globalObject)) {
+    return
+  }
   Object.defineProperty(globalObject, STENT_DSH_LAUNCH_KEY, {
     configurable: true,
     enumerable: false,

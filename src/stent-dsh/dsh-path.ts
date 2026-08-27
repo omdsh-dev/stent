@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { delimiter, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { URL } from 'node:url'
+
 import { resolveDshPath } from './cli.ts'
 
 export interface DshInvocation {
@@ -9,8 +10,15 @@ export interface DshInvocation {
   passthrough: string[]
 }
 
-/** Parse only the launcher-owned DSH path and leave every other argument untouched. */
-export function parseDshPath(argv: readonly string[], env: NodeJS.ProcessEnv, cwd: URL): DshInvocation {
+/**
+ * Parse only the launcher-owned DSH path and leave every other argument
+ * untouched.
+ */
+export function parseDshPath(
+  argv: readonly string[],
+  env: NodeJS.ProcessEnv,
+  cwd: URL,
+): DshInvocation {
   let input: string | undefined
   const passthrough: string[] = []
   for (let index = 0; index < argv.length; index++) {
@@ -32,7 +40,9 @@ export function parseDshPath(argv: readonly string[], env: NodeJS.ProcessEnv, cw
       }
       continue
     }
-    if (value !== undefined) passthrough.push(value)
+    if (value !== undefined) {
+      passthrough.push(value)
+    }
   }
 
   const dshInput = resolveDshInput(input, env.PATH, cwd)
@@ -42,23 +52,38 @@ export function parseDshPath(argv: readonly string[], env: NodeJS.ProcessEnv, cw
   }
 }
 
-function resolveDshInput(input: string | undefined, pathEnv: string | undefined, cwd: URL): URL | undefined {
-  if (input === undefined || input === '') return undefined
+function resolveDshInput(
+  input: string | undefined,
+  pathEnv: string | undefined,
+  cwd: URL,
+): URL | undefined {
+  if (input === undefined || input === '') {
+    return undefined
+  }
   if (!input.includes('/') && !input.includes('\\')) {
     const command = which(input, pathEnv)
-    if (command !== undefined) return command
+    if (command !== undefined) {
+      return command
+    }
   }
   return pathToFileURL(resolve(fileURLToPath(cwd), input))
 }
 
 function which(cmd: string, pathEnv: string | undefined): URL | undefined {
-  if (pathEnv === undefined || pathEnv === '') return undefined
-  const names = process.platform === 'win32' ? [`${cmd}.cmd`, `${cmd}.exe`, cmd] : [cmd]
+  if (pathEnv === undefined || pathEnv === '') {
+    return undefined
+  }
+  const names =
+    process.platform === 'win32' ? [`${cmd}.cmd`, `${cmd}.exe`, cmd] : [cmd]
   for (const dir of pathEnv.split(delimiter)) {
-    if (dir === '') continue
+    if (dir === '') {
+      continue
+    }
     for (const name of names) {
       const candidate = pathToFileURL(join(dir, name))
-      if (existsSync(candidate)) return candidate
+      if (existsSync(candidate)) {
+        return candidate
+      }
     }
   }
   return undefined

@@ -3,11 +3,19 @@
  *
  * The rule is kept separate from the Stent plugin registration so each custom
  * rule can be tested and maintained independently.
+ *
  * @module stent/oxlint/rules/min-function-lines
  */
 
 import type { RuleTester } from 'oxlint/plugins-dev'
-import { asNode, countLines, functionName, type AstNode, type RuleContext } from '../utils/function-lines.ts'
+
+import {
+  asNode,
+  countLines,
+  functionName,
+  type AstNode,
+  type RuleContext,
+} from '../utils/function-lines.ts'
 
 type Rule = Parameters<RuleTester['run']>[1]
 type RuleFactory = Extract<Rule, { create: (...args: never[]) => unknown }>
@@ -26,16 +34,27 @@ interface RuleOptions {
 
 /** Classify a function so each syntax can have an independent threshold. */
 function functionKind(node: AstNode): FunctionKind {
-  if (node.type === 'FunctionDeclaration') return 'declaration'
-  if (node.type === 'ArrowFunctionExpression') return 'arrow'
+  if (node.type === 'FunctionDeclaration') {
+    return 'declaration'
+  }
+  if (node.type === 'ArrowFunctionExpression') {
+    return 'arrow'
+  }
   const parent = asNode(node.parent)
-  return parent?.type === 'MethodDefinition' && asNode(parent.value) === node ? 'method' : 'expression'
+  return parent?.type === 'MethodDefinition' && asNode(parent.value) === node
+    ? 'method'
+    : 'expression'
 }
 
 /** Resolve the configured threshold; `false` disables one function syntax. */
-function minimumFor(kind: FunctionKind, options: RuleOptions): number | undefined {
+function minimumFor(
+  kind: FunctionKind,
+  options: RuleOptions,
+): number | undefined {
   const configured = options.minimums?.[kind]
-  if (configured === false) return undefined
+  if (configured === false) {
+    return undefined
+  }
   return configured ?? options.minLines ?? 5
 }
 
@@ -47,7 +66,8 @@ const minFunctionLines: Rule = {
   meta: {
     type: 'suggestion',
     docs: {
-      description: 'Require functions to contain a minimum number of effective source lines',
+      description:
+        'Require functions to contain a minimum number of effective source lines',
     },
     schema: [
       {
@@ -103,17 +123,29 @@ const minFunctionLines: Rule = {
 
   create(context: RuleContext): VisitorObject {
     const raw = context.options[0]
-    const options = typeof raw === 'number' ? { minLines: raw } : isRuleOptions(raw) ? raw : {}
+    const options =
+      typeof raw === 'number'
+        ? { minLines: raw }
+        : isRuleOptions(raw)
+          ? raw
+          : {}
     const includeAnonymous = options.includeAnonymous ?? false
     const skipBlankLines = options.skipBlankLines ?? true
     const skipComments = options.skipComments ?? true
 
     function check(node: AstNode): void {
       const minLines = minimumFor(functionKind(node), options)
-      if (minLines === undefined) return
+      if (minLines === undefined) {
+        return
+      }
       const name = functionName(node)
-      if (name === undefined && !includeAnonymous) return
-      const actual = countLines(node, context.sourceCode, { skipBlankLines, skipComments })
+      if (name === undefined && !includeAnonymous) {
+        return
+      }
+      const actual = countLines(node, context.sourceCode, {
+        skipBlankLines,
+        skipComments,
+      })
       if (actual < minLines) {
         context.report({
           node,

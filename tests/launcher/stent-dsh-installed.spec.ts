@@ -1,8 +1,17 @@
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
 import { afterAll, describe, expect, it } from 'vitest'
 
 /**
@@ -11,18 +20,28 @@ import { afterAll, describe, expect, it } from 'vitest'
  * preload are plain ESM, so the installed path needs neither tsx nor a
  * checkout. The CLI resolves from the caller's project dependencies or a PATH
  * shim (symlink shims and pnpm's cmd-shim script form alike). These offline
- * fixtures stand in for each
- * resolution path; the stub `stent` in the profile records what the
- * preload delivered, and the stub `@deepseek-ai/dsh-app-boot` records the
- * pre-boot module-fallback heals.
+ * fixtures stand in for each resolution path; the stub `stent` in the profile
+ * records what the preload delivered, and the stub `@deepseek-ai/dsh-app-boot`
+ * records the pre-boot module-fallback heals.
  */
-const compiledLauncher = fileURLToPath(new URL('../../lib/stent-dsh.js', import.meta.url))
-const compiledPreload = fileURLToPath(new URL('../../lib/stent-dsh-preload.js', import.meta.url))
-if (!existsSync(compiledLauncher) || !existsSync(compiledPreload))
-  throw new Error('compiled launcher artifacts are missing; run pnpm run build before the launcher test')
+const compiledLauncher = fileURLToPath(
+  new URL('../../lib/stent-dsh.js', import.meta.url),
+)
+const compiledPreload = fileURLToPath(
+  new URL('../../lib/stent-dsh-preload.js', import.meta.url),
+)
+if (!existsSync(compiledLauncher) || !existsSync(compiledPreload)) {
+  throw new Error(
+    'compiled launcher artifacts are missing; run pnpm run build before the launcher test',
+  )
+}
 const launcher = compiledLauncher
-const sourceBundlePackageJson = fileURLToPath(new URL('../../package.json', import.meta.url))
-const commanderPackage = fileURLToPath(new URL('../../node_modules/commander', import.meta.url))
+const sourceBundlePackageJson = fileURLToPath(
+  new URL('../../package.json', import.meta.url),
+)
+const commanderPackage = fileURLToPath(
+  new URL('../../node_modules/commander', import.meta.url),
+)
 
 const tempDir = mkdtempSync(join(tmpdir(), 'stent-installed-'))
 const home = join(tempDir, 'home')
@@ -61,7 +80,9 @@ writeFileSync(
 // The CLI's own dependencies: the launcher falls back to them for js-yaml
 // (not in the profile) and resolves dsh-app-boot from the CLI's real
 // location for the pre-boot heal.
-mkdirSync(join(proj, 'node_modules', '@deepseek-ai', 'dsh-app-boot'), { recursive: true })
+mkdirSync(join(proj, 'node_modules', '@deepseek-ai', 'dsh-app-boot'), {
+  recursive: true,
+})
 writeFileSync(
   join(proj, 'node_modules', '@deepseek-ai', 'dsh-app-boot', 'package.json'),
   JSON.stringify({
@@ -120,18 +141,37 @@ writeFileSync(
 )
 writeFileSync(
   join(stubStent, 'node.js'),
-  ['export function installStentHooks() { console.log(`PROFILE-BOOT dynamic=true`) }', ''].join('\n'),
+  [
+    'export function installStentHooks() { console.log(`PROFILE-BOOT dynamic=true`) }',
+    '',
+  ].join('\n'),
 )
-writeFileSync(join(stubStent, 'activation.js'), "export { markStentDshLaunch } from './index.js'\n")
+writeFileSync(
+  join(stubStent, 'activation.js'),
+  "export { markStentDshLaunch } from './index.js'\n",
+)
 
 // An installed bundle bin derives `web` from this exact profile path. Keep
 // this profile real (not a symlink), so the launcher exercises that path
 // inference rather than only the generic installed mode.
-mkdirSync(join(webProfileDir, 'node_modules', '@oh-my-dsh'), { recursive: true })
-symlinkSync(commanderPackage, join(webProfileDir, 'node_modules', 'commander'), 'dir')
+mkdirSync(join(webProfileDir, 'node_modules', '@oh-my-dsh'), {
+  recursive: true,
+})
+symlinkSync(
+  commanderPackage,
+  join(webProfileDir, 'node_modules', 'commander'),
+  'dir',
+)
 writeFileSync(join(webProfileDir, 'package.json'), '{}\n')
-symlinkSync(stubStent, join(webProfileDir, 'node_modules', '@oh-my-dsh', 'stent'))
-const installedBundle = join(webProfileDir, 'node_modules', '@oh-my-dsh/stent-pack')
+symlinkSync(
+  stubStent,
+  join(webProfileDir, 'node_modules', '@oh-my-dsh', 'stent'),
+)
+const installedBundle = join(
+  webProfileDir,
+  'node_modules',
+  '@oh-my-dsh/stent-pack',
+)
 const installedLauncherFile = 'stent-dsh.js'
 const installedLauncher = join(installedBundle, 'lib', installedLauncherFile)
 const installedBundlePackageJson = join(installedBundle, 'package.json')
@@ -148,7 +188,10 @@ writeFileSync(
   ),
 )
 copyFileSync(launcher, installedLauncher)
-copyFileSync(compiledPreload, join(installedBundle, 'lib', 'stent-dsh-preload.js'))
+copyFileSync(
+  compiledPreload,
+  join(installedBundle, 'lib', 'stent-dsh-preload.js'),
+)
 mkdirSync(join(webProfileDir, 'node_modules', '.bin'), { recursive: true })
 symlinkSync(
   `../@oh-my-dsh/stent-pack/lib/${installedLauncherFile}`,
@@ -181,24 +224,36 @@ function run(
   const env: NodeJS.ProcessEnv = { ...process.env, DSH_HOME: home }
   delete env.STENT_CONFIG
   delete env.STENT_PROFILE
-  if (options.path !== undefined) env.PATH = options.path
+  if (options.path !== undefined) {
+    env.PATH = options.path
+  }
   const selectedLauncher = options.launcher ?? launcher
   const result = spawnSync(process.execPath, [selectedLauncher, ...argv], {
     cwd: options.cwd ?? home,
     encoding: 'utf8',
     env,
   })
-  return { status: result.status ?? -1, stdout: result.stdout, stderr: result.stderr }
+  return {
+    status: result.status ?? -1,
+    stdout: result.stdout,
+    stderr: result.stderr,
+  }
 }
 
-function expectBoot(out: { status: number; stdout: string; stderr: string }): void {
+function expectBoot(out: {
+  status: number
+  stdout: string
+  stderr: string
+}): void {
   expect(out.status, `${out.stdout}\n${out.stderr}`).toBe(0)
   // The pre-boot heal ran against the CLI package's own manifest...
   expect(out.stdout).toContain(`HEAL-MARK ${join(dshPkg, 'package.json')}`)
   // ...and the bundle's own dependency closure is added to the same fallback.
   expect(out.stdout).toContain(`HEAL-MARK ${sourceBundlePackageJson}`)
   // ...the CLI received the profile's argv untouched...
-  expect(out.stdout).toContain('FAKE-DSH argv=["--profile","t1","--dump-config"]')
+  expect(out.stdout).toContain(
+    'FAKE-DSH argv=["--profile","t1","--dump-config"]',
+  )
   expect(out.stdout).toContain('FAKE-DSH config=false')
   expect(out.stdout).toContain('FAKE-DSH node-options=')
   expect(out.stdout).toContain('stent-dsh-preload.js')
@@ -206,27 +261,40 @@ function expectBoot(out: { status: number; stdout: string; stderr: string }): vo
   // 源码 launcher 使用自身依赖图中的静态 import，不会读取 profile 替代包。
   expect(out.stdout).not.toContain('PROFILE-BOOT count=0')
   expect(out.stderr).toContain('stent-dsh: exec ')
-  expect(out.stderr).toContain('stent: dynamic hooks installed — plugin patch registrations are live')
+  expect(out.stderr).toContain(
+    'stent: dynamic hooks installed — plugin patch registrations are live',
+  )
 }
 
-function expectInstalledWeb(out: { status: number; stdout: string; stderr: string }): void {
+function expectInstalledWeb(out: {
+  status: number
+  stdout: string
+  stderr: string
+}): void {
   expect(out.status, `${out.stdout}\n${out.stderr}`).toBe(0)
   expect(out.stdout).toContain(`HEAL-MARK ${join(dshPkg, 'package.json')}`)
   expect(out.stdout).toContain(`HEAL-MARK ${installedBundlePackageJson}`)
-  expect(out.stdout).toContain('FAKE-DSH argv=["--profile","web","--port","8000"]')
+  expect(out.stdout).toContain(
+    'FAKE-DSH argv=["--profile","web","--port","8000"]',
+  )
   expect(out.stdout).toContain('FAKE-DSH config=false')
   expect(out.stdout).toContain('FAKE-DSH node-options=')
   expect(out.stdout).toContain('stent-dsh-preload.js')
   expect(out.stdout).toContain(`profile=${webProfileDir}`)
   expect(out.stdout).toContain('PROFILE-BOOT dynamic=true')
   expect(out.stderr).toContain('stent-dsh: exec ')
-  expect(out.stderr).toContain('stent: dynamic hooks installed — plugin patch registrations are live')
+  expect(out.stderr).toContain(
+    'stent: dynamic hooks installed — plugin patch registrations are live',
+  )
 }
 
 describe('stent-dsh installed mode (registry-installed dsh)', () => {
   it('uses --dsh-path as the DSH path selector', () => {
     const source = join(tempDir, 'missing-source')
-    const out = run(['--dsh-path', source, '--profile', 't1', '--dump-config'], { path: '/usr/bin:/bin' })
+    const out = run(
+      ['--dsh-path', source, '--profile', 't1', '--dump-config'],
+      { path: '/usr/bin:/bin' },
+    )
     expect(out.status).toBe(1)
     expect(out.stderr).toContain(`DSH path does not exist: ${source}`)
   })
@@ -246,19 +314,34 @@ describe('stent-dsh installed mode (registry-installed dsh)', () => {
   })
 
   it("resolves the CLI from the caller's project dependencies", () => {
-    expectBoot(run(['--profile', 't1', '--dump-config'], { cwd: proj, path: '/usr/bin:/bin' }))
+    expectBoot(
+      run(['--profile', 't1', '--dump-config'], {
+        cwd: proj,
+        path: '/usr/bin:/bin',
+      }),
+    )
   })
 
   it('follows a symlink dsh shim on PATH', () => {
-    expectBoot(run(['--profile', 't1', '--dump-config'], { path: `${shimDir}:/usr/bin:/bin` }))
+    expectBoot(
+      run(['--profile', 't1', '--dump-config'], {
+        path: `${shimDir}:/usr/bin:/bin`,
+      }),
+    )
   })
 
   it('follows a cmd-shim script dsh on PATH', () => {
-    expectBoot(run(['--profile', 't1', '--dump-config'], { path: `${scriptShimDir}:/usr/bin:/bin` }))
+    expectBoot(
+      run(['--profile', 't1', '--dump-config'], {
+        path: `${scriptShimDir}:/usr/bin:/bin`,
+      }),
+    )
   })
 
   it('fails with guidance when no CLI is resolvable', () => {
-    const out = run(['--profile', 't1', '--dump-config'], { path: '/usr/bin:/bin' })
+    const out = run(['--profile', 't1', '--dump-config'], {
+      path: '/usr/bin:/bin',
+    })
     expect(out.status).toBe(1)
     expect(out.stderr).toContain('no DSH path was supplied')
   })

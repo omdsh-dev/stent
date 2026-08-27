@@ -7,7 +7,9 @@ import type { Context } from '@deepseek-ai/cordis'
  */
 export function registrationOwner(ctx: Context): unknown {
   const entry = (ctx.fiber as { entry?: unknown }).entry
-  if (entry !== undefined) return entry
+  if (entry !== undefined) {
+    return entry
+  }
   const runtime = ctx.fiber.runtime
   return runtime?.callback ?? ctx.fiber
 }

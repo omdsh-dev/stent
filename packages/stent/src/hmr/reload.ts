@@ -4,6 +4,7 @@
  * This module knows how to evict CommonJS and ESM module instances; the loader
  * supplies the callback that clears its per-installation transform marks. It
  * deliberately does not own patch state or hook registration.
+ *
  * @module @oh-my-dsh/stent/hmr/reload
  */
 
@@ -22,45 +23,60 @@ let cachedInternalLoader: InternalLoader | undefined
 
 /** Locate Node's internal cascaded module loader when available. */
 function internalLoader(): InternalLoader | undefined {
-  if (cachedInternalLoader) return cachedInternalLoader
+  if (cachedInternalLoader) {
+    return cachedInternalLoader
+  }
   let raw: { getOrInitializeCascadedLoader?: () => unknown } | undefined
   try {
-    const addon = require('node-addon-require-builtin') as { requireBuiltin(id: string): unknown }
+    const addon = require('node-addon-require-builtin') as {
+      requireBuiltin(id: string): unknown
+    }
     raw = addon.requireBuiltin('internal/modules/esm/loader') as
       | { getOrInitializeCascadedLoader?: () => unknown }
       | undefined
   } catch {
     return undefined
   }
-  const loader = raw?.getOrInitializeCascadedLoader?.() as InternalLoader | undefined
-  if (loader) cachedInternalLoader = loader
+  const loader = raw?.getOrInitializeCascadedLoader?.() as
+    | InternalLoader
+    | undefined
+  if (loader) {
+    cachedInternalLoader = loader
+  }
   return loader
 }
 
 /** Return file-backed ESM module URLs currently held by Node's loader cache. */
 export function loadedEsmUrls(): string[] {
   const cache = internalLoader()?.loadCache
-  if (cache === undefined) return []
-  return [...cache.keys()].filter(url => url.startsWith('file:'))
+  if (cache === undefined) {
+    return []
+  }
+  return [...cache.keys()].filter((url) => url.startsWith('file:'))
 }
 
 /**
  * Re-evaluate a CommonJS module after clearing both Node caches and the
  * loader's per-installation seen marks.
  */
-export function retransformCommonJs(filename: string, clearSeen: (filename: string) => void): unknown {
+export function retransformCommonJs(
+  filename: string,
+  clearSeen: (filename: string) => void,
+): unknown {
   // oxlint-disable-next-line typescript/no-dynamic-delete -- require.cache eviction is the sanctioned invalidation API.
   delete require.cache[filename]
   const cache = internalLoader()?.loadCache
-  if (cache) Map.prototype.delete.call(cache, pathToFileURL(filename).href)
+  if (cache) {
+    Map.prototype.delete.call(cache, pathToFileURL(filename).href)
+  }
   clearSeen(filename)
   return require(filename)
 }
 
 /**
- * Re-evaluate an ESM module after evicting Node's internal load cache. A
- * failed import restores the previous module job so the old instance remains
- * usable, matching the host HMR rollback contract.
+ * Re-evaluate an ESM module after evicting Node's internal load cache. A failed
+ * import restores the previous module job so the old instance remains usable,
+ * matching the host HMR rollback contract.
  */
 export async function retransformEsm(
   url: string,
@@ -69,7 +85,9 @@ export async function retransformEsm(
   const loader = internalLoader()
   const cache = loader?.loadCache
   if (!cache) {
-    throw new Error('stent: ESM re-transformation requires the Node internal module loader (Node >= 22)')
+    throw new Error(
+      'stent: ESM re-transformation requires the Node internal module loader (Node >= 22)',
+    )
   }
   const job: unknown = Map.prototype.get.call(cache, url)
   Map.prototype.delete.call(cache, url)
@@ -78,7 +96,9 @@ export async function retransformEsm(
   try {
     return (await import(url)) as Record<string, unknown>
   } catch (error) {
-    if (job !== undefined) Map.prototype.set.call(cache, url, job)
+    if (job !== undefined) {
+      Map.prototype.set.call(cache, url, job)
+    }
     throw error
   }
 }

@@ -3,6 +3,7 @@
  * or refresh already-loaded targets. Patch metadata and handlers are supplied
  * by the platform-free `StentService`; this entry owns only Node lifecycle
  * operations.
+ *
  * @module @oh-my-dsh/stent/node
  */
 

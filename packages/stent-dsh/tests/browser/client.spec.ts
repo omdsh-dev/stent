@@ -1,9 +1,15 @@
-// @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { CommandContribution } from '@deepseek-ai/dsh-client-ui-commands/client'
 import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
-import { StentClientService, apply, name, type StentSlotOptions } from '../../src/browser/client/index.ts'
+// @vitest-environment happy-dom
+import { describe, expect, it } from 'vitest'
+
+import {
+  StentClientService,
+  apply,
+  name,
+  type StentSlotOptions,
+} from '../../src/browser/client/index.ts'
 import { materialize, prepareClientBundles, seedMap } from './module-loader.ts'
 
 // ui-primitives is a heavy render-only package (markdown/highlighting);
@@ -17,18 +23,33 @@ seedMap({ '@deepseek-ai/dsh-client-ui-primitives': {} })
 // bundle, and materialize its factory. The type arrives type-only from the
 // registry package.
 await prepareClientBundles(
-  ['@deepseek-ai/cordis', '@deepseek-ai/dsh-client-ui-slots', 'react', 'react/jsx-runtime'],
-  ['@deepseek-ai/dsh-client-ui-commands/client', '@deepseek-ai/dsh-client-runtime/client'],
+  [
+    '@deepseek-ai/cordis',
+    '@deepseek-ai/dsh-client-ui-slots',
+    'react',
+    'react/jsx-runtime',
+  ],
+  [
+    '@deepseek-ai/dsh-client-ui-commands/client',
+    '@deepseek-ai/dsh-client-runtime/client',
+  ],
 )
-const { CommandUiRuntime } = materialize<typeof import('@deepseek-ai/dsh-client-ui-commands/client')>(
-  '@deepseek-ai/dsh-client-ui-commands',
-)
+const { CommandUiRuntime } = materialize<
+  typeof import('@deepseek-ai/dsh-client-ui-commands/client')
+>('@deepseek-ai/dsh-client-ui-commands')
 
 /** Real slot/command faces; the stent client delegates through them. */
 async function bench() {
   const ctx = new Context()
-  const slots = new Map<string, { options: StentSlotOptions; component: unknown; dispose: () => void }>()
-  const registrations: Array<{ options: StentSlotOptions; component: unknown; disposed: boolean }> = []
+  const slots = new Map<
+    string,
+    { options: StentSlotOptions; component: unknown; dispose: () => void }
+  >()
+  const registrations: Array<{
+    options: StentSlotOptions
+    component: unknown
+    disposed: boolean
+  }> = []
   const sources = new Map<string, InputTriggerSource>()
   ctx.provide('inputTriggers', {
     registerSource(source: InputTriggerSource) {
@@ -98,9 +119,13 @@ describe('stent-dsh browser entry', () => {
     const dispose = service.registerCommand(commandContribution('modfixture'))
     // The contribution reaches the authoritative client command service: a
     // duplicate registration fails loud while the first claim is live.
-    expect(() => service.registerCommand(commandContribution('modfixture'))).toThrow()
+    expect(() =>
+      service.registerCommand(commandContribution('modfixture')),
+    ).toThrow()
     dispose()
-    expect(() => service.registerCommand(commandContribution('modfixture'))).not.toThrow()
+    expect(() =>
+      service.registerCommand(commandContribution('modfixture')),
+    ).not.toThrow()
     await ctx.fiber.dispose()
   })
 
@@ -147,9 +172,13 @@ describe('stent-dsh browser entry', () => {
     // The authoritative command service owns the registration as the mod
     // fiber's effect; the same name becomes available again after disposal.
     const client = ctx.get('stentClient') as StentClientService
-    expect(() => client.registerCommand(commandContribution('modscoped'))).toThrow()
+    expect(() =>
+      client.registerCommand(commandContribution('modscoped')),
+    ).toThrow()
     await mod.dispose()
-    expect(() => client.registerCommand(commandContribution('modscoped'))).not.toThrow()
+    expect(() =>
+      client.registerCommand(commandContribution('modscoped')),
+    ).not.toThrow()
     await ctx.fiber.dispose()
   })
 })
@@ -158,7 +187,10 @@ describe('stentClient keyed-slot arbitration', () => {
   const keyed = (
     priority: number,
     plugin: string,
-    extra: Partial<{ onGain: () => void; onLost: (winner: { plugin?: string }) => void }> = {},
+    extra: Partial<{
+      onGain: () => void
+      onLost: (winner: { plugin?: string }) => void
+    }> = {},
   ) => ({
     name: 'conversation.chat.toolview',
     key: 'bash',
@@ -177,7 +209,7 @@ describe('stentClient keyed-slot arbitration', () => {
         onGain: () => {
           gained++
         },
-        onLost: winner => {
+        onLost: (winner) => {
           lost = winner
         },
       }),
@@ -190,7 +222,7 @@ describe('stentClient keyed-slot arbitration', () => {
     expect(high.owner).toBe(true)
     expect(lost).toEqual({ plugin: 'mod-high' })
     expect(registrations).toHaveLength(2)
-    expect(registrations.every(record => !record.disposed)).toBe(true)
+    expect(registrations.every((record) => !record.disposed)).toBe(true)
     // Disposing the owner hands the key to the queued claimant, whose
     // component registers then.
     high.dispose()
@@ -198,7 +230,7 @@ describe('stentClient keyed-slot arbitration', () => {
     expect(gained).toBe(1)
     // The displaced incumbent's own registration is still mounted; the
     // departed owner's is gone.
-    expect(registrations.filter(record => !record.disposed)).toHaveLength(1)
+    expect(registrations.filter((record) => !record.disposed)).toHaveLength(1)
     low.dispose()
     await ctx.fiber.dispose()
   })
@@ -213,7 +245,7 @@ describe('stentClient keyed-slot arbitration', () => {
     expect(registrations).toHaveLength(1)
     first.dispose()
     expect(second.owner).toBe(true)
-    expect(registrations.filter(record => !record.disposed)).toHaveLength(1)
+    expect(registrations.filter((record) => !record.disposed)).toHaveLength(1)
     second.dispose()
     await ctx.fiber.dispose()
   })
@@ -221,21 +253,29 @@ describe('stentClient keyed-slot arbitration', () => {
   it('requires options.key', async () => {
     const { ctx } = await bench()
     const service = ctx.get('stentClient') as StentClientService
-    expect(() => service.registerKeyedSlot({ name: 'root' }, () => null)).toThrow(/needs options.key/)
+    expect(() =>
+      service.registerKeyedSlot({ name: 'root' }, () => null),
+    ).toThrow(/needs options.key/)
     await ctx.fiber.dispose()
   })
 
   it('a displaced owner may dispose itself without promoting the queue', async () => {
     const { ctx, registrations } = await bench()
     const service = ctx.get('stentClient') as StentClientService
-    const incumbent = service.registerKeyedSlot(keyed(1, 'mod-incumbent'), () => null)
-    const challenger = service.registerKeyedSlot(keyed(2, 'mod-challenger'), () => null)
+    const incumbent = service.registerKeyedSlot(
+      keyed(1, 'mod-incumbent'),
+      () => null,
+    )
+    const challenger = service.registerKeyedSlot(
+      keyed(2, 'mod-challenger'),
+      () => null,
+    )
     expect(incumbent.owner).toBe(false)
     // The displaced incumbent leaves on its own; the queue is untouched (the
     // challenger still owns; nobody is promoted in its place).
     incumbent.dispose()
     expect(challenger.owner).toBe(true)
-    expect(registrations.filter(record => !record.disposed)).toHaveLength(1)
+    expect(registrations.filter((record) => !record.disposed)).toHaveLength(1)
     challenger.dispose()
     await ctx.fiber.dispose()
   })

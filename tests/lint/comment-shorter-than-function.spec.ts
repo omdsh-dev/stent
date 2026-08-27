@@ -1,5 +1,6 @@
 import { RuleTester } from 'oxlint/plugins-dev'
 import { describe, it } from 'vitest'
+
 import { commentShorterThanFunction } from '../../tools/oxlint/rules/comment-shorter-than-function.ts'
 
 RuleTester.describe = describe

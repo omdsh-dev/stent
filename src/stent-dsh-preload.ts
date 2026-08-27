@@ -1,5 +1,6 @@
+import { sep } from 'node:path'
 /**
- * stent-dsh preload: prepares the DSH launch before the official CLI entry
+ * Stent-dsh preload: prepares the DSH launch before the official CLI entry
  * module evaluates. The bin only resolves the DSH path; this preload owns
  * profile composition, dependency healing, argv normalization, environment
  * setup, and Stent hook registration.
@@ -8,30 +9,51 @@
  * module it imports see the prepared process before their first evaluation.
  */
 import { pathToFileURL, fileURLToPath } from 'node:url'
-import { sep } from 'node:path'
-import { installStentHooks } from '@oh-my-dsh/stent/node'
+
 import { markStentDshLaunch } from '@oh-my-dsh/stent/activation'
+import { installStentHooks } from '@oh-my-dsh/stent/node'
+
 import { buildCliArgs, parseOpt } from './stent-dsh/args.ts'
 import { resolveHost } from './stent-dsh/cli.ts'
-import { composeStentConfig, resolveProfile, resolveYaml } from './stent-dsh/profile.ts'
+import {
+  composeStentConfig,
+  resolveProfile,
+  resolveYaml,
+} from './stent-dsh/profile.ts'
 
-if (process.env.STENT_PRELOAD_DONE !== '1' && process.env.STENT_DSH_LAUNCH === '1') {
+if (
+  process.env.STENT_PRELOAD_DONE !== '1'
+  && process.env.STENT_DSH_LAUNCH === '1'
+) {
   await prepareDshLaunch()
 }
 
 async function prepareDshLaunch(): Promise<void> {
   const targetPath = process.env.STENT_DSH_PATH
   if (targetPath === undefined || targetPath === '') {
-    throw new Error('stent-dsh: STENT_DSH_PATH is required for launcher preload')
+    throw new Error(
+      'stent-dsh: STENT_DSH_PATH is required for launcher preload',
+    )
   }
 
   const launcherUrl = new URL('./stent-dsh.js', import.meta.url)
-  const launcherCwd = pathToFileURL(`${process.env.STENT_LAUNCHER_CWD ?? process.cwd()}${sep}`)
+  const launcherCwd = pathToFileURL(
+    `${process.env.STENT_LAUNCHER_CWD ?? process.cwd()}${sep}`,
+  )
   const dshPath = pathToFileURL(targetPath)
-  const opt = parseOpt(process.argv.slice(2), process.env, launcherUrl, launcherCwd, dshPath)
+  const opt = parseOpt(
+    process.argv.slice(2),
+    process.env,
+    launcherUrl,
+    launcherCwd,
+    dshPath,
+  )
   const host = resolveHost(opt)
   const profile = resolveProfile(opt)
-  const { requireFromProfile, yaml } = resolveYaml(profile.profileDir, host.fromCli)
+  const { requireFromProfile, yaml } = resolveYaml(
+    profile.profileDir,
+    host.fromCli,
+  )
   const config = composeStentConfig({
     args: opt,
     dshHome: profile.dshHome,
@@ -43,9 +65,16 @@ async function prepareDshLaunch(): Promise<void> {
   try {
     const bundlePackageJson = new URL('../package.json', launcherUrl)
     await healProfiles(host, bundlePackageJson, profile.dshHome)
-    if (host.cwd !== undefined) process.chdir(fileURLToPath(host.cwd))
+    if (host.cwd !== undefined) {
+      process.chdir(fileURLToPath(host.cwd))
+    }
 
-    const cliArgs = buildCliArgs(opt, profile.effectiveProfile, config.enablePath, config.enableOverlay)
+    const cliArgs = buildCliArgs(
+      opt,
+      profile.effectiveProfile,
+      config.enablePath,
+      config.enableOverlay,
+    )
     process.argv.splice(2, process.argv.length - 2, ...cliArgs)
     process.env.STENT_PROFILE = fileURLToPath(profile.profileDir)
     process.env.DSH_HOME = fileURLToPath(profile.dshHome)
@@ -57,18 +86,32 @@ async function prepareDshLaunch(): Promise<void> {
 
     markStentDshLaunch()
     installStentHooks()
-    process.stderr.write('stent: dynamic hooks installed — plugin patch registrations are live\n')
+    process.stderr.write(
+      'stent: dynamic hooks installed — plugin patch registrations are live\n',
+    )
   } catch (error) {
     config.cleanup()
     throw error
   }
 }
 
-async function healProfiles(host: ReturnType<typeof resolveHost>, bundlePackageJson: URL, dshHome: URL): Promise<void> {
+async function healProfiles(
+  host: ReturnType<typeof resolveHost>,
+  bundlePackageJson: URL,
+  dshHome: URL,
+): Promise<void> {
   const modulePath = host.fromCli.resolve('@deepseek-ai/dsh-app-boot')
-  const { healProfilesModuleFallback } = (await import(pathToFileURL(modulePath).href)) as {
+  const moduleUrl = pathToFileURL(modulePath).href
+  const moduleExports = (await import(moduleUrl)) as {
     healProfilesModuleFallback: (packageJson: string, dshHome: string) => void
   }
-  healProfilesModuleFallback(fileURLToPath(bundlePackageJson), fileURLToPath(dshHome))
-  healProfilesModuleFallback(fileURLToPath(host.cliPkgJson), fileURLToPath(dshHome))
+  const { healProfilesModuleFallback } = moduleExports
+  healProfilesModuleFallback(
+    fileURLToPath(bundlePackageJson),
+    fileURLToPath(dshHome),
+  )
+  healProfilesModuleFallback(
+    fileURLToPath(host.cliPkgJson),
+    fileURLToPath(dshHome),
+  )
 }

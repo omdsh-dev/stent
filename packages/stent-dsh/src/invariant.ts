@@ -1,5 +1,6 @@
 /**
  * Package-owned invariant companion for `@oh-my-dsh/stent-dsh`.
+ *
  * @module @oh-my-dsh/stent-dsh/invariant
  */
 
@@ -24,8 +25,9 @@ const install: InvariantInstaller = () => {
 
 /**
  * Register this package's invariant companion.
+ *
  * @param ctx - Cordis context carrying the invariant service.
- * @returns the installed registration's disposer after setup succeeds.
+ * @returns The installed registration's disposer after setup succeeds.
  */
 export const apply = (ctx: Context): Promise<() => void> => {
   return Promise.resolve(ctx.invariants.register(PACKAGE_NAME, install))

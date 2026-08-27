@@ -3,6 +3,7 @@
  *
  * Concrete rules live under `tools/oxlint/rules`; this module only gives them
  * the `stent` namespace consumed by Oxlint.
+ *
  * @module stent/oxlint-plugin
  */
 

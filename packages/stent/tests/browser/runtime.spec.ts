@@ -1,12 +1,20 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, beforeEach } from 'vitest'
+
 import { GLOBAL_BRIDGE_KEY } from '../../src/bridge.ts'
-import { StentService, apply, name, runtime } from '../../src/browser/client/index.ts'
+import {
+  StentService,
+  apply,
+  name,
+  runtime,
+} from '../../src/browser/client/index.ts'
 
 describe('stent browser entry', () => {
   beforeEach(() => {
     Reflect.deleteProperty(globalThis, GLOBAL_BRIDGE_KEY)
-    for (const info of runtime.list()) runtime.remove(info.id)
+    for (const info of runtime.list()) {
+      runtime.remove(info.id)
+    }
   })
 
   it('exports the platform-free browser faces', () => {
@@ -18,7 +26,9 @@ describe('stent browser entry', () => {
   it('installs the bridge handle into the global object', async () => {
     const ctx = new Context()
     await apply(ctx)
-    expect((globalThis as Record<string, unknown>)[GLOBAL_BRIDGE_KEY]).toHaveProperty('publish')
+    expect(
+      (globalThis as Record<string, unknown>)[GLOBAL_BRIDGE_KEY],
+    ).toHaveProperty('publish')
     await ctx.fiber.dispose()
   })
 
@@ -38,7 +48,9 @@ describe('stent browser entry', () => {
       operation: 'after',
       handler: () => {},
     })
-    expect(service.list().some(info => info.id === 'browser/after')).toBe(true)
+    expect(service.list().some((info) => info.id === 'browser/after')).toBe(
+      true,
+    )
     await ctx.fiber.dispose()
   })
 
@@ -57,8 +69,12 @@ describe('stent browser entry', () => {
       operation: 'before',
       handler: () => {},
     })
-    expect(service.list().some(info => info.id === 'browser/lifecycle')).toBe(true)
+    expect(service.list().some((info) => info.id === 'browser/lifecycle')).toBe(
+      true,
+    )
     await ctx.fiber.dispose()
-    expect(service.list().some(info => info.id === 'browser/lifecycle')).toBe(false)
+    expect(service.list().some((info) => info.id === 'browser/lifecycle')).toBe(
+      false,
+    )
   })
 })

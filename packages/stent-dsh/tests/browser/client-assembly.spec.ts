@@ -1,11 +1,13 @@
-// @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import type { CommandContribution } from '@deepseek-ai/dsh-client-ui-commands/client'
+// @vitest-environment happy-dom
+import { describe, expect, it } from 'vitest'
+
 import { apply, StentClientService } from '../../src/browser/client/index.ts'
-import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { materialize, prepareClientBundles, seedMap } from './module-loader.ts'
 
 const packageRoot = process.cwd()
@@ -22,22 +24,30 @@ seedMap({ '@deepseek-ai/dsh-client-ui-primitives': {} })
 // arrive type-only from the registry packages (the runtime declares the
 // slots/changed event bridge).
 await prepareClientBundles(
-  ['@deepseek-ai/cordis', '@deepseek-ai/dsh-client-ui-slots', 'react', 'react/jsx-runtime'],
-  ['@deepseek-ai/dsh-client-ui-commands/client', '@deepseek-ai/dsh-client-runtime/client'],
+  [
+    '@deepseek-ai/cordis',
+    '@deepseek-ai/dsh-client-ui-slots',
+    'react',
+    'react/jsx-runtime',
+  ],
+  [
+    '@deepseek-ai/dsh-client-ui-commands/client',
+    '@deepseek-ai/dsh-client-runtime/client',
+  ],
 )
-const { CommandUiRuntime } = materialize<typeof import('@deepseek-ai/dsh-client-ui-commands/client')>(
-  '@deepseek-ai/dsh-client-ui-commands',
-)
-const { SlotRegistry } = materialize<typeof import('@deepseek-ai/dsh-client-runtime/client')>(
-  '@deepseek-ai/dsh-client-runtime',
-)
+const { CommandUiRuntime } = materialize<
+  typeof import('@deepseek-ai/dsh-client-ui-commands/client')
+>('@deepseek-ai/dsh-client-ui-commands')
+const { SlotRegistry } = materialize<
+  typeof import('@deepseek-ai/dsh-client-runtime/client')
+>('@deepseek-ai/dsh-client-runtime')
 
 /**
- * Browser assembly: the real browser command and slot services (the
- * `stent-dsh` client row's `ctx.command`/`ctx.slots` delegates) over
- * fake slash/sessions/connection faces, plus the real Loader booting an
- * unmodified browser fixture Mod through `ctx.stentClient`. This mirrors the
- * web-roster composition with the opt-in row enabled.
+ * Browser assembly: the real browser command and slot services (the `stent-dsh`
+ * client row's `ctx.command`/`ctx.slots` delegates) over fake
+ * slash/sessions/connection faces, plus the real Loader booting an unmodified
+ * browser fixture Mod through `ctx.stentClient`. This mirrors the web-roster
+ * composition with the opt-in row enabled.
  */
 async function assemble() {
   const ctx = new Context()
@@ -68,7 +78,12 @@ async function assemble() {
   })
   await ctx.plugin(Loader)
   const id = await ctx.loader.create({
-    name: pathToFileURL(join(packageRoot, 'tests/fixtures/node_modules/stent-client-fixture-mod/index.mjs')).href,
+    name: pathToFileURL(
+      join(
+        packageRoot,
+        'tests/fixtures/node_modules/stent-client-fixture-mod/index.mjs',
+      ),
+    ).href,
   })
   await ctx.loader.await()
   return { ctx, id, changed, listen }
@@ -92,7 +107,9 @@ describe('Stent API browser assembly', () => {
 
     // The slot contribution reached the real slot registry: the single 'root'
     // hole is occupied, and the registration emitted slots/changed.
-    expect(() => client.registerSlot({ name: 'root' }, () => null)).toThrow(/single/)
+    expect(() => client.registerSlot({ name: 'root' }, () => null)).toThrow(
+      /single/,
+    )
     expect(changed).toContain('root')
     listen()
 
@@ -100,7 +117,9 @@ describe('Stent API browser assembly', () => {
 
     // HMR: both contributions are gone with the Mod fiber.
     expect(() => client.registerCommand(sameCommand())).not.toThrow()
-    expect(() => client.registerSlot({ name: 'root' }, () => null)).not.toThrow()
+    expect(() =>
+      client.registerSlot({ name: 'root' }, () => null),
+    ).not.toThrow()
 
     await ctx.fiber.dispose()
   })

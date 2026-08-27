@@ -1,5 +1,6 @@
 /**
  * Stable global protocol names shared by the transform and runtime bridge.
+ *
  * @module @oh-my-dsh/stent/transform/protocol
  */
 

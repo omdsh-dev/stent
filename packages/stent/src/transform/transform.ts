@@ -4,28 +4,28 @@
  * making `around`/`replace` vetoes impossible), this transform rewrites the
  * matched function to call the Stent bridge directly.
  *
- * The function keeps its name, `.length`, and `this` binding. The original
- * body moves into a `traced` closure that replays it via `apply(this, args)`
- * over the reconstructed arguments array, and the body becomes a single
- * conditional return: `globalThis[<bridge key>]` present → publish the call,
- * absent → delegate to the traced body untouched. The bridge-absent fallback
- * makes transformed code safe before the bootstrap runs (and in browsers
- * before the bridge is installed), at the cost of the patch only taking
- * effect for calls that happen after the bridge exists.
+ * The function keeps its name, `.length`, and `this` binding. The original body
+ * moves into a `traced` closure that replays it via `apply(this, args)` over
+ * the reconstructed arguments array, and the body becomes a single conditional
+ * return: `globalThis[<bridge key>]` present → publish the call, absent →
+ * delegate to the traced body untouched. The bridge-absent fallback makes
+ * transformed code safe before the bootstrap runs (and in browsers before the
+ * bridge is installed), at the cost of the patch only taking effect for calls
+ * that happen after the bridge exists.
  *
  * Matched nodes must be function declarations, function expressions, methods,
  * or arrow functions with a block (or, for arrows, expression) body. Arrows
  * have no own `arguments` binding, so the argument array is rebuilt from the
- * parameter patterns (identifiers, rest, defaults, and destructuring all
- * work — the patterns bind their names before the injected statements run)
- * and `this` stays lexical; a body referencing the enclosing `arguments`
- * object is preserved by capturing it first. Generator functions transform
- * through delegation (`yield*` over the traced generator), so iteration
- * semantics survive the no-handler and delegated paths.
+ * parameter patterns (identifiers, rest, defaults, and destructuring all work —
+ * the patterns bind their names before the injected statements run) and `this`
+ * stays lexical; a body referencing the enclosing `arguments` object is
+ * preserved by capturing it first. Generator functions transform through
+ * delegation (`yield*` over the traced generator), so iteration semantics
+ * survive the no-handler and delegated paths.
+ *
  * @module @oh-my-dsh/stent/transform/transform
  */
 
-import type { CustomTransform, InstrumentationMatcher } from './orchestrion.ts'
 import type {
   ArrowFunctionExpression,
   Expression,
@@ -40,6 +40,8 @@ import type {
   SpreadElement,
   Statement,
 } from 'estree'
+
+import type { CustomTransform, InstrumentationMatcher } from './orchestrion.ts'
 import { GLOBAL_BRIDGE_KEY } from './protocol.ts'
 
 /** Identifier prefixes injected by this transform. */
@@ -49,22 +51,32 @@ const CALL = 'stentCall'
 const OUTER_ARGUMENTS = 'stentOuterArguments'
 
 /**
- * Register the Stent custom transform on an Orchestrion matcher. Both the
- * Node loader and the browser build register the same operator, which reads
- * the patch id and operation from the merged state.
- * @param matcher - the Orchestrion matcher to extend.
- * @param onMatch - optional callback invoked with the patch id for every
- * node the transform actually rewrites; the Node loader counts these into
- * its load-time binding records.
+ * Register the Stent custom transform on an Orchestrion matcher. Both the Node
+ * loader and the browser build register the same operator, which reads the
+ * patch id and operation from the merged state.
+ *
+ * @param matcher - The Orchestrion matcher to extend.
+ * @param onMatch - Optional callback invoked with the patch id for every node
+ *   the transform actually rewrites; the Node loader counts these into its
+ *   load-time binding records.
  */
-export function registerStentTransform(matcher: InstrumentationMatcher, onMatch?: (patchId: string) => void): void {
+export function registerStentTransform(
+  matcher: InstrumentationMatcher,
+  onMatch?: (patchId: string) => void,
+): void {
   matcher.addTransform('stent', (state, node, parent, ancestry) => {
     const patchId = state.stentPatchId
     const operation = state.stentOperation
     if (typeof patchId !== 'string' || typeof operation !== 'string') {
-      throw new Error('stent: transform config must carry stentPatchId and stentOperation strings')
+      throw new Error(
+        'stent: transform config must carry stentPatchId and stentOperation strings',
+      )
     }
-    if (createStentTransform(patchId, operation)(state, node, parent, ancestry)) onMatch?.(patchId)
+    if (
+      createStentTransform(patchId, operation)(state, node, parent, ancestry)
+    ) {
+      onMatch?.(patchId)
+    }
   })
 }
 
@@ -86,15 +98,21 @@ interface MatchedFunction {
 
 /**
  * Build the Stent custom transform for a patch.
- * @param patchId - the patch id stamped into the generated call.
- * @param operation - the operation kind stamped into the generated call.
- * @returns the per-node rewrite function, returning whether the node was
- * actually rewritten (false for selected non-function nodes).
+ *
+ * @param patchId - The patch id stamped into the generated call.
+ * @param operation - The operation kind stamped into the generated call.
+ * @returns The per-node rewrite function, returning whether the node was
+ *   actually rewritten (false for selected non-function nodes).
  */
 function createStentTransform(
   patchId: string,
   operation: string,
-): (state: Parameters<CustomTransform>[0], node: Node, parent: Node, ancestry: Node[]) => boolean {
+): (
+  state: Parameters<CustomTransform>[0],
+  node: Node,
+  parent: Node,
+  ancestry: Node[],
+) => boolean {
   return (_state, node, parent, ancestry) => {
     if (isConstructorTarget(node, parent)) {
       // A constructor body cannot move into the traced closure: a derived
@@ -102,21 +120,29 @@ function createStentTransform(
       // and new.target would silently become undefined. Fail the transform
       // loudly instead of emitting a module that breaks at evaluation.
       throw new Error(
-        'stent: constructor targets are not supported (super() and new.target cannot survive ' +
-          'the traced-closure replay); patch a method or factory instead',
+        'stent: constructor targets are not supported (super() and new.target cannot survive '
+          + 'the traced-closure replay); patch a method or factory instead',
       )
     }
     const matched = matchFunction(node)
-    if (!matched) return false
+    if (!matched) {
+      return false
+    }
     const program = ancestry[ancestry.length - 1]
-    if (!program || program.type !== 'Program') return false
+    if (!program || program.type !== 'Program') {
+      return false
+    }
 
     // Expression-bodied arrows get a synthesized block body so the injected
     // statements have a statement list to live in. Both the node and the
     // local `body` reference must move to the new block.
-    if (!matched.body) return false
+    if (!matched.body) {
+      return false
+    }
     if (matched.body.type !== 'BlockStatement') {
-      const statements: Statement[] = [{ type: 'ReturnStatement', argument: matched.body as Expression }]
+      const statements: Statement[] = [
+        { type: 'ReturnStatement', argument: matched.body as Expression },
+      ]
       const synthesized: Node = { type: 'BlockStatement', body: statements }
       matched.node.body = synthesized
       matched.body = synthesized
@@ -141,8 +167,12 @@ function createStentTransform(
     // non-arrow functions own their `arguments` and are not descended into)
     // to the capture.
     const outerArgsName =
-      matched.arrow && mapOuterArguments(matched.body, undefined) ? refs.unique(OUTER_ARGUMENTS) : undefined
-    if (outerArgsName) mapOuterArguments(matched.body, outerArgsName)
+      matched.arrow && mapOuterArguments(matched.body, undefined)
+        ? refs.unique(OUTER_ARGUMENTS)
+        : undefined
+    if (outerArgsName) {
+      mapOuterArguments(matched.body, outerArgsName)
+    }
 
     // const stentOuterArguments = arguments
     // Only arrows: the arrow's own lexical resolution makes `arguments` here
@@ -252,7 +282,10 @@ function createStentTransform(
                       },
                       property: { type: 'Identifier', name: 'apply' },
                     },
-                    arguments: [{ type: 'ThisExpression' }, { type: 'Identifier', name: argsName }],
+                    arguments: [
+                      { type: 'ThisExpression' },
+                      { type: 'Identifier', name: argsName },
+                    ],
                   },
                 },
               ],
@@ -326,7 +359,9 @@ function createStentTransform(
     let publish: Statement
     if (matched.generator) {
       const resultName = refs.unique('stentResult')
-      const isIterable = (symbol: 'iterator' | 'asyncIterator'): Expression => ({
+      const isIterable = (
+        symbol: 'iterator' | 'asyncIterator',
+      ): Expression => ({
         type: 'BinaryExpression',
         operator: '===',
         left: {
@@ -394,8 +429,18 @@ function createStentTransform(
         type: 'ReturnStatement',
         argument: { type: 'Identifier', name: resultName },
       }
-      const delegatedBody: (Statement | undefined)[] = [capture, args, traced, call, publish, delegate, fallbackReturn]
-      block.body = delegatedBody.filter((statement): statement is Statement => statement !== undefined)
+      const delegatedBody: (Statement | undefined)[] = [
+        capture,
+        args,
+        traced,
+        call,
+        publish,
+        delegate,
+        fallbackReturn,
+      ]
+      block.body = delegatedBody.filter(
+        (statement): statement is Statement => statement !== undefined,
+      )
       return true
     }
 
@@ -404,40 +449,71 @@ function createStentTransform(
       argument: publishCall(),
     }
 
-    const injected: (Statement | undefined)[] = [capture, args, traced, call, publish]
-    block.body = injected.filter((statement): statement is Statement => statement !== undefined)
+    const injected: (Statement | undefined)[] = [
+      capture,
+      args,
+      traced,
+      call,
+      publish,
+    ]
+    block.body = injected.filter(
+      (statement): statement is Statement => statement !== undefined,
+    )
     return true
   }
 }
 
 /** Whether the matched node selects a class constructor. */
 function isConstructorTarget(node: Node, parent: Node): boolean {
-  const nodeKind = node.type === 'MethodDefinition' ? (node as { kind?: unknown }).kind : undefined
-  const parentKind = parent.type === 'MethodDefinition' ? (parent as { kind?: unknown }).kind : undefined
+  const nodeKind =
+    node.type === 'MethodDefinition'
+      ? (node as { kind?: unknown }).kind
+      : undefined
+  const parentKind =
+    parent.type === 'MethodDefinition'
+      ? (parent as { kind?: unknown }).kind
+      : undefined
   return nodeKind === 'constructor' || parentKind === 'constructor'
 }
 
 /**
  * Extract a transformable function from the matched node. Class methods and
  * object properties are wrapped; the actual function lives in their `value`.
- * @param node - the matched AST node.
- * @returns the function with its body and params, or `undefined` to skip.
+ *
+ * @param node - The matched AST node.
+ * @returns The function with its body and params, or `undefined` to skip.
  */
 function matchFunction(node: Node): MatchedFunction | undefined {
-  const fn = node.type === 'MethodDefinition' || node.type === 'Property' ? (node as { value?: unknown }).value : node
-  if (typeof fn !== 'object' || fn === null) return undefined
-  const type = (fn as { type?: string }).type
-  if (type !== 'FunctionDeclaration' && type !== 'FunctionExpression' && type !== 'ArrowFunctionExpression') {
+  const fn =
+    node.type === 'MethodDefinition' || node.type === 'Property'
+      ? (node as { value?: unknown }).value
+      : node
+  if (typeof fn !== 'object' || fn === null) {
     return undefined
   }
-  const functionNode = fn as FunctionDeclaration | FunctionExpression | ArrowFunctionExpression
+  const type = (fn as { type?: string }).type
+  if (
+    type !== 'FunctionDeclaration'
+    && type !== 'FunctionExpression'
+    && type !== 'ArrowFunctionExpression'
+  ) {
+    return undefined
+  }
+  const functionNode = fn as
+    | FunctionDeclaration
+    | FunctionExpression
+    | ArrowFunctionExpression
   const arrow = type === 'ArrowFunctionExpression'
   if (arrow) {
     // A parameter literally named `arguments` would shadow the outer
     // `arguments` object the body may reference; skip rather than guess which
     // one the body means. All other pattern shapes (rest, defaults,
     // destructuring) are supported.
-    if (functionNode.params.some(param => patternNames(param).has('arguments'))) return undefined
+    if (
+      functionNode.params.some((param) => patternNames(param).has('arguments'))
+    ) {
+      return undefined
+    }
   }
   return {
     node: functionNode,
@@ -450,32 +526,40 @@ function matchFunction(node: Node): MatchedFunction | undefined {
 }
 
 /**
- * Convert a bound parameter pattern into the expression that rebuilds its
- * value for the reconstructed arrow argument array. Patterns bind their names
- * before the injected statements run (defaults are evaluated during
- * binding), so every shape is representable as an expression over the bound
- * names: an identifier is a reference, object/array patterns become their
- * literal shape over the bound names, an assignment pattern is its bound
- * pattern, and a rest element becomes a spread (the array element position
- * only).
- * @param pattern - a parameter pattern.
- * @returns the array element expression (spread for rest), or null for a
- * pattern shape the transform does not convert (never a parameter list).
+ * Convert a bound parameter pattern into the expression that rebuilds its value
+ * for the reconstructed arrow argument array. Patterns bind their names before
+ * the injected statements run (defaults are evaluated during binding), so every
+ * shape is representable as an expression over the bound names: an identifier
+ * is a reference, object/array patterns become their literal shape over the
+ * bound names, an assignment pattern is its bound pattern, and a rest element
+ * becomes a spread (the array element position only).
+ *
+ * @param pattern - A parameter pattern.
+ * @returns The array element expression (spread for rest), or null for a
+ *   pattern shape the transform does not convert (never a parameter list).
  */
-function patternToExpression(pattern: Pattern): Expression | SpreadElement | null {
+function patternToExpression(
+  pattern: Pattern,
+): Expression | SpreadElement | null {
   switch (pattern.type) {
     case 'Identifier':
       return { type: 'Identifier', name: pattern.name }
     case 'AssignmentPattern':
       return patternToExpression(pattern.left)
     case 'RestElement':
-      return { type: 'SpreadElement', argument: patternToExpression(pattern.argument) as Expression }
+      return {
+        type: 'SpreadElement',
+        argument: patternToExpression(pattern.argument) as Expression,
+      }
     case 'ObjectPattern':
       return {
         type: 'ObjectExpression',
-        properties: pattern.properties.map(prop => {
+        properties: pattern.properties.map((prop) => {
           if (prop.type === 'RestElement') {
-            return { type: 'SpreadElement', argument: patternToExpression(prop.argument) as Expression }
+            return {
+              type: 'SpreadElement',
+              argument: patternToExpression(prop.argument) as Expression,
+            }
           }
           return {
             type: 'Property',
@@ -491,10 +575,15 @@ function patternToExpression(pattern: Pattern): Expression | SpreadElement | nul
     case 'ArrayPattern':
       return {
         type: 'ArrayExpression',
-        elements: pattern.elements.map(element => {
-          if (element === null) return null
+        elements: pattern.elements.map((element) => {
+          if (element === null) {
+            return null
+          }
           if (element.type === 'RestElement') {
-            return { type: 'SpreadElement', argument: patternToExpression(element.argument) as Expression }
+            return {
+              type: 'SpreadElement',
+              argument: patternToExpression(element.argument) as Expression,
+            }
           }
           return patternToExpression(element)
         }),
@@ -506,8 +595,9 @@ function patternToExpression(pattern: Pattern): Expression | SpreadElement | nul
 
 /**
  * Collect every name a parameter pattern binds.
- * @param pattern - a parameter pattern.
- * @returns the set of bound names.
+ *
+ * @param pattern - A parameter pattern.
+ * @returns The set of bound names.
  */
 function patternNames(pattern: Pattern): Set<string> {
   const out = new Set<string>()
@@ -529,13 +619,18 @@ function collectPatternNames(pattern: Pattern, out: Set<string>): void {
       break
     case 'ObjectPattern':
       for (const prop of pattern.properties) {
-        if (prop.type === 'RestElement') collectPatternNames(prop.argument, out)
-        else collectPatternNames(prop.value, out)
+        if (prop.type === 'RestElement') {
+          collectPatternNames(prop.argument, out)
+        } else {
+          collectPatternNames(prop.value, out)
+        }
       }
       break
     case 'ArrayPattern':
       for (const element of pattern.elements) {
-        if (element !== null) collectPatternNames(element, out)
+        if (element !== null) {
+          collectPatternNames(element, out)
+        }
       }
       break
     default:
@@ -550,32 +645,68 @@ function collectPatternNames(pattern: Pattern, out: Set<string>): void {
  * functions own their `arguments` and are not descended into; nested arrows
  * still resolve lexically and are descended into. Property keys and
  * non-computed member properties are not references.
- * @param node - the node to scan (and rewrite when `name` is given).
- * @param name - capture name to rewrite `arguments` references to; omit to
- * only detect references.
- * @returns true when at least one outer `arguments` reference was found.
+ *
+ * @param node - The node to scan (and rewrite when `name` is given).
+ * @param name - Capture name to rewrite `arguments` references to; omit to only
+ *   detect references.
+ * @returns True when at least one outer `arguments` reference was found.
  */
-function mapOuterArguments(node: Node | undefined, name: string | undefined): boolean {
-  if (!node) return false
+function mapOuterArguments(
+  node: Node | undefined,
+  name: string | undefined,
+): boolean {
+  if (!node) {
+    return false
+  }
   if (node.type === 'Identifier') {
-    if (node.name !== 'arguments') return false
-    if (name !== undefined) node.name = name
+    if (node.name !== 'arguments') {
+      return false
+    }
+    if (name !== undefined) {
+      node.name = name
+    }
     return true
   }
-  if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression') return false
+  if (
+    node.type === 'FunctionDeclaration'
+    || node.type === 'FunctionExpression'
+  ) {
+    return false
+  }
   let found = false
   for (const key of Object.keys(node)) {
-    if (key === 'loc' || key === 'range' || key === 'start' || key === 'end') continue
+    if (key === 'loc' || key === 'range' || key === 'start' || key === 'end') {
+      continue
+    }
     // Property keys and non-computed member properties are not references.
-    if (key === 'key' && (node.type === 'Property' || node.type === 'MethodDefinition')) continue
-    if (key === 'property' && node.type === 'MemberExpression' && !node.computed) continue
+    if (
+      key === 'key'
+      && (node.type === 'Property' || node.type === 'MethodDefinition')
+    ) {
+      continue
+    }
+    if (
+      key === 'property'
+      && node.type === 'MemberExpression'
+      && !node.computed
+    ) {
+      continue
+    }
     const value = (node as unknown as Record<string, unknown>)[key]
     if (Array.isArray(value)) {
       for (const child of value) {
-        if (typeof child === 'object' && child !== null && mapOuterArguments(child as Node, name)) found = true
+        if (
+          typeof child === 'object'
+          && child !== null
+          && mapOuterArguments(child as Node, name)
+        ) {
+          found = true
+        }
       }
     } else if (typeof value === 'object' && value !== null) {
-      if (mapOuterArguments(value as Node, name)) found = true
+      if (mapOuterArguments(value as Node, name)) {
+        found = true
+      }
     }
   }
   return found
@@ -597,10 +728,11 @@ function property(key: string, value: Expression): Property {
 /**
  * Per-program identifier allocator: injected names are unique within one
  * transformed file and reused deterministically across files. The name set is
- * seeded with every identifier of the program on first use, so an injected
- * name can never shadow a reference the traced body keeps resolving.
- * @param program - the matched file's Program node.
- * @returns a `unique(base)` allocator for that file.
+ * seeded with every identifier of the program on first use, so an injected name
+ * can never shadow a reference the traced body keeps resolving.
+ *
+ * @param program - The matched file's Program node.
+ * @returns A `unique(base)` allocator for that file.
  */
 function namesOf(program: Program) {
   let names = programNames.get(program)
@@ -613,7 +745,9 @@ function namesOf(program: Program) {
     unique(base: string): string {
       let name = base
       let i = 0
-      while (names.has(name)) name = `${base}_${++i}`
+      while (names.has(name)) {
+        name = `${base}_${++i}`
+      }
       names.add(name)
       return name
     },
@@ -623,10 +757,11 @@ function namesOf(program: Program) {
 /**
  * Collect every identifier name in a node into the given set. The walk is
  * deliberately broad (property keys, labels, and member properties included):
- * over-conservative renaming is safe, while a missed variable reference
- * would silently change what the moved body resolves.
- * @param node - the AST node to walk.
- * @param out - the set receiving identifier names.
+ * over-conservative renaming is safe, while a missed variable reference would
+ * silently change what the moved body resolves.
+ *
+ * @param node - The AST node to walk.
+ * @param out - The set receiving identifier names.
  */
 function collectIdentifiers(node: Node, out: Set<string>): void {
   if (node.type === 'Identifier') {
@@ -634,11 +769,15 @@ function collectIdentifiers(node: Node, out: Set<string>): void {
     return
   }
   for (const key of Object.keys(node)) {
-    if (key === 'loc' || key === 'range' || key === 'start' || key === 'end') continue
+    if (key === 'loc' || key === 'range' || key === 'start' || key === 'end') {
+      continue
+    }
     const value = (node as unknown as Record<string, unknown>)[key]
     if (Array.isArray(value)) {
       for (const child of value) {
-        if (typeof child === 'object' && child !== null) collectIdentifiers(child as Node, out)
+        if (typeof child === 'object' && child !== null) {
+          collectIdentifiers(child as Node, out)
+        }
       }
     } else if (typeof value === 'object' && value !== null) {
       collectIdentifiers(value as Node, out)

@@ -1,6 +1,9 @@
 import type { StentOperation, StentTarget, PatchId } from '@oh-my-dsh/stent'
 
-/** Patch metadata for one compat target; the handler is bound by the runtime registry. */
+/**
+ * Patch metadata for one compat target; the handler is bound by the runtime
+ * registry.
+ */
 export interface StentCompatPatch {
   /** Patch id; must be stable for runtime registration and HMR ownership. */
   readonly id: PatchId
@@ -20,6 +23,9 @@ export interface StentCompatTarget {
 
 /** Module configuration: the declared observation targets. */
 export interface StentCompatConfig {
-  /** Declared targets; an empty or absent list is valid (the service still checks installation). */
+  /**
+   * Declared targets; an empty or absent list is valid (the service still
+   * checks installation).
+   */
   readonly targets?: readonly StentCompatTarget[]
 }

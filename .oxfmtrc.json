@@ -1,8 +1,12 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "arrowParens": "avoid",
+  "arrowParens": "always",
+  "bracketSameLine": false,
   "bracketSpacing": true,
+  "embeddedLanguageFormatting": "auto",
   "endOfLine": "lf",
+  "experimentalOperatorPosition": "start",
+  "htmlWhitespaceSensitivity": "strict",
   "ignorePatterns": [
     "**/lib/**",
     "**/node_modules/**",
@@ -18,13 +22,23 @@
     "**/*.config.ts"
   ],
   "insertFinalNewline": true,
-  "printWidth": 120,
-  "proseWrap": "preserve",
+  "jsdoc": true,
+  "jsxSingleQuote": true,
+  "printWidth": 80,
+  "proseWrap": "always",
+  "quoteProps": "as-needed",
   "semi": false,
   "singleQuote": true,
-  "sortImports": false,
+  "sortImports": {
+    "ignoreCase": false,
+    "newlinesBetween": true,
+    "partitionByComment": false,
+    "partitionByNewline": false,
+    "sortSideEffects": true
+  },
   "sortPackageJson": false,
   "tabWidth": 2,
   "trailingComma": "all",
-  "useTabs": false
+  "useTabs": false,
+  "vueIndentScriptAndStyle": true
 }

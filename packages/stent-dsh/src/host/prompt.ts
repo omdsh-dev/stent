@@ -1,19 +1,25 @@
 /**
- * The Stent Prompt API module: a stable, Mod-facing surface for ordered
- * system sections, cache-safe contexts, tool-schema providers, and prompt
- * variables over the authoritative system-prompt registry.
+ * The Stent Prompt API module: a stable, Mod-facing surface for ordered system
+ * sections, cache-safe contexts, tool-schema providers, and prompt variables
+ * over the authoritative system-prompt registry.
  *
  * The facade delegates every call to `ctx.systemPrompt` and passes the exact
  * effect disposer through. There is no shortcut that inserts unlogged
- * model-visible text or assembles provider requests directly: everything
- * this module contributes reaches the model only through the owning
- * registry's assembly and rendering contract.
+ * model-visible text or assembles provider requests directly: everything this
+ * module contributes reaches the model only through the owning registry's
+ * assembly and rendering contract.
+ *
  * @module @oh-my-dsh/stent-dsh/host/prompt
  */
 
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
-import type { AssembleContext, PromptContext, PromptSection, ToolProviderResult } from '@deepseek-ai/dsh-system-prompt'
+import type {
+  AssembleContext,
+  PromptContext,
+  PromptSection,
+  ToolProviderResult,
+} from '@deepseek-ai/dsh-system-prompt'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -38,6 +44,7 @@ export class StentPromptService extends Service {
 
   /**
    * Create and install the Prompt API.
+   *
    * @param ctx - Cordis context that owns the service.
    */
   constructor(ctx: Context) {
@@ -46,8 +53,9 @@ export class StentPromptService extends Service {
 
   /**
    * Register an ordered system section.
-   * @param section - the section to register.
-   * @returns the exact effect disposer that unregisters it.
+   *
+   * @param section - The section to register.
+   * @returns The exact effect disposer that unregisters it.
    */
   section(section: PromptSection): () => void {
     return this.ctx.systemPrompt.section(section)
@@ -55,8 +63,9 @@ export class StentPromptService extends Service {
 
   /**
    * Register an ordered, cache-safe dynamic context contribution.
-   * @param context - the context contribution to register.
-   * @returns the exact effect disposer that unregisters it.
+   *
+   * @param context - The context contribution to register.
+   * @returns The exact effect disposer that unregisters it.
    */
   context(context: PromptContext): () => void {
     return this.ctx.systemPrompt.context(context)
@@ -64,20 +73,28 @@ export class StentPromptService extends Service {
 
   /**
    * Register a tool-schema provider.
-   * @param provider - evaluated for each assembly with its context.
-   * @returns the exact effect disposer that unregisters it.
+   *
+   * @param provider - Evaluated for each assembly with its context.
+   * @returns The exact effect disposer that unregisters it.
    */
-  tools(provider: (context: AssembleContext) => ToolProviderResult): () => void {
+  tools(
+    provider: (context: AssembleContext) => ToolProviderResult,
+  ): () => void {
     return this.ctx.systemPrompt.tools(provider)
   }
 
   /**
    * Register a prompt variable.
-   * @param name - the `[a-z][a-z0-9_]*` reference name.
-   * @param provider - evaluated for each assembly; returning `undefined` makes a referencing section fail.
-   * @returns the exact effect disposer that unregisters it.
+   *
+   * @param name - The `[a-z][a-z0-9_]*` reference name.
+   * @param provider - Evaluated for each assembly; returning `undefined` makes
+   *   a referencing section fail.
+   * @returns The exact effect disposer that unregisters it.
    */
-  variable(name: string, provider: (context: AssembleContext) => string | undefined): () => void {
+  variable(
+    name: string,
+    provider: (context: AssembleContext) => string | undefined,
+  ): () => void {
     return this.ctx.systemPrompt.variable(name, provider)
   }
 }

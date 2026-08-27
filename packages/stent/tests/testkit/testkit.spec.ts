@@ -5,7 +5,9 @@
 // per-package boilerplate.
 
 import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
+
 import { runPatchFixture } from '../../src/testing/testkit.ts'
 
 /** The fixture entry, as an absolute file URL the child can import. */
@@ -28,7 +30,10 @@ describe('runPatchFixture', () => {
       patches: [
         {
           id: 'testkit/after-add',
-          target: { ...target, functionQuery: { functionName: 'add', kind: 'Sync' } },
+          target: {
+            ...target,
+            functionQuery: { functionName: 'add', kind: 'Sync' },
+          },
           operation: 'after',
         },
       ],
@@ -51,7 +56,10 @@ describe('runPatchFixture', () => {
       patches: [
         {
           id: 'testkit/after-add',
-          target: { ...target, functionQuery: { functionName: 'add', kind: 'Sync' } },
+          target: {
+            ...target,
+            functionQuery: { functionName: 'add', kind: 'Sync' },
+          },
           operation: 'after',
         },
       ],
@@ -62,7 +70,10 @@ describe('runPatchFixture', () => {
     expect(outcome.result).toBeUndefined()
     // The enriched-error shape the node-half specs assert: the message
     // travels verbatim across the process boundary.
-    expect(outcome.error).toEqual({ name: 'Error', message: 'command aborted\ncompleted step: 1/5\n' })
+    expect(outcome.error).toEqual({
+      name: 'Error',
+      message: 'command aborted\ncompleted step: 1/5\n',
+    })
   })
 
   it('reports an unbound patch as an empty binding list', () => {
@@ -71,7 +82,11 @@ describe('runPatchFixture', () => {
       patches: [
         {
           id: 'testkit/no-match',
-          target: { ...target, filePath: 'nope.mjs', functionQuery: { functionName: 'add', kind: 'Sync' } },
+          target: {
+            ...target,
+            filePath: 'nope.mjs',
+            functionQuery: { functionName: 'add', kind: 'Sync' },
+          },
           operation: 'before',
         },
       ],

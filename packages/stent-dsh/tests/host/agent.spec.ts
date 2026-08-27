@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentStatus } from '@deepseek-ai/dsh-agent'
+import { describe, expect, it, vi } from 'vitest'
+
 import { StentAgentService } from '../../src/host/agent.ts'
 
 /** Minimal live-agent stand-in: the facade touches only the listed members. */
@@ -32,10 +33,10 @@ describe('StentAgentService', () => {
     const { ctx } = await setup()
     const created: Agent[] = []
     const disposed: Agent[] = []
-    ctx.stentAgent.onCreated(agent => {
+    ctx.stentAgent.onCreated((agent) => {
       created.push(agent)
     })
-    ctx.stentAgent.onDisposed(agent => {
+    ctx.stentAgent.onDisposed((agent) => {
       disposed.push(agent)
     })
     const agent = fakeAgent()
@@ -68,7 +69,10 @@ describe('StentAgentService', () => {
     const { ctx } = await setup()
     const inject = vi.fn()
     const agent = fakeAgent(inject)
-    const message = { role: 'user', content: [{ type: 'text', text: 'hi' }] } as never
+    const message = {
+      role: 'user',
+      content: [{ type: 'text', text: 'hi' }],
+    } as never
     ctx.stentAgent.inject(agent, message)
     expect(inject).toHaveBeenCalledTimes(1)
     expect(inject).toHaveBeenCalledWith(message)

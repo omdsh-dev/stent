@@ -137,11 +137,11 @@ window.__ModuleLoader__.load({ id: "@oh-my-dsh/stent", factory: (require) => { .
 
 ## 7. Lint 检查
 
-每个包从自己的包根目录运行 Oxlint，使用固定的 DSH 工具链（`oxlint` 与 `oxlint-tsgolint`）和选定的 TypeScript 类型感知规则；根包与子包配置共享一份纳入版本控制的基线。warning 视为失败。生成的 `lib/` 产物、JavaScript fixture launcher 和构建配置不属于本 TypeScript lint 面。
+每个包从自己的包根目录运行 Oxlint，使用固定的 DSH 工具链（`oxlint` 与 `oxlint-tsgolint`）和选定的 TypeScript 类型感知规则；根包与子包配置共享一份纳入版本控制的基线。warning 视为失败。所有控制语句都必须使用大括号（`curly: all`）。生成的 `lib/` 产物、JavaScript fixture launcher 和构建配置不属于本 TypeScript lint 面。
 
 共享的源码 override 还会加载 `tools/oxlint/stent-plugin.ts` 并启用 `stent/comment-shorter-than-function` 与 `stent/min-function-lines`。注释规则检查函数声明前的连续文档块：如果有意义的注释行数大于或等于函数有效实现行数，就认为函数可能是不必要的，或实现过于晦涩。它会忽略被空行隔开的文件头注释、行尾注释、函数体内注释以及 lint/compiler 指令。默认跳过 exported 函数和匿名 callback，因为公共 API 文档和 callback 上下文可能确实需要更多说明；`includeExported` 与 `includeAnonymous` 可以显式开启检查。默认不计算块注释分隔符和 JSDoc 装饰星号；`countCommentDelimiters` 可以改为统计物理上的非空注释行。函数规则按有效源码行数计算，并包含函数定义行；空行和仅包含注释的行不计入。当前基线阈值为 `declaration: 5`、`expression: 3`、`method: 2`、`arrow: 3`。`minimums` 选项可以分别配置这几种写法：填写整数即可设置该写法的最小行数，填写 `false` 则禁用该写法。确实需要保留的短适配函数必须使用 `// oxlint-disable-next-line stent/min-function-lines -- reason` 并说明原因。
 
-Oxfmt 是本 workspace 的统一格式化器，共享策略写在 `.oxfmtrc.json`：两空格缩进、单引号、无分号、尾随逗号和 120 列宽。每个包分别拥有自己的 `fmt` 与 `fmt:check` 命令；根 carrier 的 `pack:fmt:check` 负责编排根包和全部实现包的检查。生成的 `lib/` 产物、fixture 目录、JavaScript launcher fixture 和构建配置不属于格式化范围。
+Oxfmt 是本 workspace 的统一格式化器，共享策略写在 `.oxfmtrc.json`：两空格缩进、JavaScript/TypeScript 使用单引号、JSX 属性使用单引号、无分号、全部支持位置添加尾随逗号和 80 列宽。每个包分别拥有自己的 `fmt` 与 `fmt:check` 命令；根 carrier 的 `pack:fmt:check` 负责编排根包和全部实现包的检查。生成的 `lib/` 产物、fixture 目录、JavaScript launcher fixture 和构建配置不属于格式化范围。
 
 根 carrier 负责自身 `src/` 下的 launcher、`tests/` 下的根集成测试，以及 `tools/` 下的仓库自有 lint 插件。根包的 `lint`、`lint:fix`、`test`、`build` 与 `knip` 命令不会扫描实现包文件，也不提供 `pack:lint:fix`。三个实现包分别声明自己的工具链，并提供只作用于本包的独立 `lint`、`lint:fix`、`test`、`build` 与 `knip` 命令；类型检查由各包带类型感知的 lint 命令提供，不再单独提供 `typecheck` 脚本。根目录的 `pack:*` 脚本只负责编排：保持根包检查与各包命令分开，并通过 `pnpm --filter` 调用后者。
 

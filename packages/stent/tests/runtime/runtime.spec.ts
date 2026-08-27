@@ -1,3 +1,7 @@
+import { Context } from '@deepseek-ai/cordis'
+import { describe, expect, it, beforeEach, afterEach } from 'vitest'
+
+import { publish, subscribeBridge } from '../../src/bridge.ts'
 import {
   runtime,
   validatePatchId,
@@ -10,9 +14,6 @@ import {
   installBridge,
   isStentInstalled,
 } from '../../src/index.ts'
-import { publish, subscribeBridge } from '../../src/bridge.ts'
-import { describe, expect, it, beforeEach, afterEach } from 'vitest'
-import { Context } from '@deepseek-ai/cordis'
 
 const baseInfo = (id: string, enabled = false) => ({
   id,
@@ -26,7 +27,9 @@ describe('stent runtime registry', () => {
   beforeEach(() => {
     Reflect.deleteProperty(globalThis, STENT_DSH_LAUNCH_KEY)
     Reflect.deleteProperty(globalThis, GLOBAL_BRIDGE_KEY)
-    for (const info of runtime.list()) runtime.remove(info.id)
+    for (const info of runtime.list()) {
+      runtime.remove(info.id)
+    }
   })
 
   it('registers, enables, disables, and removes patches', () => {
@@ -44,12 +47,18 @@ describe('stent runtime registry', () => {
 
   it('notifies loader subscribers when static metadata changes', () => {
     const changes: string[] = []
-    const unsubscribe = runtime.onPatchChange(change => changes.push(`${change.type}:${change.id}`))
+    const unsubscribe = runtime.onPatchChange((change) =>
+      changes.push(`${change.type}:${change.id}`),
+    )
     runtime.register(baseInfo('watch/a'))
     runtime.register({ ...baseInfo('watch/a'), operation: 'after' })
     runtime.remove('watch/a')
     unsubscribe()
-    expect(changes).toEqual(['register:watch/a', 'register:watch/a', 'remove:watch/a'])
+    expect(changes).toEqual([
+      'register:watch/a',
+      'register:watch/a',
+      'remove:watch/a',
+    ])
   })
 
   it('re-registering an id keeps metadata but reports not-first', () => {
@@ -72,7 +81,9 @@ describe('stent runtime registry', () => {
     runtime.register({ ...baseInfo('own/b') }, 'owner', 'fiber-1')
     expect(runtime.isOwnedBy('own/b', 'fiber-1')).toBe(true)
     expect(runtime.isOwnedBy('own/b', 'fiber-2')).toBe(false)
-    expect(runtime.register({ ...baseInfo('own/b') }, 'owner', 'fiber-2')).toBe(false)
+    expect(runtime.register({ ...baseInfo('own/b') }, 'owner', 'fiber-2')).toBe(
+      false,
+    )
     // The previous fiber's disposer must no longer own the entry...
     expect(runtime.isOwnedBy('own/b', 'fiber-1')).toBe(false)
     expect(runtime.isOwnedBy('own/b', 'fiber-2')).toBe(true)
@@ -86,9 +97,9 @@ describe('stent runtime registry', () => {
     runtime.register({ ...baseInfo('a', false), priority: 1 })
     runtime.register({ ...baseInfo('c', false), priority: 1 })
     runtime.enable('c', () => {})
-    const ids = runtime.list().map(info => info.id)
+    const ids = runtime.list().map((info) => info.id)
     expect(ids).toEqual(['a', 'c', 'b'])
-    expect(runtime.list().find(info => info.id === 'c')?.enabled).toBe(true)
+    expect(runtime.list().find((info) => info.id === 'c')?.enabled).toBe(true)
   })
 
   it('enable on an unregistered id throws', () => {
@@ -106,7 +117,13 @@ describe('stent runtime registry', () => {
   })
 
   it('validatePatchId rejects unsafe ids and accepts safe ones', () => {
-    for (const bad of ['', 'has space', '汉字', 'a'.repeat(121), 'semi;colon']) {
+    for (const bad of [
+      '',
+      'has space',
+      '汉字',
+      'a'.repeat(121),
+      'semi;colon',
+    ]) {
       expect(() => {
         validatePatchId(bad)
       }).toThrow(/patch id/)
@@ -123,14 +140,40 @@ describe('stent runtime registry', () => {
       filePath: 'index.js',
       functionQuery: { functionName: 'run', kind: 'Sync' as const },
     }
-    runtime.register({ id: 'r1', target, operation: 'replace', priority: 0, enabled: false })
+    runtime.register({
+      id: 'r1',
+      target,
+      operation: 'replace',
+      priority: 0,
+      enabled: false,
+    })
     expect(() => {
-      runtime.register({ id: 'r2', target, operation: 'replace', priority: 0, enabled: false })
+      runtime.register({
+        id: 'r2',
+        target,
+        operation: 'replace',
+        priority: 0,
+        enabled: false,
+      })
     }).toThrow(/conflicts with existing replace patch "r1"/)
     // Re-registering the same id is not a conflict, and a non-replace patch on
     // the same target is allowed (stacking semantics).
-    expect(runtime.register({ id: 'r1', target, operation: 'replace', priority: 0, enabled: false })).toBe(false)
-    runtime.register({ id: 'b1', target, operation: 'before', priority: 0, enabled: false })
+    expect(
+      runtime.register({
+        id: 'r1',
+        target,
+        operation: 'replace',
+        priority: 0,
+        enabled: false,
+      }),
+    ).toBe(false)
+    runtime.register({
+      id: 'b1',
+      target,
+      operation: 'before',
+      priority: 0,
+      enabled: false,
+    })
   })
 
   it('re-registering into an already-claimed replace target still fails', () => {
@@ -142,10 +185,28 @@ describe('stent runtime registry', () => {
     }
     // A patch first registered as `before` must not bypass the exclusive
     // replace scan by re-registering the same id as `replace`.
-    runtime.register({ id: 'x1', target, operation: 'before', priority: 0, enabled: false })
-    runtime.register({ id: 'z1', target, operation: 'replace', priority: 0, enabled: false })
+    runtime.register({
+      id: 'x1',
+      target,
+      operation: 'before',
+      priority: 0,
+      enabled: false,
+    })
+    runtime.register({
+      id: 'z1',
+      target,
+      operation: 'replace',
+      priority: 0,
+      enabled: false,
+    })
     expect(() => {
-      runtime.register({ id: 'x1', target, operation: 'replace', priority: 0, enabled: false })
+      runtime.register({
+        id: 'x1',
+        target,
+        operation: 'replace',
+        priority: 0,
+        enabled: false,
+      })
     }).toThrow(/conflicts with existing replace patch "z1"/)
   })
 
@@ -177,16 +238,26 @@ describe('stent runtime registry', () => {
   })
 
   it('records load-time bindings per patch and merges them into list()', () => {
-    runtime.recordBindings('bind/a', [{ module: 'pkg', file: 'index.js', nodes: 2 }])
-    runtime.recordBindings('bind/a', [{ module: 'pkg', file: 'lib.js', nodes: 1 }])
-    runtime.recordBindings('bind/b', [{ module: 'other', file: 'run.js', nodes: 1 }])
+    runtime.recordBindings('bind/a', [
+      { module: 'pkg', file: 'index.js', nodes: 2 },
+    ])
+    runtime.recordBindings('bind/a', [
+      { module: 'pkg', file: 'lib.js', nodes: 1 },
+    ])
+    runtime.recordBindings('bind/b', [
+      { module: 'other', file: 'run.js', nodes: 1 },
+    ])
     expect(runtime.bindingsOf('bind/a')).toEqual([
       { module: 'pkg', file: 'index.js', nodes: 2 },
       { module: 'pkg', file: 'lib.js', nodes: 1 },
     ])
     expect(runtime.bindingsOf('bind/nope')).toEqual([])
     // allBindings flattens in patch-id order.
-    expect(runtime.allBindings().map(record => record.file)).toEqual(['index.js', 'lib.js', 'run.js'])
+    expect(runtime.allBindings().map((record) => record.file)).toEqual([
+      'index.js',
+      'lib.js',
+      'run.js',
+    ])
     // list() entries carry the recorded bindings regardless of registration.
     runtime.register({
       id: 'bind/a',
@@ -195,13 +266,19 @@ describe('stent runtime registry', () => {
       priority: 0,
       enabled: false,
     })
-    expect(runtime.list().find(info => info.id === 'bind/a')?.bindings).toHaveLength(2)
+    expect(
+      runtime.list().find((info) => info.id === 'bind/a')?.bindings,
+    ).toHaveLength(2)
   })
 
   it('validatePatchStatic rejects a non-boolean required flag', () => {
     const target = { module: 'pkg', versionRange: '*', filePath: 'index.js' }
     expect(() => {
-      validatePatchStatic({ target, operation: 'before', required: 'yes' as never })
+      validatePatchStatic({
+        target,
+        operation: 'before',
+        required: 'yes' as never,
+      })
     }).toThrow(/required must be a boolean/)
     expect(() => {
       validatePatchStatic({ target, operation: 'before', required: true })
@@ -211,19 +288,34 @@ describe('stent runtime registry', () => {
   it('validatePatchStatic accepts filePaths and rejects invalid combinations', () => {
     const base = { module: 'pkg', versionRange: '*' }
     expect(() => {
-      validatePatchStatic({ target: { ...base, filePaths: ['a.js', 'b.js'] }, operation: 'before' })
+      validatePatchStatic({
+        target: { ...base, filePaths: ['a.js', 'b.js'] },
+        operation: 'before',
+      })
     }).not.toThrow()
     expect(() => {
-      validatePatchStatic({ target: { ...base, filePath: 'a.js' }, operation: 'before' })
+      validatePatchStatic({
+        target: { ...base, filePath: 'a.js' },
+        operation: 'before',
+      })
     }).not.toThrow()
     expect(() => {
-      validatePatchStatic({ target: { ...base, filePath: 'a.js', filePaths: ['b.js'] }, operation: 'before' })
+      validatePatchStatic({
+        target: { ...base, filePath: 'a.js', filePaths: ['b.js'] },
+        operation: 'before',
+      })
     }).toThrow(/not both/)
     expect(() => {
-      validatePatchStatic({ target: { ...base, filePaths: [] }, operation: 'before' })
+      validatePatchStatic({
+        target: { ...base, filePaths: [] },
+        operation: 'before',
+      })
     }).toThrow(/filePaths/)
     expect(() => {
-      validatePatchStatic({ target: { ...base, filePaths: [''] }, operation: 'before' })
+      validatePatchStatic({
+        target: { ...base, filePaths: [''] },
+        operation: 'before',
+      })
     }).toThrow(/filePaths/)
     expect(() => {
       validatePatchStatic({ target: { ...base }, operation: 'before' })
@@ -301,7 +393,7 @@ describe('StentService', () => {
       handler: () => {},
     })
     expect(id).toBe('service/a')
-    expect(service.list().some(info => info.id === id)).toBe(true)
+    expect(service.list().some((info) => info.id === id)).toBe(true)
   })
 
   it('is reachable as ctx.stent when mounted as a plugin', async () => {
@@ -319,7 +411,7 @@ describe('StentService', () => {
       operation: 'before',
       handler: () => {},
     })
-    expect(ctx.stent.list().some(info => info.id === 'service/b')).toBe(true)
+    expect(ctx.stent.list().some((info) => info.id === 'service/b')).toBe(true)
   })
 
   it('rejects invalid patches with descriptive errors', () => {
@@ -360,7 +452,12 @@ describe('StentService', () => {
     expect(() =>
       service.register({
         id: 'x',
-        target: { module: 'm', versionRange: '*', filePath: 'f.js', astQuery: '   ' },
+        target: {
+          module: 'm',
+          versionRange: '*',
+          filePath: 'f.js',
+          astQuery: '   ',
+        },
         operation: 'before',
         handler: () => {},
       }),
@@ -370,10 +467,14 @@ describe('StentService', () => {
   it('bindings() snapshots one patch or every recorded binding', () => {
     const ctx = new Context()
     const service = new StentService(ctx)
-    runtime.recordBindings('service/one', [{ module: 'm', file: 'f.js', nodes: 1 }])
+    runtime.recordBindings('service/one', [
+      { module: 'm', file: 'f.js', nodes: 1 },
+    ])
     expect(service.bindings('service/one')).toHaveLength(1)
     expect(service.bindings('service/none')).toEqual([])
-    expect(service.bindings().some(record => record.file === 'f.js')).toBe(true)
+    expect(service.bindings().some((record) => record.file === 'f.js')).toBe(
+      true,
+    )
   })
 
   it('getStent mounts once and reuses the mounted service', () => {
@@ -524,7 +625,9 @@ describe('StentService', () => {
 describe('bridge multi-listener dispatch', () => {
   const disposers: Array<() => void> = []
   afterEach(() => {
-    for (const dispose of disposers.splice(0)) dispose()
+    for (const dispose of disposers.splice(0)) {
+      dispose()
+    }
   })
 
   const call = (id: string) => ({

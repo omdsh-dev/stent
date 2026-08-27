@@ -1,6 +1,7 @@
 /**
  * The catalog adapter belongs to the DSH integration layer: the pure Stent
  * package has no dependency on the host's tool-cordis catalog.
+ *
  * @module @oh-my-dsh/stent-dsh/catalog
  */
 
@@ -16,7 +17,9 @@ export const STENT_CATALOG_ENTRIES = [
         signature: 'register(patch: StentPatch): PatchId',
         description:
           'Register a patch and enable its handler for the current fiber. The registration is an effect: disposing the fiber disables and removes the patch, so transformed code falls back to the original body. The effect attaches on the first registration of an id only; a later re-registration from another fiber updates metadata and handler without changing disposal ownership.',
-        parameters: [{ name: 'patch', description: 'validated patch descriptor.' }],
+        parameters: [
+          { name: 'patch', description: 'validated patch descriptor.' },
+        ],
         returns: 'the registered patch id.',
       },
       {
@@ -33,7 +36,8 @@ export const STENT_CATALOG_ENTRIES = [
       },
       {
         signature: 'enable(id: string, handler: StentHandler): void',
-        description: 'Enable a previously disabled patch with a fresh handler binding.',
+        description:
+          'Enable a previously disabled patch with a fresh handler binding.',
         parameters: [
           { name: 'id', description: 'the patch id.' },
           { name: 'handler', description: 'the trusted runtime handler.' },
@@ -63,19 +67,30 @@ export const STENT_CATALOG_ENTRIES = [
       {
         signature: 'onCreated(listener: (agent: Agent) => void): () => boolean',
         description: 'Observe a live agent being created.',
-        parameters: [{ name: 'listener', description: 'called with the created agent.' }],
+        parameters: [
+          { name: 'listener', description: 'called with the created agent.' },
+        ],
         returns: 'the exact `ctx.on()` disposer removing this listener.',
       },
       {
-        signature: 'onDisposed(listener: (agent: Agent) => void): () => boolean',
+        signature:
+          'onDisposed(listener: (agent: Agent) => void): () => boolean',
         description: 'Observe a live agent being disposed.',
-        parameters: [{ name: 'listener', description: 'called with the disposed agent.' }],
+        parameters: [
+          { name: 'listener', description: 'called with the disposed agent.' },
+        ],
         returns: 'the exact `ctx.on()` disposer removing this listener.',
       },
       {
-        signature: 'onStatus(listener: (agent: Agent, status: AgentStatus) => void): () => boolean',
+        signature:
+          'onStatus(listener: (agent: Agent, status: AgentStatus) => void): () => boolean',
         description: "Observe an agent's idle/running status transitions.",
-        parameters: [{ name: 'listener', description: 'called with the agent and its new status.' }],
+        parameters: [
+          {
+            name: 'listener',
+            description: 'called with the agent and its new status.',
+          },
+        ],
         returns: 'the exact `ctx.on()` disposer removing this listener.',
       },
       {
@@ -84,7 +99,10 @@ export const STENT_CATALOG_ENTRIES = [
           "Inject a logged, model-visible user message into one agent's context. The message goes through `agent.inject()`, the Agent's own durable injection path: anything this API contributes to a model request is reconstructable from the session log. No provider request is assembled here.",
         parameters: [
           { name: 'agent', description: 'the live agent to inject into.' },
-          { name: 'message', description: 'the sourced user message to append.' },
+          {
+            name: 'message',
+            description: 'the sourced user message to append.',
+          },
         ],
       },
     ],
@@ -97,14 +115,26 @@ export const STENT_CATALOG_ENTRIES = [
     methods: [
       {
         signature: 'register(definition: CommandDefinition): () => void',
-        description: 'Register one human command through the authoritative registry.',
-        parameters: [{ name: 'definition', description: 'discovery metadata and direct UI handler.' }],
+        description:
+          'Register one human command through the authoritative registry.',
+        parameters: [
+          {
+            name: 'definition',
+            description: 'discovery metadata and direct UI handler.',
+          },
+        ],
         returns: 'the exact effect disposer that unregisters this definition.',
       },
       {
         signature: 'list(agent: Agent): readonly CommandDescriptor[]',
-        description: 'List the effective immutable command descriptors for one agent.',
-        parameters: [{ name: 'agent', description: 'exact receiving agent and scoped-layer key.' }],
+        description:
+          'List the effective immutable command descriptors for one agent.',
+        parameters: [
+          {
+            name: 'agent',
+            description: 'exact receiving agent and scoped-layer key.',
+          },
+        ],
         returns: 'name-sorted descriptors after scoped shadowing.',
       },
     ],
@@ -118,29 +148,48 @@ export const STENT_CATALOG_ENTRIES = [
       {
         signature: 'section(section: PromptSection): () => void',
         description: 'Register an ordered system section.',
-        parameters: [{ name: 'section', description: 'the section to register.' }],
+        parameters: [
+          { name: 'section', description: 'the section to register.' },
+        ],
         returns: 'the exact effect disposer that unregisters it.',
       },
       {
         signature: 'context(context: PromptContext): () => void',
-        description: 'Register an ordered, cache-safe dynamic context contribution.',
-        parameters: [{ name: 'context', description: 'the context contribution to register.' }],
-        returns: 'the exact effect disposer that unregisters it.',
-      },
-      {
-        signature: 'tools(provider: (context: AssembleContext) => ToolProviderResult): () => void',
-        description: 'Register a tool-schema provider.',
-        parameters: [{ name: 'provider', description: 'evaluated for each assembly with its context.' }],
-        returns: 'the exact effect disposer that unregisters it.',
-      },
-      {
-        signature: 'variable(name: string, provider: (context: AssembleContext) => string | undefined): () => void',
-        description: 'Register a prompt variable.',
+        description:
+          'Register an ordered, cache-safe dynamic context contribution.',
         parameters: [
-          { name: 'name', description: 'the `[a-z][a-z0-9_]*` reference name.' },
+          {
+            name: 'context',
+            description: 'the context contribution to register.',
+          },
+        ],
+        returns: 'the exact effect disposer that unregisters it.',
+      },
+      {
+        signature:
+          'tools(provider: (context: AssembleContext) => ToolProviderResult): () => void',
+        description: 'Register a tool-schema provider.',
+        parameters: [
           {
             name: 'provider',
-            description: 'evaluated for each assembly; returning `undefined` makes a referencing section fail.',
+            description: 'evaluated for each assembly with its context.',
+          },
+        ],
+        returns: 'the exact effect disposer that unregisters it.',
+      },
+      {
+        signature:
+          'variable(name: string, provider: (context: AssembleContext) => string | undefined): () => void',
+        description: 'Register a prompt variable.',
+        parameters: [
+          {
+            name: 'name',
+            description: 'the `[a-z][a-z0-9_]*` reference name.',
+          },
+          {
+            name: 'provider',
+            description:
+              'evaluated for each assembly; returning `undefined` makes a referencing section fail.',
           },
         ],
         returns: 'the exact effect disposer that unregisters it.',
@@ -159,7 +208,8 @@ export const STENT_CATALOG_ENTRIES = [
         parameters: [
           {
             name: 'definition',
-            description: 'tool schema, execution, and optional finalization/presentation callbacks.',
+            description:
+              'tool schema, execution, and optional finalization/presentation callbacks.',
           },
         ],
         returns: 'the exact disposer that unregisters the tool.',
@@ -171,7 +221,8 @@ export const STENT_CATALOG_ENTRIES = [
         parameters: [
           {
             name: 'listener',
-            description: 'the waterfall listener; call `next()` to delegate, return without it to veto.',
+            description:
+              'the waterfall listener; call `next()` to delegate, return without it to veto.',
           },
         ],
         returns: 'the exact `ctx.on()` disposer removing this listener.',
@@ -179,9 +230,14 @@ export const STENT_CATALOG_ENTRIES = [
       {
         signature:
           'onPostExecute( listener: ( exec: ToolExecution, result: Readonly<ToolExecutionResult>, next: () => Promise<PostToolDecision>, ) => Promise<PostToolDecision>, ): () => boolean',
-        description: 'Observe or shape a normalized dispatch outcome through `tools/post-execute`.',
+        description:
+          'Observe or shape a normalized dispatch outcome through `tools/post-execute`.',
         parameters: [
-          { name: 'listener', description: 'the waterfall listener; call `next()` to accept the result unchanged.' },
+          {
+            name: 'listener',
+            description:
+              'the waterfall listener; call `next()` to accept the result unchanged.',
+          },
         ],
         returns: 'the exact `ctx.on()` disposer removing this listener.',
       },
@@ -189,11 +245,13 @@ export const STENT_CATALOG_ENTRIES = [
   },
   {
     name: 'StentAfterHandler',
-    declaration: 'export type StentAfterHandler = (call: StentCall) => unknown;',
+    declaration:
+      'export type StentAfterHandler = (call: StentCall) => unknown;',
   },
   {
     name: 'StentAroundHandler',
-    declaration: 'export type StentAroundHandler = (call: StentCall, invoke: StentInvoke) => unknown;',
+    declaration:
+      'export type StentAroundHandler = (call: StentCall, invoke: StentInvoke) => unknown;',
   },
   {
     name: 'StentBeforeHandler',
@@ -201,7 +259,8 @@ export const STENT_CATALOG_ENTRIES = [
   },
   {
     name: 'StentBinding',
-    declaration: 'export interface StentBinding {\n    module: string;\n    file: string;\n    nodes: number;\n}',
+    declaration:
+      'export interface StentBinding {\n    module: string;\n    file: string;\n    nodes: number;\n}',
   },
   {
     name: 'StentCall',
@@ -219,7 +278,8 @@ export const STENT_CATALOG_ENTRIES = [
   },
   {
     name: 'StentOperation',
-    declaration: "export type StentOperation = 'before' | 'after' | 'around' | 'replace';",
+    declaration:
+      "export type StentOperation = 'before' | 'after' | 'around' | 'replace';",
   },
   {
     name: 'StentPatch',
@@ -233,7 +293,8 @@ export const STENT_CATALOG_ENTRIES = [
   },
   {
     name: 'StentReplaceHandler',
-    declaration: 'export type StentReplaceHandler = (call: StentCall, invoke: StentInvoke) => unknown;',
+    declaration:
+      'export type StentReplaceHandler = (call: StentCall, invoke: StentInvoke) => unknown;',
   },
   {
     name: 'StentTarget',
@@ -263,9 +324,13 @@ export async function registerCatalogEntries(): Promise<void> {
     const spec = '@deepseek-ai/dsh-tool-cordis/src/api-catalog.ts'
     const catalog = (await import(spec)) as unknown as ApiCatalogModule
     const list = catalog.SERVICE_API
-    if (list === undefined) return
+    if (list === undefined) {
+      return
+    }
     for (const entry of STENT_CATALOG_ENTRIES as Array<{ key: string }>) {
-      if (!list.some(existing => existing.key === entry.key)) list.push(entry)
+      if (!list.some((existing) => existing.key === entry.key)) {
+        list.push(entry)
+      }
     }
   } catch {
     // Built host (no tsx, no ./src/* resolution): the inspect report still

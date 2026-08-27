@@ -4,6 +4,7 @@
  * The transform layer owns the static patch shape it consumes and the binding
  * reports it produces. Platform and runtime modules may import these contracts,
  * but this directory does not depend on them.
+ *
  * @module @oh-my-dsh/stent/transform/types
  */
 
@@ -59,9 +60,9 @@ export type StentOperation = 'before' | 'after' | 'around' | 'replace'
 
 /** Static target descriptor consumed by the instrumentation builder. */
 export interface StentTarget {
-  /** npm package name matched against the resolved module's owner. */
+  /** Npm package name matched against the resolved module's owner. */
   module: string
-  /** semver range the owning package version must satisfy. */
+  /** Semver range the owning package version must satisfy. */
   versionRange: string
   /** File path or pattern relative to the package root. */
   filePath?: string | RegExp

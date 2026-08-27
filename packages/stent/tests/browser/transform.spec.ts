@@ -1,11 +1,19 @@
-import { createBrowserTransform, repoSourceResolver, resolvePackageIdentity } from '../../src/browser/index.ts'
-import type { IdentityResolver } from '../../src/browser/index.ts'
-import type { StentPatchStub } from '../../src/types.ts'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
 
-const fixtureDir = fileURLToPath(new URL('../fixtures/node_modules/stent-target-fixture/', import.meta.url))
+import {
+  createBrowserTransform,
+  repoSourceResolver,
+  resolvePackageIdentity,
+} from '../../src/browser/index.ts'
+import type { IdentityResolver } from '../../src/browser/index.ts'
+import type { StentPatchStub } from '../../src/types.ts'
+
+const fixtureDir = fileURLToPath(
+  new URL('../fixtures/node_modules/stent-target-fixture/', import.meta.url),
+)
 
 const patch = {
   id: 'web/before-add',
@@ -19,14 +27,19 @@ const patch = {
   handler: () => {},
 }
 
-const createTransform = (patches: readonly StentPatchStub[], resolve: IdentityResolver = resolvePackageIdentity) =>
-  createBrowserTransform({ patches, resolve })
+const createTransform = (
+  patches: readonly StentPatchStub[],
+  resolve: IdentityResolver = resolvePackageIdentity,
+) => createBrowserTransform({ patches, resolve })
 
 describe('createBrowserTransform validation', () => {
-  const createInvalid = (value: StentPatchStub): unknown => createTransform([value])
+  const createInvalid = (value: StentPatchStub): unknown =>
+    createTransform([value])
 
   it('rejects malformed static fields instead of installing a never-matching config', () => {
-    expect(() => createInvalid({ ...patch, id: 'has space' })).toThrow(/patch id/)
+    expect(() => createInvalid({ ...patch, id: 'has space' })).toThrow(
+      /patch id/,
+    )
     expect(() =>
       createInvalid({
         ...patch,
@@ -73,26 +86,41 @@ describe('createBrowserTransform', () => {
 
   it('returns null for modules no instrumentation targets', () => {
     const transform = createTransform([patch])
-    const output = transform('export const x = 1', '/tmp/other-pkg/lib/index.js')
+    const output = transform(
+      'export const x = 1',
+      '/tmp/other-pkg/lib/index.js',
+    )
     expect(output).toBeNull()
   })
 
   it('repoSourceResolver maps source-tree ids to the package identity', () => {
     const packageRoot = ['/repo', 'packages', 'client', 'x'].join('/')
-    const resolver = repoSourceResolver({ packageName: '@example/client-x', packageRoot, version: '0.0.1' })
+    const resolver = repoSourceResolver({
+      packageName: '@example/client-x',
+      packageRoot,
+      version: '0.0.1',
+    })
     expect(resolver(`${packageRoot}/src/client/index.ts`)).toEqual({
       name: '@example/client-x',
       version: '0.0.1',
       path: 'src/client/index.ts',
     })
-    expect(resolver(`${['/repo', 'packages', 'client', 'y'].join('/')}/src/client/index.ts`)).toBeUndefined()
+    expect(
+      resolver(
+        `${['/repo', 'packages', 'client', 'y'].join('/')}/src/client/index.ts`,
+      ),
+    ).toBeUndefined()
   })
 
   it('transforms source-tree modules through repoSourceResolver', () => {
     const root = fixtureDir.replace(/\/$/, '')
     const transform = createTransform(
       [patch],
-      repoSourceResolver({ packageName: 'stent-target-fixture', packageRoot: root, version: '1.0.0' }),
+      repoSourceResolver({
+        packageName: 'stent-target-fixture',
+        packageRoot: root,
+        version: '1.0.0',
+      }),
     )
     const id = `${root}/index.mjs`
     const source = readFileSync(id, 'utf8')
@@ -199,7 +227,10 @@ describe('createBrowserTransform', () => {
     }
     const transform = createTransform([patchCollision])
     const id = `${fixtureDir}collision.js`
-    const source = ['const stentCall = "outer"', 'export function readOuter() { return stentCall }'].join('\n')
+    const source = [
+      'const stentCall = "outer"',
+      'export function readOuter() { return stentCall }',
+    ].join('\n')
     const output = transform(source, id)
     expect(output).not.toBeNull()
     // The injected record variable must not shadow the module-level binding
@@ -221,7 +252,8 @@ describe('createBrowserTransform', () => {
     }
     const transform = createTransform([patchArgs])
     const id = `${fixtureDir}args-arrow.js`
-    const source = 'function wrap() { return (x) => x + arguments[0] }\nexport const bad = () => arguments[0]'
+    const source =
+      'function wrap() { return (x) => x + arguments[0] }\nexport const bad = () => arguments[0]'
     const output = transform(source, id)
     expect(output).not.toBeNull()
     // The arrow is transformed, and the outer `arguments` reference is
@@ -235,40 +267,50 @@ describe('createBrowserTransform', () => {
 describe('multi-match selection', () => {
   const multiId = `${fixtureDir}multi.mjs`
   const multiSource = (): string => readFileSync(multiId, 'utf8')
-  const multiTarget = { module: 'stent-target-fixture', versionRange: '^1.0.0', filePath: 'multi.mjs' }
+  const multiTarget = {
+    module: 'stent-target-fixture',
+    versionRange: '^1.0.0',
+    filePath: 'multi.mjs',
+  }
   const multiTransform = (target: Record<string, unknown>) =>
-    createTransform([{ id: 'web/multi', operation: 'before', target: target as never }])
+    createTransform([
+      { id: 'web/multi', operation: 'before', target: target as never },
+    ])
 
   it('transforms every function the selector picks by default (name query)', () => {
-    const output = multiTransform({ ...multiTarget, functionQuery: { methodName: 'close', kind: 'Sync' } })(
-      multiSource(),
-      multiId,
-    )!
+    const output = multiTransform({
+      ...multiTarget,
+      functionQuery: { methodName: 'close', kind: 'Sync' },
+    })(multiSource(), multiId)!
     expect(output.code.match(/web\/multi/g) ?? []).toHaveLength(2)
   })
 
   it('transforms every function the selector picks by default (raw astQuery)', () => {
-    const output = multiTransform({ ...multiTarget, astQuery: 'ClassBody > [key.name="close"] > FunctionExpression' })(
-      multiSource(),
-      multiId,
-    )!
+    const output = multiTransform({
+      ...multiTarget,
+      astQuery: 'ClassBody > [key.name="close"] > FunctionExpression',
+    })(multiSource(), multiId)!
     expect(output.code.match(/web\/multi/g) ?? []).toHaveLength(2)
   })
 
   it('selects the index-th match when a name query carries an index', () => {
-    const first = multiTransform({ ...multiTarget, functionQuery: { methodName: 'close', kind: 'Sync', index: 0 } })(
-      multiSource(),
-      multiId,
-    )!
+    const first = multiTransform({
+      ...multiTarget,
+      functionQuery: { methodName: 'close', kind: 'Sync', index: 0 },
+    })(multiSource(), multiId)!
     expect(first.code.match(/web\/multi/g) ?? []).toHaveLength(1)
-    expect(first.code.indexOf('web/multi')).toBeLessThan(first.code.indexOf('beta:'))
+    expect(first.code.indexOf('web/multi')).toBeLessThan(
+      first.code.indexOf('beta:'),
+    )
 
-    const second = multiTransform({ ...multiTarget, functionQuery: { methodName: 'close', kind: 'Sync', index: 1 } })(
-      multiSource(),
-      multiId,
-    )!
+    const second = multiTransform({
+      ...multiTarget,
+      functionQuery: { methodName: 'close', kind: 'Sync', index: 1 },
+    })(multiSource(), multiId)!
     expect(second.code.match(/web\/multi/g) ?? []).toHaveLength(1)
-    expect(second.code.indexOf('web/multi')).toBeGreaterThan(second.code.indexOf('alpha:'))
+    expect(second.code.indexOf('web/multi')).toBeGreaterThan(
+      second.code.indexOf('alpha:'),
+    )
   })
 
   it('forwards target.index as the behavior bag for raw astQuery targets', () => {
@@ -278,7 +320,9 @@ describe('multi-match selection', () => {
       index: 1,
     })(multiSource(), multiId)!
     expect(output.code.match(/web\/multi/g) ?? []).toHaveLength(1)
-    expect(output.code.indexOf('web/multi')).toBeGreaterThan(output.code.indexOf('alpha:'))
+    expect(output.code.indexOf('web/multi')).toBeGreaterThan(
+      output.code.indexOf('alpha:'),
+    )
   })
 
   it('rejects malformed index fields at instrumentation build time', () => {
@@ -287,7 +331,11 @@ describe('multi-match selection', () => {
         {
           id: 'web/bad-index',
           operation: 'before',
-          target: { ...multiTarget, astQuery: 'FunctionDeclaration', index: -1 },
+          target: {
+            ...multiTarget,
+            astQuery: 'FunctionDeclaration',
+            index: -1,
+          },
         },
       ]),
     ).toThrow(/target\.index/)
@@ -296,7 +344,10 @@ describe('multi-match selection', () => {
         {
           id: 'web/bad-fq-index',
           operation: 'before',
-          target: { ...multiTarget, functionQuery: { methodName: 'close', kind: 'Sync', index: 1.5 } },
+          target: {
+            ...multiTarget,
+            functionQuery: { methodName: 'close', kind: 'Sync', index: 1.5 },
+          },
         },
       ]),
     ).toThrow(/functionQuery\.index/)

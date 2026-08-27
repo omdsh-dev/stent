@@ -1,7 +1,8 @@
 /**
- * The only direct adapter boundary to the Orchestrion code transformer.
- * Runtime and platform adapters consume these local names instead of reaching
- * into the third-party package themselves.
+ * The only direct adapter boundary to the Orchestrion code transformer. Runtime
+ * and platform adapters consume these local names instead of reaching into the
+ * third-party package themselves.
+ *
  * @module @oh-my-dsh/stent/transform/orchestrion
  */
 

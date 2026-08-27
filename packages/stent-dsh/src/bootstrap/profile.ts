@@ -3,8 +3,8 @@
  *
  * Profile rows decide which plugins are mounted, but they no longer carry
  * executable patch descriptors. The launcher preload installs an empty,
- * runtime-driven loader before the host imports plugins; plugin code then
- * calls `ctx.stent.register()` with patch metadata and its handler.
+ * runtime-driven loader before the host imports plugins; plugin code then calls
+ * `ctx.stent.register()` with patch metadata and its handler.
  *
  * @module @oh-my-dsh/stent-dsh/bootstrap/profile
  */
@@ -27,9 +27,17 @@ export type StentProfileRows = ReadonlyMap<string, StentProfileRow>
 /** Reject removed YAML patch descriptors at every bootstrap boundary. */
 function assertDynamicProfile(rows: StentProfileRows): void {
   for (const [id, row] of rows) {
-    if (row.config === null || typeof row.config !== 'object' || Array.isArray(row.config)) continue
+    if (
+      row.config === null
+      || typeof row.config !== 'object'
+      || Array.isArray(row.config)
+    ) {
+      continue
+    }
     const stent = (row.config as { stent?: unknown }).stent
-    if (stent === null || typeof stent !== 'object' || Array.isArray(stent)) continue
+    if (stent === null || typeof stent !== 'object' || Array.isArray(stent)) {
+      continue
+    }
     if (Object.prototype.hasOwnProperty.call(stent, 'patches')) {
       throw new Error(
         `stent-dsh: profile row ${JSON.stringify(id)} uses config.stent.patches; register patch metadata in plugin code instead`,
@@ -47,15 +55,21 @@ function assertDynamicProfile(rows: StentProfileRows): void {
  * plugin code. Calling it from a launcher boot is skipped because the preload
  * installation already handles the target modules.
  */
-export async function installStentBootstrap(rows: StentProfileRows): Promise<void> {
+export async function installStentBootstrap(
+  rows: StentProfileRows,
+): Promise<void> {
   assertDynamicProfile(rows)
-  if (!rows.has('stent') || isStentDshLaunch()) return
+  if (!rows.has('stent') || isStentDshLaunch()) {
+    return
+  }
   const { installStentHooks } = await import('@oh-my-dsh/stent/node')
   installStentHooks()
 }
 
 /** Verify all dynamically registered required patches after profile boot. */
-export async function checkStentRequiredPatches(rows: StentProfileRows): Promise<void> {
+export async function checkStentRequiredPatches(
+  rows: StentProfileRows,
+): Promise<void> {
   assertDynamicProfile(rows)
   const { checkRequiredPatches } = await import('@oh-my-dsh/stent/node')
   checkRequiredPatches()
@@ -73,7 +87,9 @@ function logHookSummary(
   patches: readonly StentPatchInfo[],
   runtime: { bindingsOf: (id: string) => StentBindingView[] },
 ): void {
-  if (patches.length === 0) return
+  if (patches.length === 0) {
+    return
+  }
   const lines: string[] = []
   for (const patch of patches) {
     const bindings = runtime.bindingsOf(patch.id)
@@ -82,10 +98,14 @@ function logHookSummary(
       continue
     }
     for (const binding of bindings) {
-      lines.push(`  hooked ${patch.id} → ${binding.module} ${binding.file} (${binding.nodes} node(s))`)
+      lines.push(
+        `  hooked ${patch.id} → ${binding.module} ${binding.file} (${binding.nodes} node(s))`,
+      )
     }
   }
-  process.stderr.write(`stent: hooks summary — ${patches.length} patch(es):\n${lines.join('\n')}\n`)
+  process.stderr.write(
+    `stent: hooks summary — ${patches.length} patch(es):\n${lines.join('\n')}\n`,
+  )
 }
 
 /**
@@ -100,13 +120,21 @@ export function scheduleRequiredPatchCheck(ctx: Context): void {
   const stentOn = isStentDshLaunch()
   ctx.effect(() => {
     const timer = setTimeout(() => {
-      if (!stentOn) return
+      if (!stentOn) {
+        return
+      }
       void (async () => {
-        const { checkRequiredPatches, flushBindingReports } = await import('@oh-my-dsh/stent/node')
+        const { checkRequiredPatches, flushBindingReports } =
+          await import('@oh-my-dsh/stent/node')
         const { runtime } = await import('@oh-my-dsh/stent')
         await flushBindingReports(1000)
         checkRequiredPatches()
-        logHookSummary(runtime.list(), runtime as unknown as { bindingsOf: (id: string) => StentBindingView[] })
+        logHookSummary(
+          runtime.list(),
+          runtime as unknown as {
+            bindingsOf: (id: string) => StentBindingView[]
+          },
+        )
       })()
     }, 0)
     return () => {

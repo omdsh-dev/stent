@@ -3,32 +3,39 @@
  * applies the Stent rewrite to target modules during a client bundle build.
  *
  * Client bundles build from repository source paths, so this factory accepts a
- * caller-provided identity resolver: map a module id to `{ name, version,
- * path }` (package name, version, package-relative path) and the matcher runs
+ * caller-provided identity resolver: map a module id to `{ name, version, path
+ * }` (package name, version, package-relative path) and the matcher runs
  * exactly as it does for the Node loader.
  *
  * Like the Node path, the transform parses emitted JavaScript: TypeScript
  * sources must be compiled before transformation, or the parse fails loudly.
  * This module is an internal implementation used by the public
  * `@oh-my-dsh/stent/browser` entry.
+ *
  * @module @oh-my-dsh/stent/transform/browser
  */
 
 import { readFileSync } from 'node:fs'
 import { relative } from 'node:path'
+
 import ts from 'typescript'
-import { detectModuleType } from './identity.ts'
-import { createStentMatcher, getStentTransformer, transformStentSource } from './matcher.ts'
+
 import { expandPatchStub, type StentInstrumentationConfig } from './config.ts'
+import { detectModuleType } from './identity.ts'
+import {
+  createStentMatcher,
+  getStentTransformer,
+  transformStentSource,
+} from './matcher.ts'
 import type { StentBindingReport, StentPatchStub } from './types.ts'
 
 /**
- * Strip TypeScript type annotations so the code transformer (a plain
- * JavaScript parser) can parse `.ts`/`.tsx` sources. Type stripping only
- * removes annotations; the emitted JavaScript keeps module and function
- * shapes intact.
+ * Strip TypeScript type annotations so the code transformer (a plain JavaScript
+ * parser) can parse `.ts`/`.tsx` sources. Type stripping only removes
+ * annotations; the emitted JavaScript keeps module and function shapes intact.
+ *
  * @param code - TypeScript source.
- * @returns the equivalent JavaScript source.
+ * @returns The equivalent JavaScript source.
  */
 function stripTypes(code: string, fileName: string): string {
   const output = ts.transpileModule(code, {
@@ -51,7 +58,7 @@ function stripTypes(code: string, fileName: string): string {
 
 /** Module identity the matcher needs for one module id. */
 export interface ModuleIdentity {
-  /** npm package name. */
+  /** Npm package name. */
   name: string
   /** Installed or declared package version. */
   version: string
@@ -64,7 +71,7 @@ export type IdentityResolver = (id: string) => ModuleIdentity | undefined
 
 /** Options for {@link repoSourceResolver}. */
 export interface RepoSourceResolverOptions {
-  /** npm package name of the built client plugin. */
+  /** Npm package name of the built client plugin. */
   packageName: string
   /** Absolute source root of the package. */
   packageRoot: string
@@ -76,14 +83,25 @@ export interface RepoSourceResolverOptions {
  * Resolve repository source modules: any id under `packageRoot` maps to the
  * given package name and version. This is the resolver client plugin builds
  * use, since their sources live at `packages/<group>/<name>/src/...`.
- * @param options - package identity and source-root options.
- * @returns an identity resolver for that package's sources.
+ *
+ * @param options - Package identity and source-root options.
+ * @returns An identity resolver for that package's sources.
  */
-export function repoSourceResolver({ packageName, packageRoot, version }: RepoSourceResolverOptions): IdentityResolver {
+export function repoSourceResolver({
+  packageName,
+  packageRoot,
+  version,
+}: RepoSourceResolverOptions): IdentityResolver {
   const root = packageRoot.endsWith('/') ? packageRoot : `${packageRoot}/`
-  return id => {
-    if (!id.startsWith(root)) return undefined
-    return { name: packageName, version, path: relative(packageRoot, id).replaceAll('\\', '/') }
+  return (id) => {
+    if (!id.startsWith(root)) {
+      return undefined
+    }
+    return {
+      name: packageName,
+      version,
+      path: relative(packageRoot, id).replaceAll('\\', '/'),
+    }
   }
 }
 
@@ -98,7 +116,10 @@ export interface TransformOutput {
 }
 
 /** A bundler transform for one set of Stent patches. */
-export type BrowserTransform = (code: string, id: string) => TransformOutput | null
+export type BrowserTransform = (
+  code: string,
+  id: string,
+) => TransformOutput | null
 
 /** Options for {@link createBrowserTransform}. */
 export interface BrowserTransformOptions {
@@ -119,10 +140,12 @@ export interface WatchedBrowserTransformOptions {
 /**
  * Build a transform from already-expanded internal instrumentation configs.
  * Node's loader-thread entry uses this boundary after reviving its wire data;
- * browser consumers should use {@link createBrowserTransform} with patch stubs.
- * @param instrumentations - expanded Stent instrumentation configs.
- * @param resolve - module identity resolver for the build's source layout.
- * @returns a transform function `(code, id) => output | null`.
+ * browser consumers should use {@link createBrowserTransform} with patch
+ * stubs.
+ *
+ * @param instrumentations - Expanded Stent instrumentation configs.
+ * @param resolve - Module identity resolver for the build's source layout.
+ * @returns A transform function `(code, id) => output | null`.
  */
 export function createInstrumentedTransform(
   instrumentations: readonly StentInstrumentationConfig[],
@@ -131,22 +154,37 @@ export function createInstrumentedTransform(
   // Per-call pending counts: the transform function below runs once per
   // module, so counts accumulated during one call belong to that module.
   const pending = new Map<string, number>()
-  const matcher = createStentMatcher(instrumentations, patchId => {
+  const matcher = createStentMatcher(instrumentations, (patchId) => {
     pending.set(patchId, (pending.get(patchId) ?? 0) + 1)
   })
 
   return (code, id) => {
     const identity = resolve(id)
-    if (!identity) return null
-    const transformer = getStentTransformer(matcher, identity.name, identity.version, identity.path)
-    if (!transformer) return null
+    if (!identity) {
+      return null
+    }
+    const transformer = getStentTransformer(
+      matcher,
+      identity.name,
+      identity.version,
+      identity.path,
+    )
+    if (!transformer) {
+      return null
+    }
     // TypeScript sources are stripped to plain JavaScript first; the source
     // map is intentionally not chained through the strip step.
     const source = /\.tsx?$/.test(id) ? stripTypes(code, id) : code
     pending.clear()
-    const result = transformStentSource(transformer, source, detectModuleType(id))
+    const result = transformStentSource(
+      transformer,
+      source,
+      detectModuleType(id),
+    )
     const output: TransformOutput =
-      result.map === undefined ? { code: result.code } : { code: result.code, map: result.map }
+      result.map === undefined
+        ? { code: result.code }
+        : { code: result.code, map: result.map }
     if (pending.size > 0) {
       output.bindings = [...pending].map(([patchId, nodes]) => ({
         patchId,
@@ -161,19 +199,23 @@ export function createInstrumentedTransform(
 
 /**
  * Build a browser bundle transform from public Stent patch stubs.
- * @param options - patch stubs and the build's identity resolver.
- * @returns a transform function `(code, id) => output | null`.
+ *
+ * @param options - Patch stubs and the build's identity resolver.
+ * @returns A transform function `(code, id) => output | null`.
  */
-export function createBrowserTransform({ patches, resolve }: BrowserTransformOptions): BrowserTransform {
+export function createBrowserTransform({
+  patches,
+  resolve,
+}: BrowserTransformOptions): BrowserTransform {
   const instrumentations = patches.flatMap(expandPatchStub)
   const transform = createInstrumentedTransform(instrumentations, resolve)
   return transform
 }
 
 /**
- * A browser transform that also receives the bundler's watch-file
- * registration hook (the third argument `clientBundle`'s source-transform
- * plugin forwards), so a file-backed patch set joins the watch graph.
+ * A browser transform that also receives the bundler's watch-file registration
+ * hook (the third argument `clientBundle`'s source-transform plugin forwards),
+ * so a file-backed patch set joins the watch graph.
  */
 export type WatchedBrowserTransform = (
   code: string,
@@ -184,28 +226,44 @@ export type WatchedBrowserTransform = (
 /**
  * Parse the watched patches file: a JSON array of static patch stubs for the
  * browser build API. The Node DSH launcher does not read profile patch
- * descriptors; browser transforms are explicitly assembled from this file
- * when a bundle needs static instrumentation. JSON cannot express a `RegExp`
- * `filePath`, so file paths are strings here. Every malformed entry fails
- * loud at build time rather than installing a never-matching transform.
- * @param content - raw file content.
- * @param patchesPath - file path, used in error messages.
- * @returns the validated patch stubs.
+ * descriptors; browser transforms are explicitly assembled from this file when
+ * a bundle needs static instrumentation. JSON cannot express a `RegExp`
+ * `filePath`, so file paths are strings here. Every malformed entry fails loud
+ * at build time rather than installing a never-matching transform.
+ *
+ * @param content - Raw file content.
+ * @param patchesPath - File path, used in error messages.
+ * @returns The validated patch stubs.
  */
-function parsePatchesFile(content: string, patchesPath: string): StentPatchStub[] {
+function parsePatchesFile(
+  content: string,
+  patchesPath: string,
+): StentPatchStub[] {
   let parsed: unknown
   try {
     parsed = JSON.parse(content)
   } catch (error) {
-    throw new Error(`stent: cannot parse watched patches file ${patchesPath} as JSON`, { cause: error })
+    throw new Error(
+      `stent: cannot parse watched patches file ${patchesPath} as JSON`,
+      { cause: error },
+    )
   }
   if (!Array.isArray(parsed)) {
-    throw new Error(`stent: watched patches file ${patchesPath} must hold a JSON array of patch stubs`)
+    throw new Error(
+      `stent: watched patches file ${patchesPath} must hold a JSON array of patch stubs`,
+    )
   }
   return parsed.map((entry: unknown, index) => {
     const target: unknown =
-      typeof entry === 'object' && entry !== null ? (entry as { target?: unknown }).target : undefined
-    if (typeof entry !== 'object' || entry === null || typeof target !== 'object' || target === null) {
+      typeof entry === 'object' && entry !== null
+        ? (entry as { target?: unknown }).target
+        : undefined
+    if (
+      typeof entry !== 'object'
+      || entry === null
+      || typeof target !== 'object'
+      || target === null
+    ) {
       throw new Error(
         `stent: watched patches file ${patchesPath} entry ${index} must be a patch stub object with a target`,
       )
@@ -218,30 +276,43 @@ function parsePatchesFile(content: string, patchesPath: string): StentPatchStub[
 }
 
 /**
- * Build a bundler transform whose patch set lives in a JSON file, for the
- * dev rebuild chain: the returned transform registers the file in the
- * bundler's watch graph on every module (a patch edit can make a previously
- * unmatched module match, so every module must re-run), re-reads it per
- * module, and rebuilds the underlying matcher only when the content
- * changed — the same read-per-use, rebuild-on-content-change pattern the
- * async loader-thread entry uses for its shared configuration file.
+ * Build a bundler transform whose patch set lives in a JSON file, for the dev
+ * rebuild chain: the returned transform registers the file in the bundler's
+ * watch graph on every module (a patch edit can make a previously unmatched
+ * module match, so every module must re-run), re-reads it per module, and
+ * rebuilds the underlying matcher only when the content changed — the same
+ * read-per-use, rebuild-on-content-change pattern the async loader-thread entry
+ * uses for its shared configuration file.
  *
  * Wired through `clientBundle(id, libEntry, { transform })`, an edit to the
  * patches file triggers a bundle rebuild under `tsdown --watch`
- * (`scripts/dev-web.ts`), and the rebuilt bundle rides the client-hmr
- * chain (stat poll → `rebuilt` frame → invalidate/prefetch/fiber swap) into
- * the browser: the build trigger for browser re-transformation.
- * @param options - watched patch file and the build's identity resolver.
- * @returns a transform function `(code, id, addWatchFile?) => output | null`.
+ * (`scripts/dev-web.ts`), and the rebuilt bundle rides the client-hmr chain
+ * (stat poll → `rebuilt` frame → invalidate/prefetch/fiber swap) into the
+ * browser: the build trigger for browser re-transformation.
+ *
+ * @param options - Watched patch file and the build's identity resolver.
+ * @returns A transform function `(code, id, addWatchFile?) => output | null`.
  */
 export function createWatchedBrowserTransform({
   patchesPath,
   resolve,
 }: WatchedBrowserTransformOptions): WatchedBrowserTransform {
-  let cached: { content: string; transform: (code: string, id: string) => TransformOutput | null } | undefined
-  const transformFor = (content: string): ((code: string, id: string) => TransformOutput | null) => {
-    if (cached?.content === content) return cached.transform
-    const transform = createBrowserTransform({ patches: parsePatchesFile(content, patchesPath), resolve })
+  let cached:
+    | {
+        content: string
+        transform: (code: string, id: string) => TransformOutput | null
+      }
+    | undefined
+  const transformFor = (
+    content: string,
+  ): ((code: string, id: string) => TransformOutput | null) => {
+    if (cached?.content === content) {
+      return cached.transform
+    }
+    const transform = createBrowserTransform({
+      patches: parsePatchesFile(content, patchesPath),
+      resolve,
+    })
     cached = { content, transform }
     return transform
   }
@@ -251,7 +322,10 @@ export function createWatchedBrowserTransform({
     try {
       content = readFileSync(patchesPath, 'utf8')
     } catch (error) {
-      throw new Error(`stent: cannot read watched patches file ${patchesPath}`, { cause: error })
+      throw new Error(
+        `stent: cannot read watched patches file ${patchesPath}`,
+        { cause: error },
+      )
     }
     return transformFor(content)(code, id)
   }

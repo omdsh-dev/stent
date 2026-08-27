@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
 
 const runner = fileURLToPath(new URL('./multi-install.mjs', import.meta.url))
@@ -7,12 +8,19 @@ const runner = fileURLToPath(new URL('./multi-install.mjs', import.meta.url))
 function runScenario(name: string): string {
   // tsconfig; the child must resolve against this repo's own tsconfig.
   const childEnv = { ...process.env }
-  const result = spawnSync(process.execPath, ['--import', 'tsx/esm', runner, name], {
-    cwd: fileURLToPath(new URL('../../..', import.meta.url)),
-    encoding: 'utf8',
-    env: childEnv,
-  })
-  expect(result.status, `scenario ${name} exited 0\n${result.stdout}\n${result.stderr}`).toBe(0)
+  const result = spawnSync(
+    process.execPath,
+    ['--import', 'tsx/esm', runner, name],
+    {
+      cwd: fileURLToPath(new URL('../../..', import.meta.url)),
+      encoding: 'utf8',
+      env: childEnv,
+    },
+  )
+  expect(
+    result.status,
+    `scenario ${name} exited 0\n${result.stdout}\n${result.stderr}`,
+  ).toBe(0)
   return result.stdout
 }
 

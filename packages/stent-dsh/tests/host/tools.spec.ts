@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRegistry, { defineTool } from '@deepseek-ai/dsh-tools'
 import type { PreToolDecision } from '@deepseek-ai/dsh-tools'
+import { describe, expect, it, vi } from 'vitest'
+
 import { StentToolsService } from '../../src/host/tools.ts'
 
 async function setup() {
@@ -30,9 +31,9 @@ describe('StentToolsService', () => {
   it('registers through the authoritative registry and unregisters on the disposer', async () => {
     const ctx = await setup()
     const dispose = ctx.stentTools.register(echoTool)
-    expect(ctx.tools.schemas().map(t => t.name)).toContain('mod-echo')
+    expect(ctx.tools.schemas().map((t) => t.name)).toContain('mod-echo')
     dispose()
-    expect(ctx.tools.schemas().map(t => t.name)).not.toContain('mod-echo')
+    expect(ctx.tools.schemas().map((t) => t.name)).not.toContain('mod-echo')
   })
 
   it('removes a registered tool when its contributing fiber disposes (HMR safety)', async () => {
@@ -44,9 +45,9 @@ describe('StentToolsService', () => {
         modCtx.stentTools.register(echoTool)
       },
     })
-    expect(ctx.tools.schemas().map(t => t.name)).toContain('mod-echo')
+    expect(ctx.tools.schemas().map((t) => t.name)).toContain('mod-echo')
     await mod.dispose()
-    expect(ctx.tools.schemas().map(t => t.name)).not.toContain('mod-echo')
+    expect(ctx.tools.schemas().map((t) => t.name)).not.toContain('mod-echo')
   })
 
   it('inherits the authoritative registry validation', async () => {
