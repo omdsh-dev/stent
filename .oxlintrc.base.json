@@ -147,6 +147,10 @@
           "error",
           60
         ],
+        "stent/max-statements-per-file": [
+          "error",
+          220
+        ],
         "typescript/no-non-null-assertion": "error",
         "typescript/no-unnecessary-condition": [
           "error",

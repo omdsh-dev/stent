@@ -216,6 +216,32 @@ function applyLayer(rows: Map<string, PatchRow>, layer: PatchLayer): void {
   }
 }
 
+function bundlePatchFile(
+  requireFromProfile: NodeJS.Require,
+  manifestPath: string,
+): URL | undefined {
+  try {
+    const manifestPathname = requireFromProfile.resolve(
+      `${manifestPath}/package.json`,
+    )
+    const manifest = JSON.parse(
+      readFileSync(manifestPathname, 'utf8'),
+    ) as RecordValue
+    const patchRel =
+      isRecord(manifest.dsh)
+      && isRecord(manifest.dsh.bundle)
+      && typeof manifest.dsh.bundle.patch === 'string'
+        ? manifest.dsh.bundle.patch
+        : undefined
+    if (typeof patchRel !== 'string') {
+      return undefined
+    }
+    return pathToFileURL(resolve(dirname(manifestPathname), patchRel))
+  } catch {
+    return undefined
+  }
+}
+
 /** Compose profile rows and create the temporary activation overlay. */
 export function composeStentConfig({
   args,
@@ -231,28 +257,6 @@ export function composeStentConfig({
   yaml: YamlApi
 }): StentConfig {
   const loadPatchLayer = createPatchLoader(yaml)
-  const bundlePatchFile = (manifestPath: string): URL | undefined => {
-    try {
-      const manifestPathname = requireFromProfile.resolve(
-        `${manifestPath}/package.json`,
-      )
-      const manifest = JSON.parse(
-        readFileSync(manifestPathname, 'utf8'),
-      ) as RecordValue
-      const patchRel =
-        isRecord(manifest.dsh)
-        && isRecord(manifest.dsh.bundle)
-        && typeof manifest.dsh.bundle.patch === 'string'
-          ? manifest.dsh.bundle.patch
-          : undefined
-      if (typeof patchRel !== 'string') {
-        return undefined
-      }
-      return pathToFileURL(resolve(dirname(manifestPathname), patchRel))
-    } catch {
-      return undefined
-    }
-  }
 
   const profilePkgPath = childPath(profileDir, 'package.json')
   const profilePkg = (
@@ -268,7 +272,7 @@ export function composeStentConfig({
     if (typeof bundle !== 'string') {
       continue
     }
-    const patchPath = bundlePatchFile(bundle)
+    const patchPath = bundlePatchFile(requireFromProfile, bundle)
     if (patchPath !== undefined) {
       applyLayer(rows, loadPatchLayer(patchPath))
     }

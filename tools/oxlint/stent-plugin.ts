@@ -8,6 +8,7 @@
  */
 
 import { commentShorterThanFunction } from './rules/comment-shorter-than-function.ts'
+import { maxStatementsPerFile } from './rules/max-statements-per-file.ts'
 import { minFunctionLines } from './rules/min-function-lines.ts'
 
 type Rule = typeof minFunctionLines
@@ -24,6 +25,7 @@ const plugin: OxlintPlugin = {
   },
   rules: {
     'comment-shorter-than-function': commentShorterThanFunction,
+    'max-statements-per-file': maxStatementsPerFile,
     'min-function-lines': minFunctionLines,
   },
 }
