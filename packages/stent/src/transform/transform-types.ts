@@ -6,9 +6,10 @@
 
 import type {
   ArrowFunctionExpression,
+  BlockStatement,
+  Expression,
   FunctionDeclaration,
   FunctionExpression,
-  Node,
   Pattern,
 } from 'estree'
 
@@ -19,7 +20,7 @@ export interface MatchedFunction {
   /** Whether the node is an arrow function (lexical `this`/`arguments`). */
   arrow: boolean
   /** The function body (block, or an expression for expression-bodied arrows). */
-  body: Node | undefined
+  body: BlockStatement | Expression
   /** The parameter list. */
   params: Pattern[]
   /** Whether the node is an async function (its body may await). */

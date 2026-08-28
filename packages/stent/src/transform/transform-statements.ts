@@ -282,8 +282,7 @@ export function createInjectedStatements(
   call: Statement,
   publish: Statement,
 ): Statement[] {
-  const injected = [capture, args, traced, call, publish]
-  return injected.filter(
+  return [capture, args, traced, call, publish].filter(
     (statement): statement is Statement => statement !== undefined,
   )
 }

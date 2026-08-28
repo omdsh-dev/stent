@@ -82,8 +82,7 @@ export async function retransformEsm(
   url: string,
   clearSeen: (filename: string) => void,
 ): Promise<Record<string, unknown>> {
-  const loader = internalLoader()
-  const cache = loader?.loadCache
+  const cache = internalLoader()?.loadCache
   if (!cache) {
     throw new Error(
       'stent: ESM re-transformation requires the Node internal module loader (Node >= 22)',
@@ -91,8 +90,7 @@ export async function retransformEsm(
   }
   const job: unknown = Map.prototype.get.call(cache, url)
   Map.prototype.delete.call(cache, url)
-  const path = url.startsWith('file:') ? fileURLToPath(url) : url
-  clearSeen(path)
+  clearSeen(url.startsWith('file:') ? fileURLToPath(url) : url)
   try {
     return (await import(url)) as Record<string, unknown>
   } catch (error) {

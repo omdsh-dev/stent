@@ -207,9 +207,7 @@ export function createBrowserTransform({
   patches,
   resolve,
 }: BrowserTransformOptions): BrowserTransform {
-  const instrumentations = patches.flatMap(expandPatchStub)
-  const transform = createInstrumentedTransform(instrumentations, resolve)
-  return transform
+  return createInstrumentedTransform(patches.flatMap(expandPatchStub), resolve)
 }
 
 /**

@@ -21,7 +21,7 @@ import {
   orderStentInstrumentations,
   type StentMatcher,
 } from '../transform/matcher.ts'
-import type { StentPatchInfo, StentPatchStub } from '../types.ts'
+import type { StentPatchInfo, StentPatchStub, PatchId } from '../types.ts'
 import type { LoaderState } from './loader-types.ts'
 
 export const states: LoaderState[] = []
@@ -42,7 +42,7 @@ export function flushBindings(
   state.pending.clear()
 }
 
-export function patchStubFromInfo(info: StentPatchInfo): StentPatchStub {
+function patchStubFromInfo(info: StentPatchInfo): StentPatchStub {
   return {
     id: info.id,
     target: info.target,
@@ -73,18 +73,17 @@ export function patchShapeKey(info: StentPatchInfo): string {
 }
 
 export function currentInstrumentations(): StentInstrumentationConfig[] {
-  const runtimePatches = runtime
-    .list()
-    .flatMap((info) => expandPatchStub(patchStubFromInfo(info)))
-  return orderStentInstrumentations(runtimePatches)
+  return orderStentInstrumentations(
+    runtime.list().flatMap((info) => expandPatchStub(patchStubFromInfo(info))),
+  )
 }
 
 export function createMatcher(
-  state: LoaderState,
+  pending: Map<PatchId, number>,
   instrumentations: StentInstrumentationConfig[],
 ): StentMatcher {
   return createStentMatcher(instrumentations, (patchId) => {
-    state.pending.set(patchId, (state.pending.get(patchId) ?? 0) + 1)
+    pending.set(patchId, (pending.get(patchId) ?? 0) + 1)
   })
 }
 
@@ -186,7 +185,7 @@ export function refreshDynamicState(
   }
   state.transformers.clear()
   state.instrumentations = currentInstrumentations()
-  state.matcher = createMatcher(state, state.instrumentations)
+  state.matcher = createMatcher(state.pending, state.instrumentations)
   state.pendingPreviousMatchers.push(previousMatcher)
   writeConfig()
   queueLoadedRetransform(state)

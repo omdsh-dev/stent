@@ -283,10 +283,7 @@ function assertNoReplaceConflict(
   patchId: PatchId,
   target: string,
 ): void {
-  for (const [id, existing] of entries) {
-    if (id === patchId) {
-      continue
-    }
+  for (const existing of entries.values()) {
     if (
       existing.info.operation === 'replace'
       && targetKey(existing.info.target) === target

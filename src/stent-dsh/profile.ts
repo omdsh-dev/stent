@@ -34,14 +34,13 @@ type PatchRow = RecordValue & {
   insert?: unknown
 }
 
-export interface ResolvedProfile {
+interface ResolvedProfile {
   dshHome: URL
-  profileName: string
   effectiveProfile: string | undefined
   profileDir: URL
 }
 
-export interface StentConfig {
+interface StentConfig {
   enablePath: URL
   enableOverlay: PatchRow[]
   cleanup: () => void
@@ -134,7 +133,7 @@ export function resolveProfile({
     )
     process.exit(1)
   }
-  return { dshHome, profileName, effectiveProfile, profileDir }
+  return { dshHome, effectiveProfile, profileDir }
 }
 
 /** Resolve js-yaml from the profile first, then from the CLI package. */
@@ -344,5 +343,3 @@ export function composeStentConfig({
     },
   }
 }
-
-export type { YamlApi, PatchRow }

@@ -64,8 +64,7 @@ try {
   }
   // The entry is a runtime-provided module specifier; its shape is the
   // documented default-export function contract.
-  const mod = (await import(payload.entry)) as { default?: unknown }
-  const fn = mod.default
+  const fn = ((await import(payload.entry)) as { default?: unknown }).default
   if (typeof fn !== 'function') {
     throw new Error(
       `stent testkit: entry ${payload.entry} has no default export function`,

@@ -83,9 +83,9 @@ export function publish(call: StentBridgeCall): unknown {
  * @param globalObject - Target global object; defaults to `globalThis`.
  */
 export function installBridge(globalObject: object = globalThis): void {
-  const bridge = { publish }
-  const target = globalObject as Record<string, unknown>
-  target[GLOBAL_BRIDGE_KEY] = bridge
+  Object.assign(globalObject, {
+    [GLOBAL_BRIDGE_KEY]: { publish },
+  })
 }
 
 /**
@@ -103,7 +103,7 @@ export function installBridge(globalObject: object = globalThis): void {
  * @returns Whether the bridge handle is present.
  */
 export function isStentInstalled(globalObject: object = globalThis): boolean {
-  const target = globalObject as Record<string, unknown>
-  const bridge = target[GLOBAL_BRIDGE_KEY]
-  return bridge !== undefined
+  return (
+    (globalObject as Record<string, unknown>)[GLOBAL_BRIDGE_KEY] !== undefined
+  )
 }

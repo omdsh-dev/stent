@@ -26,9 +26,9 @@
  * @module @oh-my-dsh/stent/transform/transform
  */
 
-import type { Expression, Node, Statement } from 'estree'
+import type { BlockStatement, Node } from 'estree'
 
-import type { CustomTransform, InstrumentationMatcher } from './orchestrion.ts'
+import type { InstrumentationMatcher } from './orchestrion.ts'
 import { mapOuterArguments, namesOf } from './transform-arguments.ts'
 import { isConstructorTarget, matchFunction } from './transform-patterns.ts'
 import {
@@ -69,43 +69,10 @@ export function registerStentTransform(
         'stent: transform config must carry stentPatchId and stentOperation strings',
       )
     }
-    if (
-      createStentTransform(patchId, operation)(state, node, parent, ancestry)
-    ) {
+    if (transformMatchedFunction(patchId, operation, node, parent, ancestry)) {
       onMatch?.(patchId)
     }
   })
-}
-
-/**
- * Build the Stent custom transform for a patch.
- *
- * @param patchId - The patch id stamped into the generated call.
- * @param operation - The operation kind stamped into the generated call.
- * @returns The per-node rewrite function, returning whether the node was
- *   actually rewritten (false for selected non-function nodes).
- */
-function createStentTransform(
-  patchId: string,
-  operation: string,
-): (
-  state: Parameters<CustomTransform>[0],
-  node: Node,
-  parent: Node,
-  ancestry: Node[],
-) => boolean {
-  return (_state, node, parent, ancestry) =>
-    transformMatchedNode(patchId, operation, node, parent, ancestry)
-}
-
-function transformMatchedNode(
-  patchId: string,
-  operation: string,
-  node: Node,
-  parent: Node,
-  ancestry: Node[],
-): boolean {
-  return transformMatchedFunction(patchId, operation, node, parent, ancestry)
 }
 
 function transformMatchedFunction(
@@ -123,7 +90,7 @@ function transformMatchedFunction(
   }
   const matched = matchFunction(node)
   const program = ancestry[ancestry.length - 1]
-  if (!matched || !program || program.type !== 'Program' || !matched.body) {
+  if (!matched || !program || program.type !== 'Program') {
     return false
   }
   const block = ensureBlockBody(matched)
@@ -152,14 +119,11 @@ function transformMatchedFunction(
   return true
 }
 
-function ensureBlockBody(matched: MatchedFunction): {
-  type: 'BlockStatement'
-  body: Statement[]
-} {
-  if (matched.body?.type !== 'BlockStatement') {
-    const synthesized: Node = {
+function ensureBlockBody(matched: MatchedFunction): BlockStatement {
+  if (matched.body.type !== 'BlockStatement') {
+    const synthesized: BlockStatement = {
       type: 'BlockStatement',
-      body: [{ type: 'ReturnStatement', argument: matched.body as Expression }],
+      body: [{ type: 'ReturnStatement', argument: matched.body }],
     }
     matched.node.body = synthesized
     matched.body = synthesized
@@ -169,16 +133,13 @@ function ensureBlockBody(matched: MatchedFunction): {
 
 function prepareOuterArguments(
   matched: MatchedFunction,
-  block: { body: Statement[] },
+  block: BlockStatement,
   names: NameAllocator,
 ): string | undefined {
-  if (
-    !matched.arrow
-    || !mapOuterArguments(block as unknown as Node, undefined)
-  ) {
+  if (!matched.arrow || !mapOuterArguments(block, undefined)) {
     return undefined
   }
   const name = names.unique(OUTER_ARGUMENTS)
-  mapOuterArguments(block as unknown as Node, name)
+  mapOuterArguments(block, name)
   return name
 }

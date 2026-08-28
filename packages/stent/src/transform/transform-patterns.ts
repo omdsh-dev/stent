@@ -1,8 +1,5 @@
 import type {
-  ArrowFunctionExpression,
   Expression,
-  FunctionDeclaration,
-  FunctionExpression,
   Identifier,
   Literal,
   Node,
@@ -14,15 +11,10 @@ import type { MatchedFunction } from './transform-types.ts'
 
 /** Whether the matched node selects a class constructor. */
 export function isConstructorTarget(node: Node, parent: Node): boolean {
-  const nodeKind =
-    node.type === 'MethodDefinition'
-      ? (node as { kind?: unknown }).kind
-      : undefined
-  const parentKind =
-    parent.type === 'MethodDefinition'
-      ? (parent as { kind?: unknown }).kind
-      : undefined
-  return nodeKind === 'constructor' || parentKind === 'constructor'
+  return (
+    (node.type === 'MethodDefinition' && node.kind === 'constructor')
+    || (parent.type === 'MethodDefinition' && parent.kind === 'constructor')
+  )
 }
 
 /**
@@ -35,12 +27,9 @@ export function isConstructorTarget(node: Node, parent: Node): boolean {
 export function matchFunction(node: Node): MatchedFunction | undefined {
   const fn =
     node.type === 'MethodDefinition' || node.type === 'Property'
-      ? (node as { value?: unknown }).value
+      ? node.value
       : node
-  if (typeof fn !== 'object' || fn === null) {
-    return undefined
-  }
-  const type = (fn as { type?: string }).type
+  const type = fn.type
   if (
     type !== 'FunctionDeclaration'
     && type !== 'FunctionExpression'
@@ -48,10 +37,7 @@ export function matchFunction(node: Node): MatchedFunction | undefined {
   ) {
     return undefined
   }
-  const functionNode = fn as
-    | FunctionDeclaration
-    | FunctionExpression
-    | ArrowFunctionExpression
+  const functionNode = fn
   const arrow = type === 'ArrowFunctionExpression'
   if (arrow) {
     // A parameter literally named `arguments` would shadow the outer
@@ -67,7 +53,7 @@ export function matchFunction(node: Node): MatchedFunction | undefined {
   return {
     node: functionNode,
     arrow,
-    body: (functionNode as { body?: unknown }).body as Node | undefined,
+    body: functionNode.body,
     params: functionNode.params,
     async: functionNode.async ?? false,
     generator: functionNode.generator ?? false,

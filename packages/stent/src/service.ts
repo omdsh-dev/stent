@@ -82,7 +82,6 @@ export class StentService extends Service {
     validatePatchId(patch.id)
     validatePatch(patch)
     const fiber = this.ctx.fiber
-    const owner = registrationOwner(this.ctx)
     // The effect goes first: a disposed (or unloading) fiber rejects the
     // registration before it can leave a half-installed entry behind, and a
     // later cross-owner throw from the runtime still leaves a disposer that
@@ -95,7 +94,7 @@ export class StentService extends Service {
         }
       }
     }, `stent:register(${patch.id})`)
-    runtime.register(patchInfo(patch), owner, fiber)
+    runtime.register(patchInfo(patch), registrationOwner(this.ctx), fiber)
     runtime.enable(patch.id, patch.handler)
     return patch.id
   }

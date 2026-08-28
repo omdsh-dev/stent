@@ -11,6 +11,7 @@ import {
   retransformEsm as reloadEsm,
 } from '../hmr/reload.ts'
 import { runtime } from '../runtime.ts'
+import type { PatchId } from '../types.ts'
 import {
   flushBindingReports,
   installAsyncHooks,
@@ -21,7 +22,6 @@ import {
   createMatcher,
   currentInstrumentations,
   patchShapeKey,
-  patchStubFromInfo,
   refreshDynamicState,
   states,
   supportsSyncHooks,
@@ -34,8 +34,8 @@ import type { LoaderState } from './loader-types.ts'
 
 /** Verify that every required patch recorded at least one load-time binding. */
 export function checkRequiredPatches(): void {
-  const descriptors = runtime.list().map(patchStubFromInfo)
-  const missing = descriptors
+  const missing = runtime
+    .list()
     .filter(
       (patch) =>
         patch.required === true && runtime.bindingsOf(patch.id).length === 0,
@@ -70,23 +70,23 @@ export function installStentHooks(): () => void {
     installAsyncHooks(import.meta.url)
   }
 
+  const instrumentations = currentInstrumentations()
+  const pending = new Map<PatchId, number>()
   const state: LoaderState = {
     active: true,
-    matcher: undefined as unknown as LoaderState['matcher'],
-    instrumentations: [],
+    matcher: createMatcher(pending, instrumentations),
+    instrumentations,
     syncHooks,
     transformers: new Map(),
     seen: new Set(),
-    pending: new Map(),
+    pending,
     pendingPreviousMatchers: [],
     pendingLoadedModules: new Set(),
     retransformQueued: false,
   }
-  state.instrumentations = currentInstrumentations()
-  state.matcher = createMatcher(state, state.instrumentations)
 
   states.push(state)
-  state.unsubscribePatchChanges = runtime.onPatchChange((change) => {
+  const unsubscribePatchChanges = runtime.onPatchChange((change) => {
     if (
       change.type === 'register'
       && change.previous !== undefined
@@ -107,8 +107,9 @@ export function installStentHooks(): () => void {
 
   return () => {
     state.active = false
-    state.unsubscribePatchChanges?.()
-    delete state.unsubscribePatchChanges
+    unsubscribePatchChanges()
+    state.pending.clear()
+    state.seen.clear()
     state.pendingPreviousMatchers.length = 0
     state.pendingLoadedModules.clear()
     const index = states.indexOf(state)

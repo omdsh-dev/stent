@@ -24,7 +24,6 @@ const patch = {
     functionQuery: { functionName: 'add', kind: 'Sync' as const },
   },
   operation: 'before' as const,
-  handler: () => {},
 }
 
 const createTransform = (
@@ -61,9 +60,23 @@ describe('createBrowserTransform validation', () => {
     expect(() =>
       createInvalid({
         ...patch,
-        operation: 'sideways' as never,
+        target: {
+          ...patch.target,
+          filePath: undefined,
+          filePaths: [],
+        } as never,
       }),
-    ).toThrow(/operation/)
+    ).toThrow(/filePaths/)
+    expect(() =>
+      createInvalid({
+        ...patch,
+        target: {
+          ...patch.target,
+          filePath: undefined,
+          filePaths: 42 as never,
+        } as never,
+      }),
+    ).toThrow(/filePaths/)
   })
 
   it('accepts a valid patch and returns a transform function', () => {
@@ -240,27 +253,45 @@ describe('createBrowserTransform', () => {
     expect(output!.code).toContain('return stentCall')
   })
 
-  it('preserves an arrow body reading the enclosing arguments object', () => {
+  it('rewrites every outer arguments reference in an arrow body', () => {
     const patchArgs = {
       ...patch,
-      id: 'web/args-keep',
+      id: 'web/args-all',
       target: {
         ...patch.target,
-        filePath: 'args-arrow.js',
+        filePath: 'args-all.js',
         functionQuery: { expressionName: 'bad', kind: 'Sync' as const },
       },
     }
     const transform = createTransform([patchArgs])
-    const id = `${fixtureDir}args-arrow.js`
+    const id = `${fixtureDir}args-all.js`
     const source =
-      'function wrap() { return (x) => x + arguments[0] }\nexport const bad = () => arguments[0]'
+      'export const bad = () => { const first = arguments[0]; return arguments[1] }'
     const output = transform(source, id)
     expect(output).not.toBeNull()
-    // The arrow is transformed, and the outer `arguments` reference is
-    // preserved through a capture statement before the traced body.
-    expect(output!.code).toContain('id: "web/args-keep"')
-    expect(output!.code).toContain('stentOuterArguments = arguments')
-    expect(output!.code).not.toContain('return arguments')
+    expect(output!.code).toContain('stentOuterArguments[0]')
+    expect(output!.code).toContain('stentOuterArguments[1]')
+    expect(output!.code).not.toContain('return arguments[1]')
+  })
+
+  it('preserves arguments shadowing in nested arrows', () => {
+    const patchArgs = {
+      ...patch,
+      id: 'web/args-shadowed',
+      target: {
+        ...patch.target,
+        filePath: 'args-shadowed.cjs',
+        functionQuery: { expressionName: 'f', kind: 'Sync' as const },
+      },
+    }
+    const transform = createTransform([patchArgs])
+    const id = `${fixtureDir}args-shadowed.cjs`
+    const source =
+      'const f = () => { const g = (arguments) => arguments[0]; return g(1) }\nmodule.exports = { f }'
+    const output = transform(source, id)
+    expect(output).not.toBeNull()
+    expect(output!.code).toContain('arguments => arguments[0]')
+    expect(output!.code).not.toContain('stentOuterArguments')
   })
 })
 

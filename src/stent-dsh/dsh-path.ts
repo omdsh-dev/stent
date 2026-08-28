@@ -5,7 +5,7 @@ import type { URL } from 'node:url'
 
 import { resolveDshPath } from './cli.ts'
 
-export interface DshInvocation {
+interface DshInvocation {
   dshPath: URL
   passthrough: string[]
 }
@@ -45,9 +45,12 @@ export function parseDshPath(
     }
   }
 
-  const dshInput = resolveDshInput(input, env.PATH, cwd)
   return {
-    dshPath: resolveDshPath(dshInput, cwd, env.PATH),
+    dshPath: resolveDshPath(
+      resolveDshInput(input, env.PATH, cwd),
+      cwd,
+      env.PATH,
+    ),
     passthrough,
   }
 }

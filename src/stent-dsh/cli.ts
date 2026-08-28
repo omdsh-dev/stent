@@ -11,12 +11,9 @@ interface ResolveOptions {
   cwd: LauncherArgs['cwd']
 }
 
-export interface ResolvedHost {
-  dshPath: URL
-  realBin: URL
+interface ResolvedHost {
   cliPkgJson: URL
   fromCli: NodeJS.Require
-  nodeArgs: string[]
   cwd: URL | undefined
 }
 
@@ -167,29 +164,26 @@ export function resolveDshPath(
   if (input === undefined) {
     return resolveInstalledCli(cwd, pathEnv)
   }
-  const candidate = input
-  if (!existsSync(candidate)) {
-    console.error(
-      `stent-dsh: DSH path does not exist: ${fileURLToPath(candidate)}`,
-    )
+  if (!existsSync(input)) {
+    console.error(`stent-dsh: DSH path does not exist: ${fileURLToPath(input)}`)
     process.exit(1)
   }
-  if (statSync(candidate).isDirectory()) {
+  if (statSync(input).isDirectory()) {
     const sourceBin = pathToFileURL(
-      join(fileURLToPath(candidate), 'apps/cli/src/bin.ts'),
+      join(fileURLToPath(input), 'apps/cli/src/bin.ts'),
     )
     if (existsSync(sourceBin)) {
       return pathToFileURL(realpathSync(sourceBin))
     }
-    const installedBin = normalizeCli(candidate)
+    const installedBin = normalizeCli(input)
     if (installedBin !== undefined) {
       return pathToFileURL(realpathSync(installedBin))
     }
   }
-  if (fileURLToPath(candidate).endsWith('.ts')) {
-    return pathToFileURL(realpathSync(candidate))
+  if (fileURLToPath(input).endsWith('.ts')) {
+    return pathToFileURL(realpathSync(input))
   }
-  const installedBin = normalizeCli(chaseShim(candidate))
+  const installedBin = normalizeCli(chaseShim(input))
   if (installedBin !== undefined) {
     return pathToFileURL(realpathSync(installedBin))
   }
@@ -244,11 +238,8 @@ export function resolveHost({
       : new URL('apps/cli/package.json', sourceRoot)
   const fromCli = createRequire(realBin)
   return {
-    dshPath: resolvedDshPath,
-    realBin,
     cliPkgJson,
     fromCli,
-    nodeArgs: sourceRoot === undefined ? [] : ['--import', 'tsx/esm'],
     cwd: sourceRoot,
   }
 }

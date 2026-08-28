@@ -28,14 +28,11 @@ export type StentInstrumentationConfig = InstrumentationConfig & {
 function patchInstrumentation(
   patch: StentPatchStub,
 ): StentInstrumentationConfig {
-  validatePatchId(patch.id)
-  validatePatchStatic(patch)
   const target = patch.target
   const rawQuery = target.astQuery
   if (typeof rawQuery === 'string' && rawQuery.trim().length === 0) {
     throw new Error('stent: patch target astQuery must not be blank')
   }
-  const query = rawQuery ?? queryFromFunction(patch)
   const filePath = target.filePath
   if (filePath === undefined) {
     throw new Error(
@@ -49,7 +46,7 @@ function patchInstrumentation(
       versionRange: target.versionRange,
       filePath,
     },
-    astQuery: query,
+    astQuery: rawQuery ?? queryFromFunction(patch),
     functionQuery:
       target.functionQuery && !target.astQuery
         ? { ...target.functionQuery, index: target.functionQuery.index ?? null }
@@ -116,6 +113,8 @@ function queryFromFunction(patch: StentPatchStub): string {
 export function expandPatchStub(
   patch: StentPatchStub,
 ): StentInstrumentationConfig[] {
+  validatePatchId(patch.id)
+  validatePatchStatic(patch)
   const { filePaths, ...target } = patch.target
   if (filePaths === undefined) {
     return [patchInstrumentation(patch)]

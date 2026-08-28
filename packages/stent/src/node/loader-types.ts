@@ -20,7 +20,6 @@ export interface LoaderState {
   transformers: Map<string, StentTransformer>
   seen: Set<string>
   pending: Map<PatchId, number>
-  unsubscribePatchChanges?: () => void
   pendingPreviousMatchers: StentMatcher[]
   pendingLoadedModules: Set<string>
   retransformQueued: boolean

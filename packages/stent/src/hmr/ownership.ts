@@ -10,6 +10,5 @@ export function registrationOwner(ctx: Context): unknown {
   if (entry !== undefined) {
     return entry
   }
-  const runtime = ctx.fiber.runtime
-  return runtime?.callback ?? ctx.fiber
+  return ctx.fiber.runtime?.callback ?? ctx.fiber
 }

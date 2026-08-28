@@ -19,17 +19,12 @@ export const inject = ['invariants']
  * This package delegates invariant ownership to the authoritative DSH services;
  * its companion only reserves the package registration.
  */
-const install: InvariantInstaller = () => {
-  return undefined
-}
-
-/**
- * Register this package's invariant companion.
- *
- * @param ctx - Cordis context carrying the invariant service.
- * @returns The installed registration's disposer after setup succeeds.
- */
 export const apply = (ctx: Context): Promise<() => void> => {
-  return Promise.resolve(ctx.invariants.register(PACKAGE_NAME, install))
+  return Promise.resolve(
+    ctx.invariants.register(
+      PACKAGE_NAME,
+      (() => undefined) satisfies InvariantInstaller,
+    ),
+  )
 }
 /* jscpd:ignore-end */

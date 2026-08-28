@@ -73,8 +73,8 @@ export class StentCompatService extends Service {
   private readonly targets = new Map<string, StentCompatTarget>()
   /** Patch ids claimed by the declared observation targets (a stable namespace). */
   private readonly targetIds = new Set<PatchId>()
-  /** Runtime patch registrations made through this service, by id. */
-  private readonly registered = new Map<PatchId, StentPatch>()
+  /** Runtime patch ids registered through this service. */
+  private readonly registered = new Set<PatchId>()
   private readonly observers = new Map<string, Set<(call: StentCall) => void>>()
 
   /**
@@ -145,7 +145,7 @@ export class StentCompatService extends Service {
     // transforms are absent (the low-level registry has the same posture) —
     // the bridge check belongs to observe, whose contract promises delivery.
     this.stent.register(patch)
-    this.registered.set(patch.id, patch)
+    this.registered.add(patch.id)
     return patch.id
   }
 

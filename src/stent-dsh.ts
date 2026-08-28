@@ -59,6 +59,7 @@ function appendNodeImports(
   imports: readonly string[],
 ): string {
   const flags = imports.map((value) => `--import ${JSON.stringify(value)}`)
-  const values = existing === undefined ? flags : [existing, ...flags]
-  return values.filter(Boolean).join(' ')
+  return (existing === undefined ? flags : [existing, ...flags])
+    .filter(Boolean)
+    .join(' ')
 }

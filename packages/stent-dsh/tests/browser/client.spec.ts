@@ -1,6 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { CommandContribution } from '@deepseek-ai/dsh-client-ui-commands/client'
-import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 
@@ -43,20 +42,12 @@ async function bench() {
   const ctx = new Context()
   const slots = new Map<
     string,
-    { options: StentSlotOptions; component: unknown; dispose: () => void }
+    { options: StentSlotOptions; component: unknown }
   >()
-  const registrations: Array<{
-    options: StentSlotOptions
-    component: unknown
-    disposed: boolean
-  }> = []
-  const sources = new Map<string, InputTriggerSource>()
+  const registrations: Array<{ disposed: boolean }> = []
   ctx.provide('inputTriggers', {
-    registerSource(source: InputTriggerSource) {
-      sources.set(`${source.trigger} ${source.name}`, source)
-      return () => {
-        sources.delete(`${source.trigger} ${source.name}`)
-      }
+    registerSource() {
+      return () => {}
     },
   })
   ctx.provide('sessions', {
@@ -69,14 +60,8 @@ async function bench() {
   ctx.provide('remote.commands', commandsRemote)
   ctx.provide('slots', {
     register(options: StentSlotOptions, component: unknown) {
-      const record = { options, component, disposed: false }
-      slots.set(options.name, {
-        options,
-        component,
-        dispose: () => {
-          record.disposed = true
-        },
-      })
+      const record = { disposed: false }
+      slots.set(options.name, { options, component })
       registrations.push(record)
       return () => {
         record.disposed = true

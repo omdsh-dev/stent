@@ -111,14 +111,10 @@ export interface KeyedSlotOptions extends StentSlotOptions {
 
 /** One claim in the per-key arbitration table. */
 interface KeyedClaim {
-  readonly name: string
-  readonly key: string
   readonly options: KeyedSlotOptions
   readonly component: unknown
   /** Whether the claim currently owns the key (its component is registered). */
   owner: boolean
-  /** Whether the claim still competes for the key (a displaced owner does not). */
-  active: boolean
   /** The slot registration's disposer, when the claim is owner. */
   registered: (() => void) | undefined
 }
@@ -212,19 +208,11 @@ export class StentClientService extends Service {
     const id = `${options.name}\u0000${key}`
     const claims = this.keyed.get(id) ?? []
     const claim: KeyedClaim = {
-      name: options.name,
-      key,
       options,
       component,
       owner: false,
-      active: true,
       registered: undefined,
     }
-    const slotRegister = (
-      this.ctx.slots as unknown as {
-        register(options: StentSlotOptions, component: unknown): () => void
-      }
-    ).register.bind(this.ctx.slots)
     const current = claims.find((candidate) => candidate.owner)
     const priority = options.priority ?? 0
     if (current === undefined || priority > (current.options.priority ?? 0)) {
@@ -236,7 +224,11 @@ export class StentClientService extends Service {
         )
       }
       claim.owner = true
-      claim.registered = slotRegister(options, component)
+      claim.registered = (
+        this.ctx.slots as unknown as {
+          register(options: StentSlotOptions, component: unknown): () => void
+        }
+      ).register(options, component)
       claims.unshift(claim)
     } else {
       // Queue: equal priorities keep registration order (warn), lower
@@ -250,13 +242,12 @@ export class StentClientService extends Service {
       claims.push(claim)
     }
     this.keyed.set(id, claims)
-    const self = claim
     return {
       get owner(): boolean {
-        return self.owner
+        return claim.owner
       },
       dispose: () => {
-        this.withdraw(id, self)
+        this.withdraw(id, claim)
       },
     }
   }
@@ -288,13 +279,11 @@ export class StentClientService extends Service {
   }
 
   /**
-   * Hand the key to the first active waiting claimant. A displaced incumbent
-   * already has its component mounted and only regains the ownership flag.
+   * Hand the key to the first waiting claimant. A displaced incumbent already
+   * has its component mounted and only regains the ownership flag.
    */
   private promote(claims: KeyedClaim[]): void {
-    const next = claims.find(
-      (candidate) => candidate.active && !candidate.owner,
-    )
+    const next = claims.find((candidate) => !candidate.owner)
     if (next === undefined) {
       return
     }
@@ -319,8 +308,7 @@ export const name = 'stent-dsh'
  * @param ctx - Cordis context that owns the service.
  */
 export async function apply(ctx: Context): Promise<void> {
-  const clientFiber = ctx.plugin(StentClientService)
-  await clientFiber
+  await ctx.plugin(StentClientService)
   if (ctx.get('stentClient') === undefined) {
     throw new Error('stent-dsh: browser client service failed to mount')
   }

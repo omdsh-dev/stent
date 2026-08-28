@@ -86,8 +86,7 @@ export function resolvePackageIdentity(
 
 /** Detect the module kind of a source file from its extension. */
 export function detectModuleType(id: string): 'esm' | 'cjs' {
-  const commonJs = id.endsWith('.cjs')
-  if (commonJs) {
+  if (id.endsWith('.cjs')) {
     return 'cjs'
   }
   return 'esm'

@@ -11,7 +11,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { isStentDshLaunch } from '@oh-my-dsh/stent/activation'
-import type { StentPatchInfo } from '@oh-my-dsh/stent/types'
+import type { StentBinding, StentPatchInfo } from '@oh-my-dsh/stent/types'
 
 /** One composed profile row's config surface (the loader row shape). */
 export interface StentProfileRow {
@@ -75,17 +75,10 @@ export async function checkStentRequiredPatches(
   checkRequiredPatches()
 }
 
-/** One recorded load-time binding, as the runtime reports it. */
-interface StentBindingView {
-  module: string
-  file: string
-  nodes: number
-}
-
 /** Print the post-boot summary for patches registered by plugin code. */
 function logHookSummary(
   patches: readonly StentPatchInfo[],
-  runtime: { bindingsOf: (id: string) => StentBindingView[] },
+  runtime: { bindingsOf: (id: string) => readonly StentBinding[] },
 ): void {
   if (patches.length === 0) {
     return
@@ -117,24 +110,18 @@ function logHookSummary(
  * dynamic hooks are already active.
  */
 export function scheduleRequiredPatchCheck(ctx: Context): void {
-  const stentOn = isStentDshLaunch()
+  if (!isStentDshLaunch()) {
+    return
+  }
   ctx.effect(() => {
     const timer = setTimeout(() => {
-      if (!stentOn) {
-        return
-      }
       void (async () => {
         const { checkRequiredPatches, flushBindingReports } =
           await import('@oh-my-dsh/stent/node')
         const { runtime } = await import('@oh-my-dsh/stent')
         await flushBindingReports(1000)
         checkRequiredPatches()
-        logHookSummary(
-          runtime.list(),
-          runtime as unknown as {
-            bindingsOf: (id: string) => StentBindingView[]
-          },
-        )
+        logHookSummary(runtime.list(), runtime)
       })()
     }, 0)
     return () => {

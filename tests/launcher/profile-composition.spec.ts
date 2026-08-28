@@ -80,7 +80,6 @@ function compose(
         profile: 'web',
         dshHome: undefined,
         pathEnv: undefined,
-        env: {},
         launcherUrl: new URL(import.meta.url),
         cwd: pathToFileURL(root),
         patchFiles: [],

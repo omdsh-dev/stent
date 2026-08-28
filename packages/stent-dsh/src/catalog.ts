@@ -5,6 +5,7 @@
  * @module @oh-my-dsh/stent-dsh/catalog
  */
 
+type CatalogEntry = { key: string } | { name: string; declaration: string }
 /** The stent catalog entries (verbatim from the host patch). */
 export const STENT_CATALOG_ENTRIES = [
   {
@@ -312,8 +313,12 @@ export const STENT_CATALOG_ENTRIES = [
   },
 ]
 
+const catalogEntryKey = (entry: CatalogEntry): string => {
+  return 'key' in entry ? `key:${entry.key}` : `name:${entry.name}`
+}
+
 interface ApiCatalogModule {
-  SERVICE_API?: Array<{ key: string }>
+  SERVICE_API?: CatalogEntry[]
 }
 
 /** Push the stent entries into the official catalog once (idempotent). */
@@ -327,8 +332,12 @@ export async function registerCatalogEntries(): Promise<void> {
     if (list === undefined) {
       return
     }
-    for (const entry of STENT_CATALOG_ENTRIES as Array<{ key: string }>) {
-      if (!list.some((existing) => existing.key === entry.key)) {
+    for (const entry of STENT_CATALOG_ENTRIES) {
+      if (
+        !list.some(
+          (existing) => catalogEntryKey(existing) === catalogEntryKey(entry),
+        )
+      ) {
         list.push(entry)
       }
     }

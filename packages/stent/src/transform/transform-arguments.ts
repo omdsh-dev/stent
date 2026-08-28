@@ -1,4 +1,4 @@
-import type { Node, Program } from 'estree'
+import type { Node, Pattern, Program } from 'estree'
 
 import type { NameAllocator } from './transform-types.ts'
 
@@ -33,6 +33,8 @@ export function mapOuterArguments(
   if (
     node.type === 'FunctionDeclaration'
     || node.type === 'FunctionExpression'
+    || (node.type === 'ArrowFunctionExpression'
+      && node.params.some(patternBindsArguments))
   ) {
     return false
   }
@@ -69,17 +71,45 @@ function mapOuterArgumentsValue(
   name: string | undefined,
 ): boolean {
   if (Array.isArray(value)) {
-    return value.some(
-      (child) =>
+    let found = false
+    for (const child of value) {
+      if (
         typeof child === 'object'
         && child !== null
-        && mapOuterArguments(child as Node, name),
-    )
+        && mapOuterArguments(child as Node, name)
+      ) {
+        found = true
+      }
+    }
+    return found
   }
   if (typeof value === 'object' && value !== null) {
     return mapOuterArguments(value as Node, name)
   }
   return false
+}
+
+function patternBindsArguments(pattern: Pattern): boolean {
+  switch (pattern.type) {
+    case 'Identifier':
+      return pattern.name === 'arguments'
+    case 'AssignmentPattern':
+      return patternBindsArguments(pattern.left)
+    case 'RestElement':
+      return patternBindsArguments(pattern.argument)
+    case 'ObjectPattern':
+      return pattern.properties.some((property) =>
+        property.type === 'RestElement'
+          ? patternBindsArguments(property.argument)
+          : patternBindsArguments(property.value),
+      )
+    case 'ArrayPattern':
+      return pattern.elements.some(
+        (element) => element !== null && patternBindsArguments(element),
+      )
+    default:
+      return false
+  }
 }
 
 /**

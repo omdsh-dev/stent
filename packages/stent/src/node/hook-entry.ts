@@ -91,7 +91,7 @@ function readTransforms(): TransformFn[] {
   let parsed: Array<{
     active?: boolean
     instrumentations?: StentWireInstrumentation[]
-  }> = []
+  }>
   try {
     parsed = JSON.parse(raw) as typeof parsed
   } catch {
