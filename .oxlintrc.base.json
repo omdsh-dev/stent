@@ -143,6 +143,14 @@
             "skipComments": false
           }
         ],
+        "eslint/max-lines": [
+          "error",
+          {
+            "max": 350,
+            "skipBlankLines": false,
+            "skipComments": false
+          }
+        ],
         "eslint/max-statements": [
           "error",
           60

@@ -17,10 +17,10 @@
  * @module @oh-my-dsh/stent/runtime
  */
 
-import { subscribeBridge, type StentBridgeCall } from './bridge.ts'
+import { subscribeBridge } from './bridge.ts'
+import { dispatch } from './runtime-dispatch.ts'
 import type {
   StentBinding,
-  StentCall,
   StentHandler,
   StentPatchInfo,
   StentTarget,
@@ -61,17 +61,6 @@ export interface StentPatchChange {
 
 /** Listener notified after patch metadata changes. */
 export type StentPatchChangeListener = (change: StentPatchChange) => void
-
-/** Whether a value is a thenable (the async-target result shape). */
-function isThenable(value: unknown): value is PromiseLike<unknown> {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  if (!('then' in value)) {
-    return false
-  }
-  return typeof value.then === 'function'
-}
 
 /** Registry of enabled Stent patches with the shared bridge subscription. */
 class StentRuntime {
@@ -318,64 +307,6 @@ function targetKey(target: StentTarget): string {
     target.filePath
     ?? (target.filePaths === undefined ? null : target.filePaths.join('|'))
   return [target.module, target.versionRange, String(files), selector].join('|')
-}
-
-/**
- * Run the enabled handler for one transformed call. `before` mutates arguments
- * then delegates; `after` delegates then mutates the result; `around` and
- * `replace` decide whether the original body runs and may supply their own
- * result.
- *
- * @param entry - The patch's runtime state.
- * @param call - The call record published by the transform.
- * @returns The value the wrapped function should return: the handler's result
- *   for `around`/`replace`, the traced body's result otherwise.
- */
-function dispatch(entry: PatchEntry, call: StentBridgeCall): unknown {
-  const handler = entry.handler
-  if (!handler) {
-    return call.traced()
-  }
-  // The handler union's members are distinguished only by their arity; the
-  // operation switch selects the calling convention at runtime.
-  const observe = handler as (call: StentCall) => unknown
-
-  const record: StentCall = {
-    arguments: call.arguments,
-    self: call.self,
-  }
-  const invoke = call.traced.bind(call)
-
-  switch (entry.info.operation) {
-    case 'before': {
-      observe(record)
-      return invoke()
-    }
-    case 'after': {
-      const result = invoke()
-      if (isThenable(result)) {
-        // Async target: rewrite after the promise settles. The caller already
-        // holds the original promise, so the rewritten promise is returned
-        // and the caller's await resolves to the final value. A handler that
-        // returns `undefined` keeps the (possibly in-place mutated)
-        // `record.result`, mirroring the sync branch below.
-        return result.then((value) => {
-          record.result = value
-          const rewritten = observe(record)
-          return rewritten === undefined ? record.result : rewritten
-        })
-      }
-      record.result = result
-      const rewritten = observe(record)
-      return rewritten === undefined ? record.result : rewritten
-    }
-    case 'around':
-    case 'replace': {
-      // The handler union is a plain intersection of callable signatures;
-      // `around` and `replace` share the two-argument calling convention.
-      return handler(record, invoke)
-    }
-  }
 }
 
 /** Singleton runtime shared by the Cordis service and the transform hooks. */

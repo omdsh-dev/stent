@@ -141,6 +141,8 @@ window.__ModuleLoader__.load({ id: "@oh-my-dsh/stent", factory: (require) => { .
 
 共享的源码 override 还会加载 `tools/oxlint/stent-plugin.ts` 并启用 `stent/comment-shorter-than-function` 与 `stent/min-function-lines`。注释规则检查函数声明前的连续文档块：如果有意义的注释行数大于或等于函数有效实现行数，就认为函数可能是不必要的，或实现过于晦涩。它会忽略被空行隔开的文件头注释、行尾注释、函数体内注释以及 lint/compiler 指令。默认跳过 exported 函数和匿名 callback，因为公共 API 文档和 callback 上下文可能确实需要更多说明；`includeExported` 与 `includeAnonymous` 可以显式开启检查。默认不计算块注释分隔符和 JSDoc 装饰星号；`countCommentDelimiters` 可以改为统计物理上的非空注释行。函数规则按有效源码行数计算，并包含函数定义行；空行和仅包含注释的行不计入。当前基线阈值为 `declaration: 5`、`expression: 3`、`method: 2`、`arrow: 3`。`minimums` 选项可以分别配置这几种写法：填写整数即可设置该写法的最小行数，填写 `false` 则禁用该写法。确实需要保留的短适配函数必须使用 `// oxlint-disable-next-line stent/min-function-lines -- reason` 并说明原因。
 
+共享的源码 override 还启用 `eslint/max-lines`：每个文件最多 350 行物理源码，空行和仅包含注释的行也计入，因此该规则衡量的是完整的源码文件大小。
+
 新增的 `stent/max-statements-per-file` 是文件级规则：每个源码文件只检查一次，递归统计函数体和 class body 中的可执行语句及声明，超过 220 条时报错。内置的 `eslint/max-statements` 仍单独负责函数级限制。
 
 Oxfmt 是本 workspace 的统一格式化器，共享策略写在 `.oxfmtrc.json`：两空格缩进、JavaScript/TypeScript 使用单引号、JSX 属性使用单引号、无分号、全部支持位置添加尾随逗号和 80 列宽。每个包分别拥有自己的 `fmt` 与 `fmt:check` 命令；根 carrier 的 `pack:fmt:check` 负责编排根包和全部实现包的检查。生成的 `lib/` 产物、fixture 目录、JavaScript launcher fixture 和构建配置不属于格式化范围。
