@@ -465,7 +465,7 @@ const watched = createWatchedBrowserTransform({
 ### Node loader 的等价链路(源码阅读)
 
 ```ts
-// src/node/loader.ts 内部:
+// src/node/loader/loader.ts 内部:
 const instrumentations = orderStentInstrumentations(
   runtime.list().flatMap((info) => expandPatchStub(patchStubFromInfo(info))),
 )

@@ -5,23 +5,23 @@ import {
   retransformCommonJs as reloadCommonJs,
   retransformEsm as reloadEsm,
   loadedEsmUrls,
-} from '../hmr/reload.ts'
-import { runtime } from '../runtime.ts'
+} from '../../hmr/reload.ts'
+import { runtime } from '../../runtime.ts'
 import {
   expandPatchStub,
   type StentInstrumentationConfig,
-} from '../transform/config.ts'
+} from '../../transform/config.ts'
 import {
   resolvePackageIdentity,
   type PackageIdentity,
-} from '../transform/identity.ts'
+} from '../../transform/identity.ts'
 import {
   createStentMatcher,
   getStentTransformer,
   orderStentInstrumentations,
   type StentMatcher,
-} from '../transform/matcher.ts'
-import type { StentPatchInfo, StentPatchStub, PatchId } from '../types.ts'
+} from '../../transform/matcher.ts'
+import type { StentPatchInfo, StentPatchStub, PatchId } from '../../types.ts'
 import type { LoaderState } from './loader-types.ts'
 
 export const states: LoaderState[] = []

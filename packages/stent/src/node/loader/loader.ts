@@ -5,13 +5,13 @@
  * @module @oh-my-dsh/stent/node/internal-loader
  */
 
-import { installBridge } from '../bridge.ts'
+import { installBridge } from '../../bridge.ts'
 import {
   retransformCommonJs as reloadCommonJs,
   retransformEsm as reloadEsm,
-} from '../hmr/reload.ts'
-import { runtime } from '../runtime.ts'
-import type { PatchId } from '../types.ts'
+} from '../../hmr/reload.ts'
+import { runtime } from '../../runtime.ts'
+import type { PatchId } from '../../types.ts'
 import {
   flushBindingReports,
   installAsyncHooks,

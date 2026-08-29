@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { MessagePort } from 'node:worker_threads'
 
-import { runtime } from '../runtime.ts'
-import { serializeInstrumentation } from '../transform/wire.ts'
-import type { StentBindingReport } from '../types.ts'
+import { runtime } from '../../runtime.ts'
+import { serializeInstrumentation } from '../../transform/wire.ts'
+import type { StentBindingReport } from '../../types.ts'
 import { states } from './loader-state.ts'
 
 let asyncHooksInstalled = false
@@ -71,10 +71,11 @@ export function installAsyncHooks(baseUrl: string): void {
   })
   port.unref()
   const directNodeEntry =
-    baseUrl.endsWith('/node/loader.js') || baseUrl.endsWith('/node/loader.ts')
+    baseUrl.endsWith('/node/loader/loader.js')
+    || baseUrl.endsWith('/node/loader/loader.ts')
   const hookEntry = directNodeEntry
     ? new URL(
-        baseUrl.endsWith('.ts') ? './hook-entry.ts' : './hook-entry.js',
+        baseUrl.endsWith('.ts') ? '../hook-entry.ts' : '../hook-entry.js',
         baseUrl,
       )
     : new URL('./node/hook-entry.js', baseUrl)

@@ -2,11 +2,11 @@ import { readFileSync } from 'node:fs'
 import { Module, registerHooks } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
-import { resolvePackageIdentity } from '../transform/identity.ts'
+import { resolvePackageIdentity } from '../../transform/identity.ts'
 import {
   getStentTransformer,
   transformStentSource,
-} from '../transform/matcher.ts'
+} from '../../transform/matcher.ts'
 import { flushBindings, states } from './loader-state.ts'
 import type { CompileFn, LoaderState } from './loader-types.ts'
 

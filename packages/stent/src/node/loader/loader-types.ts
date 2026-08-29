@@ -1,8 +1,8 @@
 import type { Module } from 'node:module'
 
-import type { StentInstrumentationConfig } from '../transform/config.ts'
-import type { StentMatcher, StentTransformer } from '../transform/matcher.ts'
-import type { PatchId } from '../types.ts'
+import type { StentInstrumentationConfig } from '../../transform/config.ts'
+import type { StentMatcher, StentTransformer } from '../../transform/matcher.ts'
+import type { PatchId } from '../../types.ts'
 
 /** The `Module.prototype._compile` function wrapped for CommonJS transforms. */
 export type CompileFn = (

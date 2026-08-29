@@ -13,4 +13,4 @@ export {
   installStentHooks,
   retransformCommonJs,
   retransformEsm,
-} from './loader.ts'
+} from './loader/loader.ts'

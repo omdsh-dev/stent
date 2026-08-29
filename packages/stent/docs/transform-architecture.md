@@ -18,7 +18,7 @@
    `@apm-js-collab/code-transformer`),但**绝不能反向依赖** `src/bridge.ts`、
    `src/runtime.ts`、`src/types.ts`、`src/node/*`、`src/browser/*` 等包内模块。
 2. **对外单向**。包内其他模块只通过 `transform/` 拿到变换能力:
-   - `src/node/loader.ts` → `config.ts`(expandPatchStub、StentInstrumentationConfig)、
+   - `src/node/loader/loader.ts` → `config.ts`(expandPatchStub、StentInstrumentationConfig)、
      `identity.ts`、`matcher.ts`、`wire.ts`;
    - `src/node/hook-entry.ts`(loader 线程)→ `browser.ts`(createInstrumentedTransform)、
      `identity.ts`、`wire.ts`;
@@ -70,7 +70,7 @@
         wire.ts ──type──► config.ts (RegExp 序列化,主干旁支)
         types.ts ──type──► config.ts / browser.ts (契约类型)
 
-        包内消费者(位于本图之外):src/node/loader.ts、src/node/hook-entry.ts、
+        包内消费者(位于本图之外):src/node/loader/loader.ts、src/node/hook-entry.ts、
         src/browser/index.ts、src/browser/serve.ts、src/bridge.ts、src/runtime.ts
 ```
 (示意图如实标明每条边;精确依赖边见下表,与 import 语句一一对应。)
@@ -108,7 +108,7 @@
 
 ## 3. 编译期数据流(patch 描述符 → 改写后的代码)
 
-### 3.1 Node 加载路径(src/node/loader.ts)
+### 3.1 Node 加载路径(src/node/loader/loader.ts)
 
 ```text
 插件 ctx.stent.register()                    runtime.register()
@@ -337,7 +337,7 @@ JSON 不能表达 RegExp。`wire.ts#serializeInstrumentation` 把
 - 变换期:transform 配置缺 `stentPatchId`/`stentOperation` 抛错;构造函数命中
   抛错;匹配节点不是函数形状返回 `false` 不报错;
 - 加载期:变换抛错包装为 `stent: failed to transform <url>`;
-- 启动后:required patch 无绑定由 `checkRequiredPatches` 报出(`src/node/loader.ts`);
+- 启动后:required patch 无绑定由 `checkRequiredPatches` 报出(`src/node/loader/loader.ts`);
 - 浏览器 serve:patch 未绑定或变换失败默认 500 点名 patch id,
   `fallback: 'raw'` 才降级为原样 bundle。
 
