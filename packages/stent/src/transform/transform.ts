@@ -28,9 +28,10 @@
 
 import type { BlockStatement, Node } from 'estree'
 
+import { mapOuterArguments, namesOf } from './arguments.ts'
+import type { MatchedFunction, NameAllocator } from './ast-types.ts'
 import type { InstrumentationMatcher } from './orchestrion.ts'
-import { mapOuterArguments, namesOf } from './transform-arguments.ts'
-import { isConstructorTarget, matchFunction } from './transform-patterns.ts'
+import { isConstructorTarget, matchFunction } from './patterns.ts'
 import {
   createArgumentsStatement,
   createCallStatement,
@@ -38,8 +39,7 @@ import {
   createOuterArgumentsCapture,
   createPublishStatement,
   createTracedStatement,
-} from './transform-statements.ts'
-import type { MatchedFunction, NameAllocator } from './transform-types.ts'
+} from './statements.ts'
 
 /** Identifier prefixes injected by this transform. */
 const ARGS = 'stentArguments'

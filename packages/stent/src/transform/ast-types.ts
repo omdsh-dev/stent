@@ -1,7 +1,7 @@
 /**
  * Shared local types for the Stent AST transform helpers.
  *
- * @module @oh-my-dsh/stent/transform/transform-types
+ * @module @oh-my-dsh/stent/transform/ast-types
  */
 
 import type {

@@ -1,6 +1,6 @@
 import type { Node, Pattern, Program } from 'estree'
 
-import type { NameAllocator } from './transform-types.ts'
+import type { NameAllocator } from './ast-types.ts'
 
 /**
  * Whether a node references the enclosing scope's `arguments` object, and

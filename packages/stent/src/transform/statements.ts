@@ -1,8 +1,8 @@
 import type { Expression, Property, Statement } from 'estree'
 
+import type { MatchedFunction, NameAllocator } from './ast-types.ts'
+import { patternToExpression } from './patterns.ts'
 import { GLOBAL_BRIDGE_KEY } from './protocol.ts'
-import { patternToExpression } from './transform-patterns.ts'
-import type { MatchedFunction, NameAllocator } from './transform-types.ts'
 
 export function createOuterArgumentsCapture(
   name: string | undefined,

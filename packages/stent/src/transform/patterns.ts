@@ -7,7 +7,7 @@ import type {
   SpreadElement,
 } from 'estree'
 
-import type { MatchedFunction } from './transform-types.ts'
+import type { MatchedFunction } from './ast-types.ts'
 
 /** Whether the matched node selects a class constructor. */
 export function isConstructorTarget(node: Node, parent: Node): boolean {
