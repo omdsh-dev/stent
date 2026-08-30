@@ -94,9 +94,10 @@ function matchInstalledProfile(launcherUrl: URL): InstalledProfile | undefined {
   const profileDir = dirname(dirname(dirname(dirname(dirname(launcher)))))
   const profilesDir = dirname(profileDir)
   const profile = basename(profileDir)
-  return profile === ''
-    ? undefined
-    : { home: pathToFileURL(dirname(profilesDir)), profile }
+  if (profile === '') {
+    return undefined
+  }
+  return { home: pathToFileURL(dirname(profilesDir)), profile }
 }
 
 /**
@@ -109,12 +110,18 @@ function resolveProfile({
   launcherUrl,
 }: LauncherArgs): ResolvedProfile {
   const installed = matchInstalledProfile(launcherUrl)
-  const dshHome =
-    installed === undefined ? (configuredHome ?? homeUrl()) : installed.home
-  const profileName =
-    installed === undefined
-      ? (profile ?? 'default')
-      : (profile ?? installed.profile)
+  let dshHome: URL
+  if (installed === undefined) {
+    dshHome = configuredHome ?? homeUrl()
+  } else {
+    dshHome = installed.home
+  }
+  let profileName: string
+  if (installed === undefined) {
+    profileName = profile ?? 'default'
+  } else {
+    profileName = profile ?? installed.profile
+  }
   // An installed profile bin already identifies the profile. Reuse that name
   // when forwarding to the official CLI, even when the caller omits `web`.
   const effectiveProfile = profile ?? installed?.profile
@@ -182,11 +189,16 @@ function createPatchLoader(yaml: YamlApi): (path: URL) => PatchLayer {
       return []
     }
     const text = readFileSync(path, 'utf8')
-    const data =
-      yamlSchema !== undefined
-        ? yaml.load(text, { schema: yamlSchema })
-        : yaml.load(text)
-    return Array.isArray(data) ? data : []
+    let data: unknown
+    if (yamlSchema !== undefined) {
+      data = yaml.load(text, { schema: yamlSchema })
+    } else {
+      data = yaml.load(text)
+    }
+    if (Array.isArray(data)) {
+      return data
+    }
+    return []
   }
 }
 
@@ -221,12 +233,14 @@ function bundlePatchFile(
     const manifest = JSON.parse(
       readFileSync(manifestPathname, 'utf8'),
     ) as RecordValue
-    const patchRel =
+    let patchRel: string | undefined
+    if (
       isRecord(manifest.dsh)
       && isRecord(manifest.dsh.bundle)
       && typeof manifest.dsh.bundle.patch === 'string'
-        ? manifest.dsh.bundle.patch
-        : undefined
+    ) {
+      patchRel = manifest.dsh.bundle.patch
+    }
     if (typeof patchRel !== 'string') {
       return undefined
     }
@@ -253,13 +267,21 @@ function composeStentConfig({
   const loadPatchLayer = createPatchLoader(yaml)
 
   const profilePkgPath = childPath(profileDir, 'package.json')
-  const profilePkg = (
-    existsSync(profilePkgPath)
-      ? JSON.parse(readFileSync(profilePkgPath, 'utf8'))
-      : {}
-  ) as ProfileManifest
+  let profilePkg: ProfileManifest
+  if (existsSync(profilePkgPath)) {
+    profilePkg = JSON.parse(
+      readFileSync(profilePkgPath, 'utf8'),
+    ) as ProfileManifest
+  } else {
+    profilePkg = {}
+  }
   const bundlesValue = profilePkg.dsh?.profile?.bundles
-  const bundles = Array.isArray(bundlesValue) ? bundlesValue : []
+  let bundles: unknown[]
+  if (Array.isArray(bundlesValue)) {
+    bundles = bundlesValue
+  } else {
+    bundles = []
+  }
 
   const rows = new Map<string, PatchRow>()
   for (const bundle of bundles) {
@@ -281,10 +303,13 @@ function composeStentConfig({
 
   const temp = pathToFileURL(mkdtempSync(join(tmpdir(), 'stent-overlay-')))
   const enablePath = childPath(temp, 'enable.yaml')
-  writeFileSync(
-    enablePath,
-    enableOverlay.length > 0 ? yaml.dump(enableOverlay) : '[]\n',
-  )
+  let enableContents: string
+  if (enableOverlay.length > 0) {
+    enableContents = yaml.dump(enableOverlay)
+  } else {
+    enableContents = '[]\n'
+  }
+  writeFileSync(enablePath, enableContents)
   return {
     enablePath,
     enableOverlay,

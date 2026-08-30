@@ -47,6 +47,13 @@ function compose(
   const profileDir = join(root, 'profile')
   mkdirSync(profileDir, { recursive: true })
   writeFileSync(join(profileDir, 'package.json'), '{}\n')
+  let stentConfig: Record<string, unknown>
+  if (legacyPatchConfig) {
+    stentConfig = { stent: { patches: [{ id: 'legacy/patch' }] } }
+  } else {
+    stentConfig = { stent: { dynamic: true } }
+  }
+
   writeFileSync(
     join(profileDir, 'cordis.patch.yml'),
     JSON.stringify([
@@ -56,9 +63,7 @@ function compose(
             id: 'stent',
             name: '@oh-my-dsh/stent',
             disabled: true,
-            config: legacyPatchConfig
-              ? { stent: { patches: [{ id: 'legacy/patch' }] } }
-              : { stent: { dynamic: true } },
+            config: stentConfig,
           },
           { id: 'stent-dsh', name: '@oh-my-dsh/stent-dsh', disabled: true },
           {
@@ -72,6 +77,11 @@ function compose(
     ]),
   )
 
+  const passthrough: string[] = []
+  if (mode !== undefined) {
+    passthrough.push(mode)
+  }
+
   let result: ReturnType<typeof composeStentConfig>
   try {
     result = composeStentConfig({
@@ -83,7 +93,7 @@ function compose(
         launcherUrl: new URL(import.meta.url),
         cwd: pathToFileURL(root),
         patchFiles: [],
-        passthrough: mode === undefined ? [] : [mode],
+        passthrough,
       },
       dshHome: pathToFileURL(join(root, 'home')),
       profileDir: pathToFileURL(profileDir),

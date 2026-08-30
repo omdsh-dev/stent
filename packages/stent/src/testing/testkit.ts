@@ -65,14 +65,13 @@ interface PatchFixtureResult {
  * @throws When the child process fails or answers no parseable envelope.
  */
 function runPatchFixture(options: RunPatchFixtureOptions): PatchFixtureResult {
-  const runner = fileURLToPath(
-    new URL(
-      existsSync(fileURLToPath(new URL('./testkit-runner.js', import.meta.url)))
-        ? './testkit-runner.js'
-        : './testkit-runner.ts',
-      import.meta.url,
-    ),
-  )
+  let runnerName = './testkit-runner.ts'
+  if (
+    existsSync(fileURLToPath(new URL('./testkit-runner.js', import.meta.url)))
+  ) {
+    runnerName = './testkit-runner.js'
+  }
+  const runner = fileURLToPath(new URL(runnerName, import.meta.url))
   const result = spawnSync(process.execPath, ['--import', 'tsx/esm', runner], {
     input: JSON.stringify({
       patches: options.patches,
@@ -100,12 +99,17 @@ function runPatchFixture(options: RunPatchFixtureOptions): PatchFixtureResult {
       `stent testkit: child answered no parseable envelope\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
     )
   }
-  return {
+  const fixtureResult: PatchFixtureResult = {
     bindings: envelope.bindings ?? {},
-    ...(envelope.result === undefined ? {} : { result: envelope.result }),
-    ...(envelope.error === undefined ? {} : { error: envelope.error }),
     exitCode: result.status,
   }
+  if (envelope.result !== undefined) {
+    fixtureResult.result = envelope.result
+  }
+  if (envelope.error !== undefined) {
+    fixtureResult.error = envelope.error
+  }
+  return fixtureResult
 }
 
 export type { RunPatchFixtureOptions, PatchFixtureResult }

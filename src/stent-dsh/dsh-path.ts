@@ -76,8 +76,12 @@ function which(cmd: string, pathEnv: string | undefined): URL | undefined {
   if (pathEnv === undefined || pathEnv === '') {
     return undefined
   }
-  const names =
-    process.platform === 'win32' ? [`${cmd}.cmd`, `${cmd}.exe`, cmd] : [cmd]
+  let names: string[]
+  if (process.platform === 'win32') {
+    names = [`${cmd}.cmd`, `${cmd}.exe`, cmd]
+  } else {
+    names = [cmd]
+  }
   for (const dir of pathEnv.split(delimiter)) {
     if (dir === '') {
       continue

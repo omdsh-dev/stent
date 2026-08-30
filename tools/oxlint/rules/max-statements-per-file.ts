@@ -123,8 +123,10 @@ function countStatements(
   seen.add(value)
   const node = value
   const type = nodeType(node)
-  const own =
-    includeSelf && type !== undefined && statementTypes.has(type) ? 1 : 0
+  let own = 0
+  if (includeSelf && type !== undefined && statementTypes.has(type)) {
+    own = 1
+  }
   return own + countNodeChildren(node, seen, type)
 }
 

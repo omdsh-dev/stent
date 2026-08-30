@@ -88,7 +88,10 @@ function repoSourceResolver({
   packageRoot,
   version,
 }: RepoSourceResolverOptions): IdentityResolver {
-  const root = packageRoot.endsWith('/') ? packageRoot : `${packageRoot}/`
+  let root = packageRoot
+  if (!packageRoot.endsWith('/')) {
+    root = `${packageRoot}/`
+  }
   return (id) => {
     if (!id.startsWith(root)) {
       return undefined
@@ -170,17 +173,20 @@ function createInstrumentedTransform(
     }
     // TypeScript sources are stripped to plain JavaScript first; the source
     // map is intentionally not chained through the strip step.
-    const source = /\.tsx?$/.test(id) ? stripTypes(code, id) : code
+    let source = code
+    if (/\.tsx?$/.test(id)) {
+      source = stripTypes(code, id)
+    }
     pending.clear()
     const result = transformStentSource(
       transformer,
       source,
       detectModuleType(id),
     )
-    const output: TransformOutput =
-      result.map === undefined
-        ? { code: result.code }
-        : { code: result.code, map: result.map }
+    const output: TransformOutput = { code: result.code }
+    if (result.map !== undefined) {
+      output.map = result.map
+    }
     if (pending.size > 0) {
       output.bindings = [...pending].map(([patchId, nodes]) => ({
         patchId,
@@ -253,10 +259,10 @@ function parsePatchesFile(
     )
   }
   return parsed.map((entry: unknown, index) => {
-    const target: unknown =
-      typeof entry === 'object' && entry !== null
-        ? (entry as { target?: unknown }).target
-        : undefined
+    let target: unknown
+    if (typeof entry === 'object' && entry !== null) {
+      target = (entry as { target?: unknown }).target
+    }
     if (
       typeof entry !== 'object'
       || entry === null

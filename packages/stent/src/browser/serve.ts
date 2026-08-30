@@ -236,7 +236,11 @@ function createBundleHandler(bundleCode: BundleCode) {
         return
       }
       res.writeHead(500)
-      res.end(String(error instanceof Error ? error.message : error))
+      let message = String(error)
+      if (error instanceof Error) {
+        message = error.message
+      }
+      res.end(message)
       return
     }
     res.writeHead(200, {

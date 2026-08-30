@@ -57,9 +57,10 @@ const manifestCache = new Map<string, { name: string; version: string }>()
 function resolvePackageIdentity(
   urlOrPath: string,
 ): PackageIdentity | undefined {
-  const filename = urlOrPath.startsWith('file:')
-    ? fileURLToPath(urlOrPath)
-    : urlOrPath
+  let filename = urlOrPath
+  if (urlOrPath.startsWith('file:')) {
+    filename = fileURLToPath(urlOrPath)
+  }
   const root = findPackageRoot(filename)
   if (root === undefined) {
     return undefined
@@ -73,10 +74,15 @@ function resolvePackageIdentity(
         name?: unknown
         version?: unknown
       }
-      manifest = {
-        name: typeof parsed.name === 'string' ? parsed.name : '',
-        version: typeof parsed.version === 'string' ? parsed.version : '',
+      let name = ''
+      if (typeof parsed.name === 'string') {
+        name = parsed.name
       }
+      let version = ''
+      if (typeof parsed.version === 'string') {
+        version = parsed.version
+      }
+      manifest = { name, version }
     } catch {
       manifest = { name: '', version: '' }
     }

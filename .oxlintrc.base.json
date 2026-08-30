@@ -75,6 +75,7 @@
         ],
         "eslint/no-constant-condition": "error",
         "eslint/no-nested-ternary": "error",
+        "no-ternary": "error",
         "eslint/no-unneeded-ternary": "error",
         "typescript/await-thenable": "error",
         "typescript/ban-ts-comment": [

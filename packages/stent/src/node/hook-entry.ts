@@ -103,9 +103,13 @@ function readTransforms(): TransformFn[] {
       const instrumentations = (entry.instrumentations ?? []).map(
         reviveInstrumentation,
       )
-      return instrumentations.length === 0
-        ? undefined
-        : createInstrumentedTransform(instrumentations, resolvePackageIdentity)
+      if (instrumentations.length === 0) {
+        return undefined
+      }
+      return createInstrumentedTransform(
+        instrumentations,
+        resolvePackageIdentity,
+      )
     })
     .filter((transform): transform is TransformFn => transform !== undefined)
   cached = { config: raw, transforms }

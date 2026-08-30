@@ -201,7 +201,10 @@ function commentTokenLines(
     return lines.filter((line) => line.trim() !== '').length
   }
   if (comment.type === 'Line') {
-    return isMeaningfulDocumentation(comment.value.trim()) ? 1 : 0
+    if (isMeaningfulDocumentation(comment.value.trim())) {
+      return 1
+    }
+    return 0
   }
   return lines.filter((line, index) => {
     const content = documentationLine(
@@ -259,7 +262,12 @@ const commentShorterThanFunction: Rule = {
 
   create(context: RuleContext): VisitorObject {
     const raw = context.options[0]
-    const options = isRuleOptions(raw) ? raw : {}
+    let options: RuleOptions
+    if (isRuleOptions(raw)) {
+      options = raw
+    } else {
+      options = {}
+    }
     const includeAnonymous = options.includeAnonymous ?? false
     const includeExported = options.includeExported ?? false
     const countDelimiters = options.countCommentDelimiters ?? false

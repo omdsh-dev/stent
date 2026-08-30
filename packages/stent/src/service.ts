@@ -164,7 +164,10 @@ class StentService extends Service {
    * @returns The recorded binding records.
    */
   bindings(id?: PatchId): readonly StentBinding[] {
-    return id === undefined ? runtime.allBindings() : runtime.bindingsOf(id)
+    if (id === undefined) {
+      return runtime.allBindings()
+    }
+    return runtime.bindingsOf(id)
   }
 }
 
@@ -223,14 +226,17 @@ function validatePatch(patch: StentPatch): void {
 
 /** Build the immutable runtime info snapshot for a patch. */
 function patchInfo(patch: StentPatch): StentPatchInfo {
-  return {
+  const info: StentPatchInfo = {
     id: patch.id,
     target: patch.target,
     operation: patch.operation,
     priority: patch.priority ?? 0,
-    ...(patch.required === undefined ? {} : { required: patch.required }),
     enabled: true,
   }
+  if (patch.required !== undefined) {
+    info.required = patch.required
+  }
+  return info
 }
 
 export { StentService, getStent }

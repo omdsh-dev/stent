@@ -312,15 +312,15 @@ const STENT_CATALOG_ENTRIES = [
       "export type PreToolDecision = {\n    kind: 'allow';\n} | {\n    kind: 'deny';\n    reason: string;\n} | {\n    kind: 'ask';\n    reason?: string;\n};",
   },
 ]
-
 const catalogEntryKey = (entry: CatalogEntry): string => {
-  return 'key' in entry ? `key:${entry.key}` : `name:${entry.name}`
+  if ('key' in entry) {
+    return `key:${entry.key}`
+  }
+  return `name:${entry.name}`
 }
-
 interface ApiCatalogModule {
   SERVICE_API?: CatalogEntry[]
 }
-
 /** Push the stent entries into the official catalog once (idempotent). */
 async function registerCatalogEntries(): Promise<void> {
   try {

@@ -9,21 +9,21 @@ import { parseDshPath } from './stent-dsh/dsh-path.ts'
 const cwd = pathToFileURL(`${process.cwd()}${sep}`)
 const invocation = parseDshPath(process.argv.slice(2), process.env, cwd)
 const sourceCwd = sourceRootFor(invocation.dshPath)
-const preloadUrl = new URL(
-  import.meta.url.endsWith('.ts')
-    ? './stent-dsh-preload.ts'
-    : './stent-dsh-preload.js',
-  import.meta.url,
-)
+let preloadFile = './stent-dsh-preload.js'
+if (import.meta.url.endsWith('.ts')) {
+  preloadFile = './stent-dsh-preload.ts'
+}
+const preloadUrl = new URL(preloadFile, import.meta.url)
 const preloadPath = fileURLToPath(preloadUrl)
 const childArgs = [fileURLToPath(invocation.dshPath), ...invocation.passthrough]
-const nodeImports = [
-  ...(fileURLToPath(invocation.dshPath).endsWith('.ts')
+const nodeImports: string[] = []
+if (
+  fileURLToPath(invocation.dshPath).endsWith('.ts')
   || preloadPath.endsWith('.ts')
-    ? ['tsx/esm']
-    : []),
-  preloadPath,
-]
+) {
+  nodeImports.push('tsx/esm')
+}
+nodeImports.push(preloadPath)
 const childEnv: NodeJS.ProcessEnv = {
   ...process.env,
   NODE_OPTIONS: appendNodeImports(process.env.NODE_OPTIONS, nodeImports),
@@ -44,11 +44,18 @@ process.stderr.write(
 
 process.on('SIGINT', () => {})
 process.on('SIGTERM', () => {})
-const result = spawnSync(process.execPath, childArgs, {
+const spawnOptions: {
+  stdio: 'inherit'
+  cwd?: string
+  env: NodeJS.ProcessEnv
+} = {
   stdio: 'inherit',
-  ...(sourceCwd === undefined ? {} : { cwd: fileURLToPath(sourceCwd) }),
   env: childEnv,
-})
+}
+if (sourceCwd !== undefined) {
+  spawnOptions.cwd = fileURLToPath(sourceCwd)
+}
+const result = spawnSync(process.execPath, childArgs, spawnOptions)
 if (result.error !== undefined) {
   throw result.error
 }
@@ -59,7 +66,5 @@ function appendNodeImports(
   imports: readonly string[],
 ): string {
   const flags = imports.map((value) => `--import ${JSON.stringify(value)}`)
-  return (existing === undefined ? flags : [existing, ...flags])
-    .filter(Boolean)
-    .join(' ')
+  return [existing, ...flags].filter(Boolean).join(' ')
 }

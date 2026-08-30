@@ -31,6 +31,14 @@ function readStdin(): Promise<string> {
   })
 }
 
+/** Format an unknown thrown value for the JSON result envelope. */
+function errorDetails(thrown: unknown): { name: string; message: string } {
+  if (thrown instanceof Error) {
+    return { name: thrown.name, message: thrown.message }
+  }
+  return { name: 'Error', message: String(thrown) }
+}
+
 /** The fixture payload from the parent. */
 interface FixturePayload {
   patches?: StentPatchStub[]
@@ -75,10 +83,7 @@ try {
   try {
     result = await (fn as (args: unknown) => unknown)(payload.args)
   } catch (thrown) {
-    error = {
-      name: thrown instanceof Error ? thrown.name : 'Error',
-      message: thrown instanceof Error ? thrown.message : String(thrown),
-    }
+    error = errorDetails(thrown)
   }
   // The async hook path delivers binding records over a MessagePort; wait for
   // the loader thread's flush reply so every report from the entry's loads has
@@ -88,17 +93,24 @@ try {
   for (const patch of payload.patches) {
     bindings[patch.id] = runtime.bindingsOf(patch.id)
   }
-  process.stdout.write(
-    JSON.stringify({
-      bindings,
-      ...(result === undefined ? {} : { result }),
-      ...(error === undefined ? {} : { error }),
-    }),
-  )
+  const envelope: {
+    bindings: Record<string, ReturnType<typeof runtime.bindingsOf>>
+    result?: unknown
+    error?: { name: string; message: string }
+  } = { bindings }
+  if (result !== undefined) {
+    envelope.result = result
+  }
+  if (error !== undefined) {
+    envelope.error = error
+  }
+  process.stdout.write(JSON.stringify(envelope))
   process.exit(0)
 } catch (error) {
-  console.error(
-    `stent testkit runner: ${error instanceof Error ? error.message : String(error)}`,
-  )
+  let message = String(error)
+  if (error instanceof Error) {
+    message = error.message
+  }
+  console.error(`stent testkit runner: ${message}`)
   process.exit(1)
 }

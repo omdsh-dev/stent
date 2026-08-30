@@ -70,7 +70,11 @@ async function createTestWebServer(): Promise<TestWebServer> {
         return
       }
       res.writeHead(500)
-      res.end(String(error instanceof Error ? error.message : error))
+      if (error instanceof Error) {
+        res.end(error.message)
+      } else {
+        res.end(String(error))
+      }
     })
   })
   await new Promise<void>((resolve, reject) => {
@@ -87,7 +91,12 @@ async function createTestWebServer(): Promise<TestWebServer> {
   return {
     port: address.port,
     register(route) {
-      const routes = route.kind === 'exact' ? exact : prefixes
+      let routes: Map<string, TestRoute>
+      if (route.kind === 'exact') {
+        routes = exact
+      } else {
+        routes = prefixes
+      }
       if (routes.has(route.path)) {
         throw new Error(
           `test webserver: duplicate ${route.kind} route "${route.path}"`,

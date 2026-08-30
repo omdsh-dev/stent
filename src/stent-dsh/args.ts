@@ -35,13 +35,20 @@ function parseOpt(
   const passthrough = [...operands, ...unknown]
   const cwdPath = fileURLToPath(cwd)
   const options = command.opts<{ profile?: string; patch?: string[] }>()
+  let profile: string | undefined
+  if (options.profile !== undefined) {
+    profile = options.profile
+  } else if (passthrough[0] === 'web') {
+    profile = 'web'
+  }
+  let dshHome: URL | undefined
+  if (env.DSH_HOME !== undefined) {
+    dshHome = pathToFileURL(resolve(env.DSH_HOME))
+  }
   return {
     dshPath,
-    profile: options.profile ?? (passthrough[0] === 'web' ? 'web' : undefined),
-    dshHome:
-      env.DSH_HOME === undefined
-        ? undefined
-        : pathToFileURL(resolve(env.DSH_HOME)),
+    profile,
+    dshHome,
     pathEnv: env.PATH,
     patchFiles: (options.patch ?? []).map((value) =>
       pathToFileURL(resolve(cwdPath, value)),
@@ -58,10 +65,17 @@ function buildCliArgs(
   enableOverlay: readonly unknown[],
 ): string[] {
   const [mode] = args.passthrough
-  const patchArgs = [
-    ...args.patchFiles.flatMap((file) => ['--patch', fileURLToPath(file)]),
-    ...(enableOverlay.length > 0 ? ['--patch', fileURLToPath(enablePath)] : []),
-  ]
+  const patchArgs = args.patchFiles.flatMap((file) => [
+    '--patch',
+    fileURLToPath(file),
+  ])
+  if (enableOverlay.length > 0) {
+    patchArgs.push('--patch', fileURLToPath(enablePath))
+  }
+  const profileArgs: string[] = []
+  if (effectiveProfile) {
+    profileArgs.push('--profile', effectiveProfile)
+  }
   if (mode === 'plugin') {
     if (patchArgs.length > 0) {
       console.error(
@@ -69,10 +83,7 @@ function buildCliArgs(
       )
       process.exit(1)
     }
-    return [
-      ...args.passthrough,
-      ...(effectiveProfile ? ['--profile', effectiveProfile] : []),
-    ]
+    return [...args.passthrough, ...profileArgs]
   }
   if (mode === 'web') {
     if (args.profile !== undefined && args.profile !== 'web') {
@@ -88,11 +99,7 @@ function buildCliArgs(
   }
   // Generic boot takes the launcher flags first; the app args only start at
   // the first token the launcher does not know.
-  return [
-    ...(effectiveProfile ? ['--profile', effectiveProfile] : []),
-    ...patchArgs,
-    ...args.passthrough,
-  ]
+  return [...profileArgs, ...patchArgs, ...args.passthrough]
 }
 
 export { parseOpt, buildCliArgs }

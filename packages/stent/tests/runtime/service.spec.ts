@@ -240,7 +240,11 @@ describe('StentService HMR ownership', () => {
     try {
       await ctx.plugin(pluginB)
     } catch (error) {
-      threw = error instanceof Error ? error.message : String(error)
+      if (error instanceof Error) {
+        threw = error.message
+      } else {
+        threw = String(error)
+      }
     }
     expect(threw).toMatch(/already registered by another owner/)
     expect(runtime.isEnabled('service/x')).toBe(true)

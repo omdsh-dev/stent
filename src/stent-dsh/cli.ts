@@ -26,8 +26,12 @@ function which(cmd: string, pathEnv: string | undefined): URL | undefined {
   if (pathEnv === undefined || pathEnv === '') {
     return undefined
   }
-  const names =
-    process.platform === 'win32' ? [`${cmd}.cmd`, `${cmd}.exe`, cmd] : [cmd]
+  let names: string[]
+  if (process.platform === 'win32') {
+    names = [`${cmd}.cmd`, `${cmd}.exe`, cmd]
+  } else {
+    names = [cmd]
+  }
   for (const dir of pathEnv.split(delimiter)) {
     if (dir === '') {
       continue
@@ -83,9 +87,10 @@ function chaseShim(path: URL): URL {
     return resolved
   }
   const target = shimTarget(resolved)
-  return target !== undefined && existsSync(target)
-    ? pathToFileURL(realpathSync(target))
-    : resolved
+  if (target !== undefined && existsSync(target)) {
+    return pathToFileURL(realpathSync(target))
+  }
+  return resolved
 }
 
 function directoryForPath(path: URL): string {
@@ -248,12 +253,14 @@ function resolveHost({ dshPath, pathEnv, cwd }: ResolveOptions): ResolvedHost {
     )
     process.exit(1)
   }
-  const cliPkgJson =
-    sourceRoot === undefined
-      ? pathToFileURL(
-          join(dirname(dirname(fileURLToPath(realBin))), 'package.json'),
-        )
-      : new URL('apps/cli/package.json', sourceRoot)
+  let cliPkgJson: URL
+  if (sourceRoot === undefined) {
+    cliPkgJson = pathToFileURL(
+      join(dirname(dirname(fileURLToPath(realBin))), 'package.json'),
+    )
+  } else {
+    cliPkgJson = new URL('apps/cli/package.json', sourceRoot)
+  }
   const fromCli = createRequire(realBin)
   return {
     cliPkgJson,

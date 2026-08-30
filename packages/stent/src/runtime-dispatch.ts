@@ -65,12 +65,18 @@ function dispatch(entry: DispatchEntry, call: StentBridgeCall): unknown {
         return result.then((value) => {
           record.result = value
           const rewritten = observe(record)
-          return rewritten === undefined ? record.result : rewritten
+          if (rewritten === undefined) {
+            return record.result
+          }
+          return rewritten
         })
       }
       record.result = result
       const rewritten = observe(record)
-      return rewritten === undefined ? record.result : rewritten
+      if (rewritten === undefined) {
+        return record.result
+      }
+      return rewritten
     }
     case 'around':
     case 'replace': {

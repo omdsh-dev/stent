@@ -48,15 +48,21 @@ function createArgumentsStatement(
   matched: MatchedFunction,
   name: string,
 ): Statement {
-  const init: Expression = matched.arrow
-    ? {
-        type: 'ArrayExpression',
-        elements: matched.params.map(patternToExpression),
-      }
-    : {
-        type: 'CallExpression',
+  let init: Expression
+  if (matched.arrow) {
+    init = {
+      type: 'ArrayExpression',
+      elements: matched.params.map(patternToExpression),
+    }
+  } else {
+    init = {
+      type: 'CallExpression',
+      optional: false,
+      callee: {
+        type: 'MemberExpression',
+        computed: false,
         optional: false,
-        callee: {
+        object: {
           type: 'MemberExpression',
           computed: false,
           optional: false,
@@ -64,19 +70,16 @@ function createArgumentsStatement(
             type: 'MemberExpression',
             computed: false,
             optional: false,
-            object: {
-              type: 'MemberExpression',
-              computed: false,
-              optional: false,
-              object: { type: 'Identifier', name: 'Array' },
-              property: { type: 'Identifier', name: 'prototype' },
-            },
-            property: { type: 'Identifier', name: 'slice' },
+            object: { type: 'Identifier', name: 'Array' },
+            property: { type: 'Identifier', name: 'prototype' },
           },
-          property: { type: 'Identifier', name: 'call' },
+          property: { type: 'Identifier', name: 'slice' },
         },
-        arguments: [{ type: 'Identifier', name: 'arguments' }],
-      }
+        property: { type: 'Identifier', name: 'call' },
+      },
+      arguments: [{ type: 'Identifier', name: 'arguments' }],
+    }
+  }
   return {
     type: 'VariableDeclaration',
     kind: 'const',
@@ -296,14 +299,15 @@ function iterableExpression(name: string, async: boolean): Expression {
     },
     right: { type: 'Literal', value: 'function' },
   })
-  return async
-    ? {
-        type: 'LogicalExpression',
-        operator: '||',
-        left: check('iterator'),
-        right: check('asyncIterator'),
-      }
-    : check('iterator')
+  if (async) {
+    return {
+      type: 'LogicalExpression',
+      operator: '||',
+      left: check('iterator'),
+      right: check('asyncIterator'),
+    }
+  }
+  return check('iterator')
 }
 
 /**
@@ -324,7 +328,6 @@ function createInjectedStatements(
   )
 }
 
-/** A `key: value` object property. */
 function property(key: string, value: Expression): Property {
   return {
     type: 'Property',
@@ -336,7 +339,6 @@ function property(key: string, value: Expression): Property {
     value,
   }
 }
-
 export {
   createOuterArgumentsCapture,
   createArgumentsStatement,

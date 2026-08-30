@@ -32,9 +32,10 @@ interface LineCountOptions {
 
 /** Narrow an arbitrary AST property to a ranged node. */
 function asNode(value: unknown): AstNode | undefined {
-  return typeof value === 'object' && value !== null && 'range' in value
-    ? (value as AstNode)
-    : undefined
+  if (typeof value !== 'object' || value === null || !('range' in value)) {
+    return undefined
+  }
+  return value as AstNode
 }
 
 /**
@@ -112,9 +113,10 @@ function countLines(
   options: LineCountOptions,
 ): number {
   const text = sourceCode.getText(node)
-  const code = options.skipComments
-    ? sourceWithoutComments(node, sourceCode)
-    : text
+  let code = text
+  if (options.skipComments) {
+    code = sourceWithoutComments(node, sourceCode)
+  }
   const sourceLines = text.split(/\r\n|\r|\n/)
   const codeLines = code.split(/\r\n|\r|\n/)
   let count = 0

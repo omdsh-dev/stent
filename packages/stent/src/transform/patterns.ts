@@ -44,10 +44,10 @@ function isConstructorTarget(node: Node, parent: Node): boolean {
  * @returns The function with its body and params, or `undefined` to skip.
  */
 function matchFunction(node: Node): MatchedFunction | undefined {
-  const fn =
-    node.type === 'MethodDefinition' || node.type === 'Property'
-      ? node.value
-      : node
+  let fn: Node = node
+  if (node.type === 'MethodDefinition' || node.type === 'Property') {
+    fn = node.value
+  }
   const type = fn.type
   if (
     type !== 'FunctionDeclaration'

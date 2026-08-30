@@ -54,6 +54,13 @@ function patchInstrumentation(
       'stent: patch target.filePaths must be expanded before instrumentation (use expandPatchStub)',
     )
   }
+  let functionQuery = { index: target.index ?? null }
+  if (target.functionQuery && !target.astQuery) {
+    functionQuery = {
+      ...target.functionQuery,
+      index: target.functionQuery.index ?? null,
+    }
+  }
   return {
     channelName: patch.id,
     module: {
@@ -62,10 +69,7 @@ function patchInstrumentation(
       filePath,
     },
     astQuery: rawQuery ?? queryFromFunction(patch),
-    functionQuery:
-      target.functionQuery && !target.astQuery
-        ? { ...target.functionQuery, index: target.functionQuery.index ?? null }
-        : { index: target.index ?? null },
+    functionQuery,
     transform: 'stent',
     stentPatchId: patch.id,
     stentOperation: patch.operation,
@@ -109,8 +113,10 @@ function queryFromFunction(patch: StentPatchStub): string {
     method = q.privateMethodName
   }
   if (method) {
-    const keyType =
-      'privateMethodName' in q ? 'PrivateIdentifier' : 'Identifier'
+    let keyType: 'PrivateIdentifier' | 'Identifier' = 'Identifier'
+    if ('privateMethodName' in q) {
+      keyType = 'PrivateIdentifier'
+    }
     queries.push(
       `ClassBody > [key.name="${method}"][key.type=${keyType}] > [async]`,
       `Property[key.name="${method}"][key.type=${keyType}] > [async]`,

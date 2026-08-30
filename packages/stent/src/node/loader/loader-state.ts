@@ -40,21 +40,28 @@ function flushBindings(state: LoaderState, identity: PackageIdentity): void {
 }
 
 function patchStubFromInfo(info: StentPatchInfo): StentPatchStub {
-  return {
+  const stub: StentPatchStub = {
     id: info.id,
     target: info.target,
     operation: info.operation,
-    ...(info.priority === 0 ? {} : { priority: info.priority }),
-    ...(info.required === undefined ? {} : { required: info.required }),
   }
+  if (info.priority !== 0) {
+    stub.priority = info.priority
+  }
+  if (info.required !== undefined) {
+    stub.required = info.required
+  }
+  return stub
 }
 
 function patchShapeKey(info: StentPatchInfo): string {
   const target = info.target
-  const filePath =
-    target.filePath instanceof RegExp
-      ? [target.filePath.source, target.filePath.flags]
-      : target.filePath
+  let filePath: string | RegExp | [string, string] | undefined
+  if (target.filePath instanceof RegExp) {
+    filePath = [target.filePath.source, target.filePath.flags]
+  } else {
+    filePath = target.filePath
+  }
   return JSON.stringify([
     info.id,
     target.module,

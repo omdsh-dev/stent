@@ -97,12 +97,16 @@ function installAsyncHooks(baseUrl: string): void {
   const directNodeEntry =
     baseUrl.endsWith('/node/loader/loader.js')
     || baseUrl.endsWith('/node/loader/loader.ts')
-  const hookEntry = directNodeEntry
-    ? new URL(
-        baseUrl.endsWith('.ts') ? '../hook-entry.ts' : '../hook-entry.js',
-        baseUrl,
-      )
-    : new URL('./node/hook-entry.js', baseUrl)
+  let hookEntry: URL
+  if (directNodeEntry) {
+    let hookEntryPath = '../hook-entry.js'
+    if (baseUrl.endsWith('.ts')) {
+      hookEntryPath = '../hook-entry.ts'
+    }
+    hookEntry = new URL(hookEntryPath, baseUrl)
+  } else {
+    hookEntry = new URL('./node/hook-entry.js', baseUrl)
+  }
   register(hookEntry.href, baseUrl, {
     data: { configPath: asyncConfigPath, port: channel.port2 },
     transferList: [channel.port2],

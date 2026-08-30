@@ -40,8 +40,12 @@ const config = {
 /** Report one check line; mark the process failed on mismatch. */
 function check(label, actual, expected) {
   const ok = actual === expected
-  console.log(`${ok ? 'PASS' : 'FAIL'} ${label}: ${JSON.stringify(actual)}${ok ? '' : ` (expect ${JSON.stringify(expected)})`}`)
-  if (!ok) process.exitCode = 1
+  if (!ok) {
+    console.log(`FAIL ${label}: ${JSON.stringify(actual)} (expect ${JSON.stringify(expected)})`)
+    process.exitCode = 1
+    return
+  }
+  console.log(`PASS ${label}: ${JSON.stringify(actual)}`)
 }
 
 const caseName = process.argv[2]

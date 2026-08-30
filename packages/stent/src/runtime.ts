@@ -313,9 +313,10 @@ function compareStrings(left: string, right: string): number {
 function targetKey(target: StentTarget): string {
   const selector =
     target.astQuery ?? JSON.stringify(target.functionQuery ?? null)
-  const files =
-    target.filePath
-    ?? (target.filePaths === undefined ? null : target.filePaths.join('|'))
+  let files: string | RegExp | null = target.filePath ?? null
+  if (target.filePath == null && target.filePaths !== undefined) {
+    files = target.filePaths.join('|')
+  }
   return [target.module, target.versionRange, String(files), selector].join('|')
 }
 

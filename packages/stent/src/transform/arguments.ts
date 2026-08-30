@@ -142,11 +142,12 @@ function patternBindsArguments(pattern: Pattern): boolean {
     case 'RestElement':
       return patternBindsArguments(pattern.argument)
     case 'ObjectPattern':
-      return pattern.properties.some((property) =>
-        property.type === 'RestElement'
-          ? patternBindsArguments(property.argument)
-          : patternBindsArguments(property.value),
-      )
+      return pattern.properties.some((property) => {
+        if (property.type === 'RestElement') {
+          return patternBindsArguments(property.argument)
+        }
+        return patternBindsArguments(property.value)
+      })
     case 'ArrayPattern':
       return pattern.elements.some(
         (element) => element !== null && patternBindsArguments(element),

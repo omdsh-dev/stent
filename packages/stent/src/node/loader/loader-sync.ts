@@ -42,14 +42,20 @@ function installSynchronousHooks(state: LoaderState): void {
       if (!transformer) {
         return result
       }
-      const path = url.startsWith('file:') ? fileURLToPath(url) : url
+      let path = url
+      if (url.startsWith('file:')) {
+        path = fileURLToPath(url)
+      }
       if (state.seen.has(path)) {
         return result
       }
       state.seen.add(path)
       try {
         const source = readSource(result, url)
-        const moduleType = context.format === 'module' ? 'esm' : 'cjs'
+        let moduleType: 'esm' | 'cjs' = 'cjs'
+        if (context.format === 'module') {
+          moduleType = 'esm'
+        }
         const transformed = transformStentSource(
           transformer,
           source,

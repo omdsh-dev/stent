@@ -41,9 +41,10 @@ function functionKind(node: AstNode): FunctionKind {
     return 'arrow'
   }
   const parent = asNode(node.parent)
-  return parent?.type === 'MethodDefinition' && asNode(parent.value) === node
-    ? 'method'
-    : 'expression'
+  if (parent?.type === 'MethodDefinition' && asNode(parent.value) === node) {
+    return 'method'
+  }
+  return 'expression'
 }
 
 /** Resolve the configured threshold; `false` disables one function syntax. */

@@ -97,9 +97,10 @@ function transformStentSource(
   moduleType: 'esm' | 'cjs',
 ): { code: string; map?: string } {
   const result = transformer.transform(source, moduleType)
-  return result.map === undefined
-    ? { code: result.code }
-    : { code: result.code, map: result.map }
+  if (result.map === undefined) {
+    return { code: result.code }
+  }
+  return { code: result.code, map: result.map }
 }
 
 export {

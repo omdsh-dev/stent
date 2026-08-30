@@ -31,10 +31,11 @@ function patchesFile(entries: unknown): string {
   const root = mkdtempSync(join(tmpdir(), 'stent-watched-'))
   roots.push(root)
   const path = join(root, 'stent.patches.json')
-  writeFileSync(
-    path,
-    typeof entries === 'string' ? entries : JSON.stringify(entries),
-  )
+  if (typeof entries === 'string') {
+    writeFileSync(path, entries)
+  } else {
+    writeFileSync(path, JSON.stringify(entries))
+  }
   return path
 }
 

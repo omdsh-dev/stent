@@ -90,7 +90,11 @@ async function retransformEsm(
   }
   const job: unknown = Map.prototype.get.call(cache, url)
   Map.prototype.delete.call(cache, url)
-  clearSeen(url.startsWith('file:') ? fileURLToPath(url) : url)
+  let clearPath = url
+  if (url.startsWith('file:')) {
+    clearPath = fileURLToPath(url)
+  }
+  clearSeen(clearPath)
   try {
     return (await import(url)) as Record<string, unknown>
   } catch (error) {
