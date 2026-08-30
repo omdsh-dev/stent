@@ -2,6 +2,8 @@ import type { Node, Pattern, Program } from 'estree'
 
 import type { NameAllocator } from './ast-types.ts'
 
+const AST_METADATA_KEYS = new Set(['loc', 'range', 'start', 'end'])
+
 /**
  * Whether a node references the enclosing scope's `arguments` object, and
  * optionally rewrites those references to a capture name. Nested non-arrow
@@ -40,7 +42,7 @@ export function mapOuterArguments(
   }
   let found = false
   for (const key of Object.keys(node)) {
-    if (key === 'loc' || key === 'range' || key === 'start' || key === 'end') {
+    if (AST_METADATA_KEYS.has(key)) {
       continue
     }
     // Property keys and non-computed member properties are not references.
@@ -155,7 +157,7 @@ function collectIdentifiers(node: Node, out: Set<string>): void {
     return
   }
   for (const key of Object.keys(node)) {
-    if (key === 'loc' || key === 'range' || key === 'start' || key === 'end') {
+    if (AST_METADATA_KEYS.has(key)) {
       continue
     }
     const value = (node as unknown as Record<string, unknown>)[key]

@@ -145,12 +145,14 @@ export async function load(
   if (transforms.length === 0) {
     return result
   }
-  let source =
-    typeof result.source === 'string'
-      ? result.source
-      : result.source == null
-        ? ''
-        : Buffer.from(result.source).toString('utf8')
+  let source: string
+  if (typeof result.source === 'string') {
+    source = result.source
+  } else if (result.source == null) {
+    source = ''
+  } else {
+    source = Buffer.from(result.source).toString('utf8')
+  }
   let transformed = false
   const reports: StentBindingReport[] = []
   for (const transform of transforms) {

@@ -74,12 +74,12 @@ function queryFromFunction(patch: StentPatchStub): string {
     throw new Error('stent: patch target must carry functionQuery or astQuery')
   }
   const queries: string[] = []
-  const method =
-    'methodName' in q
-      ? q.methodName
-      : 'privateMethodName' in q
-        ? q.privateMethodName
-        : undefined
+  let method: string | undefined
+  if ('methodName' in q) {
+    method = q.methodName
+  } else if ('privateMethodName' in q) {
+    method = q.privateMethodName
+  }
   if (method) {
     const keyType =
       'privateMethodName' in q ? 'PrivateIdentifier' : 'Identifier'

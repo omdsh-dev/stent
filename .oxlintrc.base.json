@@ -155,6 +155,10 @@
           "error",
           60
         ],
+        "eslint/complexity": "error",
+        "eslint/no-constant-condition": "error",
+        "eslint/no-nested-ternary": "error",
+        "eslint/no-unneeded-ternary": "error",
         "stent/max-statements-per-file": [
           "error",
           220

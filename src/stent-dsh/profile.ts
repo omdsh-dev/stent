@@ -11,6 +11,7 @@ import { basename, dirname, join, matchesGlob, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import type { LauncherArgs } from './args.ts'
+import { createEnableOverlay, type PatchRow } from './profile-overlay.ts'
 
 interface YamlTypeOptions {
   kind: 'scalar'
@@ -27,12 +28,6 @@ interface YamlApi {
 
 type RecordValue = Record<string, unknown>
 type PatchLayer = unknown[]
-type PatchRow = RecordValue & {
-  id?: string
-  disabled?: boolean
-  config?: RecordValue
-  insert?: unknown
-}
 
 interface ResolvedProfile {
   dshHome: URL
@@ -282,52 +277,7 @@ export function composeStentConfig({
     applyLayer(rows, loadPatchLayer(patchFile))
   }
 
-  // A row whose config declares a Stent dependency is a dynamic patch plugin.
-  // Such rows may ship disabled; the launcher enables them through a generated
-  // overlay after every user layer. The patch metadata and handlers themselves
-  // are registered by plugin code at runtime, never extracted from YAML.
-  const enableOverlay: PatchRow[] = []
-  const mode = args.passthrough[0]
-  const isConfigDump =
-    args.passthrough.includes('--dump-config')
-    || args.passthrough.includes('--dump-default-config')
-  const canEnableDynamicRows = mode !== 'plugin' && !isConfigDump
-  for (const [id, row] of rows) {
-    const config = isRecord(row.config) ? row.config : undefined
-    const stentConfig = config?.stent
-    if (
-      isRecord(stentConfig)
-      && Object.prototype.hasOwnProperty.call(stentConfig, 'patches')
-    ) {
-      throw new Error(
-        `stent-dsh: profile row ${JSON.stringify(id)} uses config.stent.patches; register patch metadata in plugin code instead`,
-      )
-    }
-    const requiresStent =
-      config !== undefined && (config.stent === true || isRecord(config.stent))
-    if (
-      canEnableDynamicRows
-      && id !== 'stent'
-      && requiresStent
-      && row.disabled !== false
-    ) {
-      enableOverlay.push({ id, disabled: false })
-    }
-  }
-  // A Stent launcher invocation is the explicit opt-in for the DSH integration
-  // row. Keep it disabled for plain `dsh`, but mount it for profile boots so
-  // its post-boot dynamic check and hook summary can run. Plugin
-  // management commands cannot receive generated profile overlays.
-  if (canEnableDynamicRows) {
-    const integration = rows.get('stent-dsh')
-    if (
-      integration !== undefined
-      && integration.disabled !== false
-      && !enableOverlay.some((row) => row.id === 'stent-dsh')
-    ) {
-      enableOverlay.push({ id: 'stent-dsh', disabled: false })
-    }
-  }
+  const enableOverlay = createEnableOverlay(rows, args.passthrough)
 
   const temp = pathToFileURL(mkdtempSync(join(tmpdir(), 'stent-overlay-')))
   const enablePath = childPath(temp, 'enable.yaml')

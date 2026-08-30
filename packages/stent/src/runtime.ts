@@ -239,7 +239,7 @@ class StentRuntime {
    */
   allBindings(): readonly StentBinding[] {
     return [...this.bindings.entries()]
-      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .sort(([left], [right]) => compareStrings(left, right))
       .flatMap(([, records]) => records)
   }
 
@@ -256,10 +256,12 @@ class StentRuntime {
         enabled: entry.handler !== undefined,
         bindings: this.bindingsOf(entry.info.id),
       }))
-      .sort(
-        (a, b) =>
-          a.priority - b.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-      )
+      .sort((a, b) => {
+        if (a.priority !== b.priority) {
+          return a.priority - b.priority
+        }
+        return compareStrings(a.id, b.id)
+      })
   }
 
   private subscribe(): void {
@@ -294,6 +296,17 @@ function assertNoReplaceConflict(
       )
     }
   }
+}
+
+/** Compare strings using the runtime's stable lexical order. */
+function compareStrings(left: string, right: string): number {
+  if (left < right) {
+    return -1
+  }
+  if (left > right) {
+    return 1
+  }
+  return 0
 }
 
 /** Stable identity of a patch target for conflict detection. */
