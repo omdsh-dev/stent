@@ -240,6 +240,10 @@
             "countCommentDelimiters": false
           }
         ],
+        "stent/file-complexity": [
+          "error",
+          75
+        ],
         "stent/max-statements-per-file": [
           "error",
           220

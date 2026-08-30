@@ -8,6 +8,7 @@
  */
 
 import { commentShorterThanFunction } from './rules/comment-shorter-than-function.ts'
+import { fileComplexity } from './rules/file-complexity.ts'
 import { maxStatementsPerFile } from './rules/max-statements-per-file.ts'
 import { minFunctionLines } from './rules/min-function-lines.ts'
 
@@ -25,6 +26,7 @@ const plugin: OxlintPlugin = {
   },
   rules: {
     'comment-shorter-than-function': commentShorterThanFunction,
+    'file-complexity': fileComplexity,
     'max-statements-per-file': maxStatementsPerFile,
     'min-function-lines': minFunctionLines,
   },
