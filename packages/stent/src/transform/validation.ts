@@ -18,14 +18,15 @@ export function validatePatchId(id: PatchId): void {
   }
 }
 
-/** Validate static patch fields before an instrumentation is built. */
-export function validatePatchStatic(
-  patch: Pick<StentPatchStub, 'target' | 'operation' | 'required'>,
-): void {
-  const target = patch.target
+type PatchTarget = StentPatchStub['target']
+
+function validateTargetModule(target: PatchTarget): void {
   if (typeof target.module !== 'string' || target.module.length === 0) {
     throw new Error('stent: patch target.module must be a non-empty string')
   }
+}
+
+function validateVersionRange(target: PatchTarget): void {
   if (
     typeof target.versionRange !== 'string'
     || target.versionRange.length === 0
@@ -34,6 +35,9 @@ export function validatePatchStatic(
       'stent: patch target.versionRange must be a non-empty string',
     )
   }
+}
+
+function validateFilePaths(target: PatchTarget): void {
   const hasFilePath =
     typeof target.filePath === 'string' || target.filePath instanceof RegExp
   if (!hasFilePath && target.filePaths === undefined) {
@@ -44,21 +48,29 @@ export function validatePatchStatic(
       'stent: patch target must carry filePath or filePaths, not both',
     )
   }
+  if (target.filePaths === undefined) {
+    return
+  }
   if (
-    target.filePaths !== undefined
-    && (!Array.isArray(target.filePaths)
-      || target.filePaths.length === 0
-      || target.filePaths.some(
-        (path) => typeof path !== 'string' || path.length === 0,
-      ))
+    !Array.isArray(target.filePaths)
+    || target.filePaths.length === 0
+    || target.filePaths.some(
+      (path) => typeof path !== 'string' || path.length === 0,
+    )
   ) {
     throw new Error(
       'stent: patch target.filePaths must be a non-empty array of non-empty strings',
     )
   }
-  if (patch.required !== undefined && typeof patch.required !== 'boolean') {
+}
+
+function validateRequired(required: unknown): void {
+  if (required !== undefined && typeof required !== 'boolean') {
     throw new Error('stent: patch.required must be a boolean when present')
   }
+}
+
+function validateTargetIndices(target: PatchTarget): void {
   if (!isValidIndex(target.index)) {
     throw new Error(
       'stent: patch target.index must be a non-negative integer or null',
@@ -69,11 +81,24 @@ export function validatePatchStatic(
       'stent: patch target functionQuery.index must be a non-negative integer or null',
     )
   }
-  if (!['before', 'after', 'around', 'replace'].includes(patch.operation)) {
-    throw new Error(
-      `stent: unknown operation ${JSON.stringify(patch.operation)}`,
-    )
+}
+
+function validateOperation(operation: StentPatchStub['operation']): void {
+  if (!['before', 'after', 'around', 'replace'].includes(operation)) {
+    throw new Error(`stent: unknown operation ${JSON.stringify(operation)}`)
   }
+}
+
+/** Validate static patch fields before an instrumentation is built. */
+export function validatePatchStatic(
+  patch: Pick<StentPatchStub, 'target' | 'operation' | 'required'>,
+): void {
+  validateTargetModule(patch.target)
+  validateVersionRange(patch.target)
+  validateFilePaths(patch.target)
+  validateRequired(patch.required)
+  validateTargetIndices(patch.target)
+  validateOperation(patch.operation)
 }
 
 /** Whether an index is unset, null, or a non-negative integer. */

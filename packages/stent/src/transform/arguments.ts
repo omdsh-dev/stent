@@ -3,6 +3,60 @@ import type { Node, Pattern, Program } from 'estree'
 import type { NameAllocator } from './ast-types.ts'
 
 const AST_METADATA_KEYS = new Set(['loc', 'range', 'start', 'end'])
+const argumentBoundaryTypes = new Set([
+  'FunctionDeclaration',
+  'FunctionExpression',
+])
+
+function mapArgumentIdentifier(
+  node: { name: string },
+  name: string | undefined,
+): boolean {
+  if (name !== undefined) {
+    node.name = name
+  }
+  return true
+}
+
+function isArgumentBoundary(node: Node): boolean {
+  if (argumentBoundaryTypes.has(node.type)) {
+    return true
+  }
+  if (node.type !== 'ArrowFunctionExpression') {
+    return false
+  }
+  return node.params.some(patternBindsArguments)
+}
+
+function shouldSkipArgumentKey(node: Node, key: string): boolean {
+  if (AST_METADATA_KEYS.has(key)) {
+    return true
+  }
+  if (key === 'key') {
+    return node.type === 'Property' || node.type === 'MethodDefinition'
+  }
+  if (key !== 'property') {
+    return false
+  }
+  return node.type === 'MemberExpression' && !node.computed
+}
+
+function mapOuterArgumentsChildren(
+  node: Node,
+  name: string | undefined,
+): boolean {
+  let found = false
+  for (const key of Object.keys(node)) {
+    if (shouldSkipArgumentKey(node, key)) {
+      continue
+    }
+    const value = (node as unknown as Record<string, unknown>)[key]
+    if (mapOuterArgumentsValue(value, name)) {
+      found = true
+    }
+  }
+  return found
+}
 
 /**
  * Whether a node references the enclosing scope's `arguments` object, and
@@ -20,51 +74,19 @@ export function mapOuterArguments(
   node: Node | undefined,
   name: string | undefined,
 ): boolean {
-  if (!node) {
+  if (node === undefined) {
     return false
   }
   if (node.type === 'Identifier') {
     if (node.name !== 'arguments') {
       return false
     }
-    if (name !== undefined) {
-      node.name = name
-    }
-    return true
+    return mapArgumentIdentifier(node, name)
   }
-  if (
-    node.type === 'FunctionDeclaration'
-    || node.type === 'FunctionExpression'
-    || (node.type === 'ArrowFunctionExpression'
-      && node.params.some(patternBindsArguments))
-  ) {
+  if (isArgumentBoundary(node)) {
     return false
   }
-  let found = false
-  for (const key of Object.keys(node)) {
-    if (AST_METADATA_KEYS.has(key)) {
-      continue
-    }
-    // Property keys and non-computed member properties are not references.
-    if (
-      key === 'key'
-      && (node.type === 'Property' || node.type === 'MethodDefinition')
-    ) {
-      continue
-    }
-    if (
-      key === 'property'
-      && node.type === 'MemberExpression'
-      && !node.computed
-    ) {
-      continue
-    }
-    const value = (node as unknown as Record<string, unknown>)[key]
-    if (mapOuterArgumentsValue(value, name)) {
-      found = true
-    }
-  }
-  return found
+  return mapOuterArgumentsChildren(node, name)
 }
 
 /** Scan an AST child value for enclosing-scope `arguments` references. */

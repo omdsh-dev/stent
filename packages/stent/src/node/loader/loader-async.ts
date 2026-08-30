@@ -24,6 +24,61 @@ function scheduleAsyncConfigCleanup(path: string): void {
   })
 }
 
+function isFlushDoneMessage(message: unknown): boolean {
+  if (typeof message !== 'object') {
+    return false
+  }
+  if (message === null) {
+    return false
+  }
+  return (message as { type?: string }).type === 'flush-done'
+}
+
+function resolveFlushWaiters(): void {
+  const waiters = flushWaiters.splice(0)
+  for (const resolve of waiters) {
+    resolve()
+  }
+}
+
+function recordBinding(value: unknown): void {
+  if (typeof value !== 'object') {
+    return
+  }
+  if (value === null) {
+    return
+  }
+  const report = value as Partial<StentBindingReport>
+  if (typeof report.patchId !== 'string') {
+    return
+  }
+  if (typeof report.module !== 'string') {
+    return
+  }
+  if (typeof report.file !== 'string') {
+    return
+  }
+  if (typeof report.nodes !== 'number') {
+    return
+  }
+  runtime.recordBindings(report.patchId, [
+    { module: report.module, file: report.file, nodes: report.nodes },
+  ])
+}
+
+function handleBindingMessage(message: unknown): void {
+  if (isFlushDoneMessage(message)) {
+    resolveFlushWaiters()
+    return
+  }
+  if (!Array.isArray(message)) {
+    return
+  }
+  for (const record of message) {
+    recordBinding(record)
+  }
+}
+
 /** Install the loader-thread hooks used when synchronous hooks are unavailable. */
 export function installAsyncHooks(baseUrl: string): void {
   if (asyncConfigPath === undefined) {
@@ -37,38 +92,7 @@ export function installAsyncHooks(baseUrl: string): void {
   const channel = new MessageChannel()
   const port = channel.port1
   asyncBindingPort = port
-  port.on('message', (message: unknown) => {
-    if (
-      typeof message === 'object'
-      && message !== null
-      && (message as { type?: string }).type === 'flush-done'
-    ) {
-      const waiters = flushWaiters.splice(0)
-      for (const resolve of waiters) {
-        resolve()
-      }
-      return
-    }
-    if (!Array.isArray(message)) {
-      return
-    }
-    for (const record of message) {
-      if (typeof record !== 'object' || record === null) {
-        continue
-      }
-      const report = record as Partial<StentBindingReport>
-      if (
-        typeof report.patchId === 'string'
-        && typeof report.module === 'string'
-        && typeof report.file === 'string'
-        && typeof report.nodes === 'number'
-      ) {
-        runtime.recordBindings(report.patchId, [
-          { module: report.module, file: report.file, nodes: report.nodes },
-        ])
-      }
-    }
-  })
+  port.on('message', handleBindingMessage)
   port.unref()
   const directNodeEntry =
     baseUrl.endsWith('/node/loader/loader.js')

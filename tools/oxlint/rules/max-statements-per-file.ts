@@ -55,40 +55,77 @@ const moduleDeclarationTypes = new Set([
   'ExportNamedDeclaration',
 ])
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object') {
+    return false
+  }
+  return value !== null
+}
+
+function countArrayStatements(
+  values: unknown[],
+  seen: WeakSet<object>,
+): number {
+  let count = 0
+  for (const child of values) {
+    count += countStatements(child, seen)
+  }
+  return count
+}
+
+function nodeType(value: Record<string, unknown>): string | undefined {
+  const type = value.type
+  if (typeof type !== 'string') {
+    return undefined
+  }
+  return type
+}
+
+function isModuleDeclarationKey(
+  key: string,
+  type: string | undefined,
+): boolean {
+  if (key !== 'declaration') {
+    return false
+  }
+  if (type === undefined) {
+    return false
+  }
+  return moduleDeclarationTypes.has(type)
+}
+
+function countNodeChildren(
+  node: Record<string, unknown>,
+  seen: WeakSet<object>,
+  type: string | undefined,
+): number {
+  let count = 0
+  for (const [key, child] of Object.entries(node)) {
+    if (key === 'parent') {
+      continue
+    }
+    count += countStatements(child, seen, !isModuleDeclarationKey(key, type))
+  }
+  return count
+}
+
 function countStatements(
   value: unknown,
   seen = new WeakSet(),
   includeSelf = true,
 ): number {
   if (Array.isArray(value)) {
-    let count = 0
-    for (const child of value) {
-      count += countStatements(child, seen)
-    }
-    return count
+    return countArrayStatements(value, seen)
   }
-  if (typeof value !== 'object' || value === null || seen.has(value)) {
+  if (!isObject(value) || seen.has(value)) {
     return 0
   }
   seen.add(value)
-  const node = value as Record<string, unknown>
-  const nodeType = typeof node.type === 'string' ? node.type : undefined
+  const node = value
+  const type = nodeType(node)
   const own =
-    includeSelf && nodeType !== undefined && statementTypes.has(nodeType)
-      ? 1
-      : 0
-  let nested = 0
-  for (const [key, child] of Object.entries(node)) {
-    if (key === 'parent') {
-      continue
-    }
-    const declaration =
-      key === 'declaration'
-      && nodeType !== undefined
-      && moduleDeclarationTypes.has(nodeType)
-    nested += countStatements(child, seen, !declaration)
-  }
-  return own + nested
+    includeSelf && type !== undefined && statementTypes.has(type) ? 1 : 0
+  return own + countNodeChildren(node, seen, type)
 }
 
 function configuredMaximum(options: readonly unknown[]): number {

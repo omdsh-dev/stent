@@ -174,11 +174,66 @@ export class StentClientService extends Service {
     // client plugin; this facade intentionally exposes a stable narrow face
     // instead. The call targets the implementation signature, which accepts
     // the same fields.
+    return this.registerComponent(options, component)
+  }
+
+  private registerComponent(
+    options: StentSlotOptions,
+    component: unknown,
+  ): () => void {
     return (
       this.ctx.slots as unknown as {
         register(options: StentSlotOptions, component: unknown): () => void
       }
     ).register(options, component)
+  }
+
+  private shouldOwn(
+    current: KeyedClaim | undefined,
+    priority: number,
+  ): boolean {
+    if (current === undefined) {
+      return true
+    }
+    return priority > (current.options.priority ?? 0)
+  }
+
+  private displace(current: KeyedClaim, winner: KeyedClaim): void {
+    current.owner = false
+    const plugin = winner.options.plugin
+    if (plugin === undefined) {
+      current.options.onLost?.({})
+      return
+    }
+    current.options.onLost?.({ plugin })
+  }
+
+  private takeOwnership(
+    claims: KeyedClaim[],
+    claim: KeyedClaim,
+    current: KeyedClaim | undefined,
+  ): void {
+    if (current !== undefined) {
+      this.displace(current, claim)
+    }
+    claim.owner = true
+    claim.registered = this.registerComponent(claim.options, claim.component)
+    claims.unshift(claim)
+  }
+
+  private queueClaim(
+    claims: KeyedClaim[],
+    claim: KeyedClaim,
+    current: KeyedClaim | undefined,
+    priority: number,
+  ): void {
+    if (current !== undefined && priority === (current.options.priority ?? 0)) {
+      this.ctx.logger.warn(
+        `stent-client: keyed slot "${claim.options.name}" key "${claim.options.key}" claimed by both `
+          + `${current.options.plugin ?? 'an earlier claimant'} (earlier) and ${claim.options.plugin ?? 'this claimant'}; the earlier one owns it`,
+      )
+    }
+    claims.push(claim)
   }
 
   /**
@@ -215,31 +270,10 @@ export class StentClientService extends Service {
     }
     const current = claims.find((candidate) => candidate.owner)
     const priority = options.priority ?? 0
-    if (current === undefined || priority > (current.options.priority ?? 0)) {
-      // No owner yet, or this claim outranks the incumbent: take the key.
-      if (current !== undefined) {
-        current.owner = false
-        current.options.onLost?.(
-          options.plugin === undefined ? {} : { plugin: options.plugin },
-        )
-      }
-      claim.owner = true
-      claim.registered = (
-        this.ctx.slots as unknown as {
-          register(options: StentSlotOptions, component: unknown): () => void
-        }
-      ).register(options, component)
-      claims.unshift(claim)
+    if (this.shouldOwn(current, priority)) {
+      this.takeOwnership(claims, claim, current)
     } else {
-      // Queue: equal priorities keep registration order (warn), lower
-      // priorities queue silently.
-      if (priority === (current.options.priority ?? 0)) {
-        this.ctx.logger.warn(
-          `stent-client: keyed slot "${options.name}" key "${key}" claimed by both `
-            + `${current.options.plugin ?? 'an earlier claimant'} (earlier) and ${options.plugin ?? 'this claimant'}; the earlier one owns it`,
-        )
-      }
-      claims.push(claim)
+      this.queueClaim(claims, claim, current, priority)
     }
     this.keyed.set(id, claims)
     return {
@@ -289,11 +323,7 @@ export class StentClientService extends Service {
     }
     next.owner = true
     if (next.registered === undefined) {
-      next.registered = (
-        this.ctx.slots as unknown as {
-          register(options: StentSlotOptions, component: unknown): () => void
-        }
-      ).register(next.options, next.component)
+      next.registered = this.registerComponent(next.options, next.component)
     }
     next.options.onGain?.()
   }

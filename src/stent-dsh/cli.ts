@@ -17,6 +17,10 @@ interface ResolvedHost {
   cwd: URL | undefined
 }
 
+interface PackageManifest {
+  name?: unknown
+}
+
 /** Look up an executable on PATH (first hit), tolerating empty segments. */
 function which(cmd: string, pathEnv: string | undefined): URL | undefined {
   if (pathEnv === undefined || pathEnv === '') {
@@ -84,35 +88,53 @@ function chaseShim(path: URL): URL {
     : resolved
 }
 
+function directoryForPath(path: URL): string {
+  if (!existsSync(path)) {
+    return dirname(fileURLToPath(path))
+  }
+  if (statSync(path).isDirectory()) {
+    return fileURLToPath(path)
+  }
+  return dirname(fileURLToPath(path))
+}
+
+function findDshBin(dir: string): URL | undefined {
+  const pkgJson = join(dir, 'package.json')
+  if (!existsSync(pkgJson)) {
+    return undefined
+  }
+  try {
+    const manifest = JSON.parse(
+      readFileSync(pkgJson, 'utf8'),
+    ) as PackageManifest
+    if (manifest.name !== '@deepseek-ai/dsh') {
+      return undefined
+    }
+    const candidate = join(dir, 'lib/bin.js')
+    if (!existsSync(candidate)) {
+      return undefined
+    }
+    return pathToFileURL(candidate)
+  } catch {
+    // unparsable manifest: keep walking up
+    return undefined
+  }
+}
+
 /**
  * Normalize a user-supplied or shim-resolved path to the package's lib/bin.js:
  * accepts the bin file, the package root, or anything inside the package.
  */
 function normalizeCli(path: URL): URL | undefined {
-  let dir =
-    existsSync(path) && statSync(path).isDirectory()
-      ? fileURLToPath(path)
-      : dirname(fileURLToPath(path))
+  let dir = directoryForPath(path)
   for (let i = 0; i < 5; i++) {
-    const pkgJson = join(dir, 'package.json')
-    if (existsSync(pkgJson)) {
-      try {
-        const manifest = JSON.parse(
-          readFileSync(pkgJson, 'utf8'),
-        ) as unknown as { name?: unknown }
-        if (manifest.name === '@deepseek-ai/dsh') {
-          const candidate = join(dir, 'lib/bin.js')
-          if (existsSync(candidate)) {
-            return pathToFileURL(candidate)
-          }
-        }
-      } catch {
-        // unparsable manifest: keep walking up
-      }
+    const candidate = findDshBin(dir)
+    if (candidate !== undefined) {
+      return candidate
     }
     const parent = dirname(dir)
     if (parent === dir) {
-      break
+      return undefined
     }
     dir = parent
   }

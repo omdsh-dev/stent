@@ -12,6 +12,10 @@
 import type { RuleTester } from 'oxlint/plugins-dev'
 
 import {
+  isDirective,
+  isTransparentExpression,
+} from '../utils/comment-predicates.ts'
+import {
   asNode,
   countLines,
   functionName,
@@ -76,13 +80,7 @@ function exportAnchor(node: AstNode): AstNode | undefined {
     if (isExportDeclaration(current)) {
       return current
     }
-    if (
-      current.type !== 'ParenthesizedExpression'
-      && current.type !== 'TSAsExpression'
-      && current.type !== 'TSSatisfiesExpression'
-      && current.type !== 'TSNonNullExpression'
-      && current.type !== 'TSInstantiationExpression'
-    ) {
+    if (!isTransparentExpression(current)) {
       return undefined
     }
     current = asNode(current.parent)
@@ -174,23 +172,6 @@ function leadingComments(
     nextStart = comment.range[0]
   }
   return selected
-}
-
-/** Return whether a comment is a tool directive rather than documentation. */
-function isDirective(comment: CommentToken): boolean {
-  const lines = comment.value
-    .split(/\r\n|\r|\n/)
-    .map((line) => line.trim().replace(/^\*+/, '').trim())
-  return lines.some(
-    (line) =>
-      /^(?:eslint|oxlint)-/i.test(line)
-      || /^@ts-/i.test(line)
-      || /^(?:istanbul|c8)\b/i.test(line)
-      || /^jscpd(?::|-|\s|$)/i.test(line)
-      || /^[@#]?__PURE__\b/i.test(line)
-      || /^@?vite-ignore\b/i.test(line)
-      || /^webpack(?:ignore|chunkname)\b/i.test(line),
-  )
 }
 
 /** Remove a block comment's delimiters and JSDoc decoration from one line. */
