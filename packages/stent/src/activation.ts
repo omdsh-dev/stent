@@ -7,14 +7,14 @@
  */
 
 /** Shared global identity so profile-resolved copies see the same marker. */
-export const STENT_DSH_LAUNCH_KEY = Symbol.for('oh-my-dsh.stent-dsh.launch')
+const STENT_DSH_LAUNCH_KEY = Symbol.for('oh-my-dsh.stent-dsh.launch')
 
 /**
  * Mark the current global object as being in the Stent-enabled DSH launch path.
  *
  * @param globalObject - Global-like object used by the runtime or a test.
  */
-export function markStentDshLaunch(globalObject: object = globalThis): void {
+function markStentDshLaunch(globalObject: object = globalThis): void {
   if (isStentDshLaunch(globalObject)) {
     return
   }
@@ -37,9 +37,11 @@ export function markStentDshLaunch(globalObject: object = globalThis): void {
  * @param globalObject - Global-like object used by the runtime or a test.
  * @returns Whether the Stent DSH launch marker is present.
  */
-export function isStentDshLaunch(globalObject: object = globalThis): boolean {
+function isStentDshLaunch(globalObject: object = globalThis): boolean {
   return (
     (globalObject as Record<PropertyKey, unknown>)[STENT_DSH_LAUNCH_KEY]
     === true
   )
 }
+
+export { STENT_DSH_LAUNCH_KEY, markStentDshLaunch, isStentDshLaunch }

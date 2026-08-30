@@ -4,7 +4,7 @@ import type { MatchedFunction, NameAllocator } from './ast-types.ts'
 import { patternToExpression } from './patterns.ts'
 import { GLOBAL_BRIDGE_KEY } from './protocol.ts'
 
-export function createOuterArgumentsCapture(
+function createOuterArgumentsCapture(
   name: string | undefined,
 ): Statement | undefined {
   if (name === undefined) {
@@ -23,7 +23,7 @@ export function createOuterArgumentsCapture(
   }
 }
 
-export function createArgumentsStatement(
+function createArgumentsStatement(
   matched: MatchedFunction,
   name: string,
 ): Statement {
@@ -69,7 +69,7 @@ export function createArgumentsStatement(
   }
 }
 
-export function createTracedStatement(
+function createTracedStatement(
   matched: MatchedFunction,
   body: Statement[],
   argsName: string,
@@ -124,7 +124,7 @@ export function createTracedStatement(
   }
 }
 
-export function createCallStatement(
+function createCallStatement(
   patchId: string,
   operation: string,
   argsName: string,
@@ -189,7 +189,7 @@ function publishExpression(callName: string, tracedName: string): Expression {
   }
 }
 
-export function createPublishStatement(
+function createPublishStatement(
   matched: MatchedFunction,
   names: NameAllocator,
   callName: string,
@@ -275,7 +275,7 @@ function iterableExpression(name: string, async: boolean): Expression {
     : check('iterator')
 }
 
-export function createInjectedStatements(
+function createInjectedStatements(
   capture: Statement | undefined,
   args: Statement,
   traced: Statement,
@@ -298,4 +298,13 @@ function property(key: string, value: Expression): Property {
     key: { type: 'Identifier', name: key },
     value,
   }
+}
+
+export {
+  createOuterArgumentsCapture,
+  createArgumentsStatement,
+  createTracedStatement,
+  createCallStatement,
+  createPublishStatement,
+  createInjectedStatements,
 }

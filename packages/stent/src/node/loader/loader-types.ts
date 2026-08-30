@@ -5,14 +5,10 @@ import type { StentMatcher, StentTransformer } from '../../transform/matcher.ts'
 import type { PatchId } from '../../types.ts'
 
 /** The `Module.prototype._compile` function wrapped for CommonJS transforms. */
-export type CompileFn = (
-  this: Module,
-  content: string,
-  filename: string,
-) => unknown
+type CompileFn = (this: Module, content: string, filename: string) => unknown
 
 /** Mutable state belonging to one installed loader. */
-export interface LoaderState {
+interface LoaderState {
   active: boolean
   matcher: StentMatcher
   instrumentations: StentInstrumentationConfig[]
@@ -24,3 +20,5 @@ export interface LoaderState {
   pendingLoadedModules: Set<string>
   retransformQueued: boolean
 }
+
+export type { CompileFn, LoaderState }

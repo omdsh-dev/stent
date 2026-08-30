@@ -19,7 +19,7 @@ const directivePatterns = [
 ]
 
 /** Return whether a node is a transparent export expression. */
-export function isTransparentExpression(node: AstNode): boolean {
+function isTransparentExpression(node: AstNode): boolean {
   if (node.type === undefined) {
     return false
   }
@@ -27,7 +27,7 @@ export function isTransparentExpression(node: AstNode): boolean {
 }
 
 /** Return whether a comment is a tool directive rather than documentation. */
-export function isDirective(comment: { value: string }): boolean {
+function isDirective(comment: { value: string }): boolean {
   const lines = comment.value
     .split(/\r\n|\r|\n/)
     .map((line) => line.trim().replace(/^\*+/, '').trim())
@@ -40,3 +40,5 @@ export function isDirective(comment: { value: string }): boolean {
   }
   return false
 }
+
+export { isTransparentExpression, isDirective }

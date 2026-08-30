@@ -40,7 +40,7 @@ declare module '@deepseek-ai/cordis' {
  * process-local runtime and ties every registration to the owning fiber's
  * lifecycle.
  */
-export class StentService extends Service {
+class StentService extends Service {
   /** Service key under which this class registers on `ctx`. */
   static provide = 'stent';
 
@@ -190,7 +190,7 @@ export class StentService extends Service {
  * @returns The mounted Stent registry (the context's view).
  * @throws When the process did not enter through the `stent-dsh` launch path.
  */
-export function getStent(ctx: Context): StentService {
+function getStent(ctx: Context): StentService {
   if (!isStentDshLaunch()) {
     throw new Error(
       'stent: getStent(ctx) requires the stent-dsh launch path; declare inject: ["stent"] for a DSH plugin so Cordis can keep it pending under plain dsh',
@@ -232,3 +232,5 @@ function patchInfo(patch: StentPatch): StentPatchInfo {
     enabled: true,
   }
 }
+
+export { StentService, getStent }

@@ -103,7 +103,7 @@ function matchInstalledProfile(launcherUrl: URL): InstalledProfile | undefined {
  * Resolve the profile like dsh does. An installed bundle bin additionally
  * derives both DSH_HOME and the profile name from its own path.
  */
-export function resolveProfile({
+function resolveProfile({
   profile,
   dshHome: configuredHome,
   launcherUrl,
@@ -132,7 +132,7 @@ export function resolveProfile({
 }
 
 /** Resolve js-yaml from the profile first, then from the CLI package. */
-export function resolveYaml(
+function resolveYaml(
   profileDir: URL,
   fromCli: NodeJS.Require,
 ): { requireFromProfile: NodeJS.Require; yaml: YamlApi } {
@@ -237,7 +237,7 @@ function bundlePatchFile(
 }
 
 /** Compose profile rows and create the temporary activation overlay. */
-export function composeStentConfig({
+function composeStentConfig({
   args,
   dshHome,
   profileDir,
@@ -293,3 +293,5 @@ export function composeStentConfig({
     },
   }
 }
+
+export { resolveProfile, resolveYaml, composeStentConfig }

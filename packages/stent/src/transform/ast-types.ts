@@ -14,7 +14,7 @@ import type {
 } from 'estree'
 
 /** One matched function with its parameter list. */
-export interface MatchedFunction {
+interface MatchedFunction {
   /** The function-like node (MethodDefinition/Property unwrapped). */
   node: FunctionDeclaration | FunctionExpression | ArrowFunctionExpression
   /** Whether the node is an arrow function (lexical `this`/`arguments`). */
@@ -30,6 +30,8 @@ export interface MatchedFunction {
 }
 
 /** Allocator for names that are unique within one transformed program. */
-export interface NameAllocator {
+interface NameAllocator {
   unique(base: string): string
 }
+
+export type { MatchedFunction, NameAllocator }

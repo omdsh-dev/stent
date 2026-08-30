@@ -40,7 +40,7 @@ declare module '@deepseek-ai/cordis' {
  * an untyped parameter list because the parameter types derive from the slot
  * declaration, which this facade intentionally does not re-derive.
  */
-export interface StentSlotOptions {
+interface StentSlotOptions {
   /** The declared slot name to contribute to. */
   readonly name: string
   /** Child-slot declaration table: keys are the declared (and claimed) holes. */
@@ -74,7 +74,7 @@ export interface StentSlotOptions {
  * point the component registers and `onGain` fires. Disposing a queued claim
  * just withdraws it.
  */
-export interface SlotClaim {
+interface SlotClaim {
   /** Whether this claim currently owns (and registers) the keyed slot. */
   readonly owner: boolean
   /**
@@ -88,7 +88,7 @@ export interface SlotClaim {
  * Registration face for the arbitrated keyed-slot method. Adds the arbitration
  * declarations to the narrow {@link StentSlotOptions} face.
  */
-export interface KeyedSlotOptions extends StentSlotOptions {
+interface KeyedSlotOptions extends StentSlotOptions {
   /**
    * Arbitration priority: the highest-priority claimant owns the key. Equal
    * priorities keep registration order (the earlier claimant owns) and log a
@@ -126,7 +126,7 @@ interface KeyedClaim {
  * keeps its conflict and disposal semantics. The service never stores a
  * parallel copy of command or slot state.
  */
-export class StentClientService extends Service {
+class StentClientService extends Service {
   /** Service key under which this class registers on `ctx`. */
   static provide = 'stentClient'
   /** The browser command and slot services must be mounted. */
@@ -330,16 +330,19 @@ export class StentClientService extends Service {
 }
 
 /** Cordis plugin name used by Loader diagnostics. */
-export const name = 'stent-dsh'
+const name = 'stent-dsh'
 
 /**
  * Mount the Stent Client API for the browser Cordis tree.
  *
  * @param ctx - Cordis context that owns the service.
  */
-export async function apply(ctx: Context): Promise<void> {
+async function apply(ctx: Context): Promise<void> {
   await ctx.plugin(StentClientService)
   if (ctx.get('stentClient') === undefined) {
     throw new Error('stent-dsh: browser client service failed to mount')
   }
 }
+
+export type { StentSlotOptions, SlotClaim, KeyedSlotOptions }
+export { StentClientService, name, apply }

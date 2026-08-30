@@ -24,13 +24,10 @@ import {
 import type { StentPatchInfo, StentPatchStub, PatchId } from '../../types.ts'
 import type { LoaderState } from './loader-types.ts'
 
-export const states: LoaderState[] = []
+const states: LoaderState[] = []
 const nodeRequire = createRequire(import.meta.url)
 
-export function flushBindings(
-  state: LoaderState,
-  identity: PackageIdentity,
-): void {
+function flushBindings(state: LoaderState, identity: PackageIdentity): void {
   if (state.pending.size === 0) {
     return
   }
@@ -52,7 +49,7 @@ function patchStubFromInfo(info: StentPatchInfo): StentPatchStub {
   }
 }
 
-export function patchShapeKey(info: StentPatchInfo): string {
+function patchShapeKey(info: StentPatchInfo): string {
   const target = info.target
   const filePath =
     target.filePath instanceof RegExp
@@ -72,13 +69,13 @@ export function patchShapeKey(info: StentPatchInfo): string {
   ])
 }
 
-export function currentInstrumentations(): StentInstrumentationConfig[] {
+function currentInstrumentations(): StentInstrumentationConfig[] {
   return orderStentInstrumentations(
     runtime.list().flatMap((info) => expandPatchStub(patchStubFromInfo(info))),
   )
 }
 
-export function createMatcher(
+function createMatcher(
   pending: Map<PatchId, number>,
   instrumentations: StentInstrumentationConfig[],
 ): StentMatcher {
@@ -87,7 +84,7 @@ export function createMatcher(
   })
 }
 
-export function clearSeen(filename: string): void {
+function clearSeen(filename: string): void {
   for (const installation of states) {
     installation.seen.delete(filename)
   }
@@ -167,7 +164,7 @@ async function retransformLoadedTargets(
   }
 }
 
-export function refreshDynamicState(
+function refreshDynamicState(
   state: LoaderState,
   writeConfig: () => void,
 ): void {
@@ -191,7 +188,7 @@ export function refreshDynamicState(
   queueLoadedRetransform(state)
 }
 
-export function supportsSyncHooks(): boolean {
+function supportsSyncHooks(): boolean {
   if (process.env.STENT_FORCE_ASYNC_HOOKS === '1') {
     return false
   }
@@ -211,4 +208,15 @@ export function supportsSyncHooks(): boolean {
     return minor > 11 || (minor === 11 && patch >= 1)
   }
   return major > 24
+}
+
+export {
+  states,
+  flushBindings,
+  patchShapeKey,
+  currentInstrumentations,
+  createMatcher,
+  clearSeen,
+  refreshDynamicState,
+  supportsSyncHooks,
 }

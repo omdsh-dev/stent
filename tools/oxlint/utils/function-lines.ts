@@ -10,10 +10,10 @@ type RuleFactory = Extract<
   Parameters<RuleTester['run']>[1],
   { create: (...args: never[]) => unknown }
 >
-export type RuleContext = Parameters<RuleFactory['create']>[0]
-export type SourceCode = RuleContext['sourceCode']
+type RuleContext = Parameters<RuleFactory['create']>[0]
+type SourceCode = RuleContext['sourceCode']
 
-export type AstNode = {
+type AstNode = {
   range: [number, number]
   type?: string
   parent?: unknown
@@ -25,13 +25,13 @@ export type AstNode = {
   name?: string
 }
 
-export interface LineCountOptions {
+interface LineCountOptions {
   skipBlankLines: boolean
   skipComments: boolean
 }
 
 /** Narrow an arbitrary AST property to a ranged node. */
-export function asNode(value: unknown): AstNode | undefined {
+function asNode(value: unknown): AstNode | undefined {
   return typeof value === 'object' && value !== null && 'range' in value
     ? (value as AstNode)
     : undefined
@@ -41,7 +41,7 @@ export function asNode(value: unknown): AstNode | undefined {
  * Return a readable name for a declaration, variable-bound function, or class
  * method.
  */
-export function functionName(node: AstNode): string | undefined {
+function functionName(node: AstNode): string | undefined {
   const id = asNode(node.id)
   if (typeof id?.name === 'string') {
     return id.name
@@ -85,10 +85,7 @@ function propertyName(key: unknown): string | undefined {
 }
 
 /** Replace comment characters with spaces while preserving line breaks. */
-export function sourceWithoutComments(
-  node: AstNode,
-  sourceCode: SourceCode,
-): string {
+function sourceWithoutComments(node: AstNode, sourceCode: SourceCode): string {
   const text = sourceCode.getText(node)
   const chars = text.split('')
   const start = node.range[0]
@@ -109,7 +106,7 @@ export function sourceWithoutComments(
 }
 
 /** Count source lines with configurable blank-line and comment-line handling. */
-export function countLines(
+function countLines(
   node: AstNode,
   sourceCode: SourceCode,
   options: LineCountOptions,
@@ -136,3 +133,6 @@ export function countLines(
   }
   return count
 }
+
+export { asNode, functionName, sourceWithoutComments, countLines }
+export type { RuleContext, SourceCode, AstNode, LineCountOptions }

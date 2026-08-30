@@ -56,7 +56,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-export class StentCompatService extends Service {
+class StentCompatService extends Service {
   /** Service key under which this class registers on `ctx`. */
   static provide = 'stentCompat'
 
@@ -254,3 +254,5 @@ export class StentCompatService extends Service {
     }
   }
 }
+
+export { StentCompatService }

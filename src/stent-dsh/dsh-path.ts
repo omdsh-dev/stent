@@ -14,7 +14,7 @@ interface DshInvocation {
  * Parse only the launcher-owned DSH path and leave every other argument
  * untouched.
  */
-export function parseDshPath(
+function parseDshPath(
   argv: readonly string[],
   env: NodeJS.ProcessEnv,
   cwd: URL,
@@ -91,3 +91,5 @@ function which(cmd: string, pathEnv: string | undefined): URL | undefined {
   }
   return undefined
 }
+
+export { parseDshPath }

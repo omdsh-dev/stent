@@ -147,6 +147,8 @@ window.__ModuleLoader__.load({ id: "@oh-my-dsh/stent", factory: (require) => { .
 
 新增的 `stent/file-complexity` 同样是文件级规则：整体圈复杂度从文件基线 1 开始，每个函数增加 1，每个条件表达式、循环、逻辑表达式、catch clause、默认赋值、可选链、逻辑赋值和非 default 的 `switch` case 增加 1；通过解析器 visitor keys 遍历，因此嵌套函数只统计一次。判定集合与 Oxlint 的 `eslint/complexity` 保持一致，是函数级规则的文件级汇总版本。规则未传选项时的后备上限为 100，共享 baseline 配置将其设为 75，用于约束后续增长；severity 后可以填写整数或 `{ max: number }` 配置上限。
 
+新增的 `stent/no-inline-exports` 用于将声明与模块导出面分离：禁止 `export const`、`export function`、`export class`、TypeScript 声明式导出和 `export default`。应先声明值，再使用 `export { name }` 或 `export type { Name }`；命名导出列表与 re-export 列表保持允许，包括确实需要 default 入口时的 `export { name as default }`。
+
 Oxfmt 是本 workspace 的统一格式化器，共享策略写在 `.oxfmtrc.json`：两空格缩进、JavaScript/TypeScript 使用单引号、JSX 属性使用单引号、无分号、全部支持位置添加尾随逗号和 80 列宽。每个包分别拥有自己的 `fmt` 与 `fmt:check` 命令；根 carrier 的 `pack:fmt:check` 负责编排根包和全部实现包的检查。生成的 `lib/` 产物、fixture 目录、JavaScript launcher fixture 和构建配置不属于格式化范围。
 
 根 carrier 负责自身 `src/` 下的 launcher、`tests/` 下的根集成测试，以及 `tools/` 下的仓库自有 lint 插件。根包的 `lint`、`lint:fix`、`test`、`build` 与 `knip` 命令不会扫描实现包文件，也不提供 `pack:lint:fix`。三个实现包分别声明自己的工具链，并提供只作用于本包的独立 `lint`、`lint:fix`、`test`、`build` 与 `knip` 命令；类型检查由各包带类型感知的 lint 命令提供，不再单独提供 `typecheck` 脚本。根目录的 `pack:*` 脚本只负责编排：保持根包检查与各包命令分开，并通过 `pnpm --filter` 调用后者。

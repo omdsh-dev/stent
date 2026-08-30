@@ -27,7 +27,7 @@ import { resolvePackageIdentity } from '../transform/identity.ts'
 import type { StentPatchStub } from '../types.ts'
 
 /** Options for {@link serveBrowserTransform}. */
-export interface ServeBrowserTransformOptions {
+interface ServeBrowserTransformOptions {
   /**
    * Exact webserver path serving the transformed bundle (e.g.
    * `/plugins/@example/client-ui-conversation/client.js`).
@@ -76,7 +76,7 @@ class BundleUnreadableError extends Error {
  *   the target package cannot resolve, a descriptor is malformed, or the
  *   patches do not all target the same bundle file.
  */
-export function serveBrowserTransform(
+function serveBrowserTransform(
   ctx: Context,
   options: ServeBrowserTransformOptions,
 ): () => void {
@@ -242,3 +242,6 @@ function createBundleHandler(bundleCode: BundleCode) {
     res.end(body)
   }
 }
+
+export type { ServeBrowserTransformOptions }
+export { serveBrowserTransform }

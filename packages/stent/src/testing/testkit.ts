@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url'
 import type { StentBinding, StentPatchStub } from '../types.ts'
 
 /** Options for {@link runPatchFixture}. */
-export interface RunPatchFixtureOptions {
+interface RunPatchFixtureOptions {
   /** Patch metadata the child registers dynamically before importing the entry. */
   patches: StentPatchStub[]
   /**
@@ -39,7 +39,7 @@ export interface RunPatchFixtureOptions {
 }
 
 /** One fixture run's outcome: bindings, result or error, and exit code. */
-export interface PatchFixtureResult {
+interface PatchFixtureResult {
   /** Load-time bindings recorded per patch id in the child. */
   bindings: Record<string, StentBinding[]>
   /** The entry's resolved return value, when it returned. */
@@ -64,9 +64,7 @@ export interface PatchFixtureResult {
  * @returns The fixture outcome.
  * @throws When the child process fails or answers no parseable envelope.
  */
-export function runPatchFixture(
-  options: RunPatchFixtureOptions,
-): PatchFixtureResult {
+function runPatchFixture(options: RunPatchFixtureOptions): PatchFixtureResult {
   const runner = fileURLToPath(
     new URL(
       existsSync(fileURLToPath(new URL('./testkit-runner.js', import.meta.url)))
@@ -109,3 +107,6 @@ export function runPatchFixture(
     exitCode: result.status,
   }
 }
+
+export type { RunPatchFixtureOptions, PatchFixtureResult }
+export { runPatchFixture }

@@ -55,7 +55,7 @@ async function seed(...specs: string[]): Promise<void> {
 }
 
 /** Inject explicit seed values (stubs for heavy render-only deps). */
-export function seedMap(entries: Record<string, unknown>): void {
+function seedMap(entries: Record<string, unknown>): void {
   for (const [spec, value] of Object.entries(entries)) {
     seeds.set(spec, value)
   }
@@ -88,7 +88,7 @@ function resolve(spec: string): unknown {
  * @returns The factory's `module.exports`.
  */
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- callers provide the module table's typed view.
-export function materialize<T>(id: string): T {
+function materialize<T>(id: string): T {
   const cached = materialized.get(id)
   if (cached !== undefined) {
     return cached as T
@@ -103,7 +103,7 @@ export function materialize<T>(id: string): T {
 }
 
 /** Convenience: seed the platform table and register the given bundle URLs. */
-export async function prepareClientBundles(
+async function prepareClientBundles(
   seedsList: string[],
   bundleUrls: string[],
 ): Promise<void> {
@@ -118,3 +118,5 @@ export async function prepareClientBundles(
 // helper, so the sink exists before any closure-factory bundle executes its
 // registration call (no separate vitest setupFiles needed).
 installModuleLoader()
+
+export { seedMap, materialize, prepareClientBundles }

@@ -57,7 +57,7 @@ function stripTypes(code: string, fileName: string): string {
 }
 
 /** Module identity the matcher needs for one module id. */
-export interface ModuleIdentity {
+interface ModuleIdentity {
   /** Npm package name. */
   name: string
   /** Installed or declared package version. */
@@ -67,10 +67,10 @@ export interface ModuleIdentity {
 }
 
 /** Map a bundler module id to its package identity; `undefined` skips it. */
-export type IdentityResolver = (id: string) => ModuleIdentity | undefined
+type IdentityResolver = (id: string) => ModuleIdentity | undefined
 
 /** Options for {@link repoSourceResolver}. */
-export interface RepoSourceResolverOptions {
+interface RepoSourceResolverOptions {
   /** Npm package name of the built client plugin. */
   packageName: string
   /** Absolute source root of the package. */
@@ -87,7 +87,7 @@ export interface RepoSourceResolverOptions {
  * @param options - Package identity and source-root options.
  * @returns An identity resolver for that package's sources.
  */
-export function repoSourceResolver({
+function repoSourceResolver({
   packageName,
   packageRoot,
   version,
@@ -106,7 +106,7 @@ export function repoSourceResolver({
 }
 
 /** A transformed module: rewritten source plus an optional source map. */
-export interface TransformOutput {
+interface TransformOutput {
   /** Rewritten source code. */
   code: string
   /** Source map when the underlying transformer produced one. */
@@ -116,13 +116,10 @@ export interface TransformOutput {
 }
 
 /** A bundler transform for one set of Stent patches. */
-export type BrowserTransform = (
-  code: string,
-  id: string,
-) => TransformOutput | null
+type BrowserTransform = (code: string, id: string) => TransformOutput | null
 
 /** Options for {@link createBrowserTransform}. */
-export interface BrowserTransformOptions {
+interface BrowserTransformOptions {
   /** Static patch stubs to apply during the bundle build. */
   patches: readonly StentPatchStub[]
   /** Resolver mapping a bundler module id to its package identity. */
@@ -130,7 +127,7 @@ export interface BrowserTransformOptions {
 }
 
 /** Options for {@link createWatchedBrowserTransform}. */
-export interface WatchedBrowserTransformOptions {
+interface WatchedBrowserTransformOptions {
   /** Absolute path of the JSON patch-stub file to watch. */
   patchesPath: string
   /** Resolver mapping a bundler module id to its package identity. */
@@ -147,7 +144,7 @@ export interface WatchedBrowserTransformOptions {
  * @param resolve - Module identity resolver for the build's source layout.
  * @returns A transform function `(code, id) => output | null`.
  */
-export function createInstrumentedTransform(
+function createInstrumentedTransform(
   instrumentations: readonly StentInstrumentationConfig[],
   resolve: IdentityResolver,
 ): BrowserTransform {
@@ -203,7 +200,7 @@ export function createInstrumentedTransform(
  * @param options - Patch stubs and the build's identity resolver.
  * @returns A transform function `(code, id) => output | null`.
  */
-export function createBrowserTransform({
+function createBrowserTransform({
   patches,
   resolve,
 }: BrowserTransformOptions): BrowserTransform {
@@ -215,7 +212,7 @@ export function createBrowserTransform({
  * hook (the third argument `clientBundle`'s source-transform plugin forwards),
  * so a file-backed patch set joins the watch graph.
  */
-export type WatchedBrowserTransform = (
+type WatchedBrowserTransform = (
   code: string,
   id: string,
   addWatchFile?: (file: string) => void,
@@ -291,7 +288,7 @@ function parsePatchesFile(
  * @param options - Watched patch file and the build's identity resolver.
  * @returns A transform function `(code, id, addWatchFile?) => output | null`.
  */
-export function createWatchedBrowserTransform({
+function createWatchedBrowserTransform({
   patchesPath,
   resolve,
 }: WatchedBrowserTransformOptions): WatchedBrowserTransform {
@@ -327,4 +324,21 @@ export function createWatchedBrowserTransform({
     }
     return transformFor(content)(code, id)
   }
+}
+
+export {
+  repoSourceResolver,
+  createInstrumentedTransform,
+  createBrowserTransform,
+  createWatchedBrowserTransform,
+}
+export type {
+  ModuleIdentity,
+  IdentityResolver,
+  RepoSourceResolverOptions,
+  TransformOutput,
+  BrowserTransform,
+  BrowserTransformOptions,
+  WatchedBrowserTransformOptions,
+  WatchedBrowserTransform,
 }

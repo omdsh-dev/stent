@@ -24,7 +24,7 @@ export type {
 } from './transform/types.ts'
 
 /** Runtime call record published to a patch's tracing channel. */
-export interface StentCall {
+interface StentCall {
   /** Actual call arguments; subscribers may mutate them in place. */
   arguments: unknown[]
   /** `this` receiver of the original call. */
@@ -39,7 +39,7 @@ export interface StentCall {
  * Call the original traced body with the (possibly mutated) call arguments. The
  * returned value is a thenable exactly when the original target is async.
  */
-export type StentInvoke = () => unknown
+type StentInvoke = () => unknown
 
 /**
  * `before` handler: observes and rewrites the call arguments. The original body
@@ -47,7 +47,7 @@ export type StentInvoke = () => unknown
  *
  * @param call - The call record whose `arguments` array the handler may mutate.
  */
-export type StentBeforeHandler = (call: StentCall) => void
+type StentBeforeHandler = (call: StentCall) => void
 
 /**
  * `after` handler: observes and rewrites the successful result. May return a
@@ -56,7 +56,7 @@ export type StentBeforeHandler = (call: StentCall) => void
  *
  * @param call - The call record whose `result` holds the original outcome.
  */
-export type StentAfterHandler = (call: StentCall) => unknown
+type StentAfterHandler = (call: StentCall) => unknown
 
 /**
  * `around` handler: decides whether the original body runs and may replace its
@@ -66,10 +66,7 @@ export type StentAfterHandler = (call: StentCall) => unknown
  * @param call - The call record for this invocation.
  * @param invoke - Runs the original body with the current call arguments.
  */
-export type StentAroundHandler = (
-  call: StentCall,
-  invoke: StentInvoke,
-) => unknown
+type StentAroundHandler = (call: StentCall, invoke: StentInvoke) => unknown
 
 /**
  * `replace` handler: owns the call. `invoke()` still runs the original body
@@ -78,13 +75,10 @@ export type StentAroundHandler = (
  * @param call - The call record for this invocation.
  * @param invoke - Runs the original body with the current call arguments.
  */
-export type StentReplaceHandler = (
-  call: StentCall,
-  invoke: StentInvoke,
-) => unknown
+type StentReplaceHandler = (call: StentCall, invoke: StentInvoke) => unknown
 
 /** Dispatcher accepted for every operation kind. */
-export type StentHandler =
+type StentHandler =
   | StentBeforeHandler
   | StentAfterHandler
   | StentAroundHandler
@@ -94,7 +88,7 @@ export type StentHandler =
  * One registered Stent patch. The handler is trusted code bound at registration
  * time; executable handlers are never deserialized from configuration.
  */
-export interface StentPatch {
+interface StentPatch {
   /**
    * Id within one Stent runtime. Re-registering an id updates the metadata and
    * reports not-first; the first registration's fiber effect still owns
@@ -124,7 +118,7 @@ export interface StentPatch {
 }
 
 /** Immutable diagnostic snapshot of one registered patch (no handler functions). */
-export interface StentPatchInfo {
+interface StentPatchInfo {
   /** Patch id. */
   id: PatchId
   /** Target descriptor. */
@@ -142,4 +136,16 @@ export interface StentPatchInfo {
    * present on `list()` entries; registration inputs may omit it.
    */
   bindings?: readonly StentBinding[]
+}
+
+export type {
+  StentCall,
+  StentInvoke,
+  StentBeforeHandler,
+  StentAfterHandler,
+  StentAroundHandler,
+  StentReplaceHandler,
+  StentHandler,
+  StentPatch,
+  StentPatchInfo,
 }

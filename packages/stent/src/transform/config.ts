@@ -11,7 +11,7 @@ import type { StentPatchStub } from './types.ts'
 import { validatePatchId, validatePatchStatic } from './validation.ts'
 
 /** Orchestrion config extended with Stent's bridge metadata. */
-export type StentInstrumentationConfig = InstrumentationConfig & {
+type StentInstrumentationConfig = InstrumentationConfig & {
   /** Patch id stamped into every generated call. */
   stentPatchId: string
   /** Operation kind stamped into every generated call. */
@@ -59,7 +59,7 @@ function patchInstrumentation(
 }
 
 /** Order instrumentations so higher priority handlers wrap first. */
-export function orderInstrumentations(
+function orderInstrumentations(
   instrumentations: readonly StentInstrumentationConfig[],
 ): StentInstrumentationConfig[] {
   return [...instrumentations].sort(
@@ -110,9 +110,7 @@ function queryFromFunction(patch: StentPatchStub): string {
 }
 
 /** Expand filePaths targets into one instrumentation per package-relative file. */
-export function expandPatchStub(
-  patch: StentPatchStub,
-): StentInstrumentationConfig[] {
+function expandPatchStub(patch: StentPatchStub): StentInstrumentationConfig[] {
   validatePatchId(patch.id)
   validatePatchStatic(patch)
   const { filePaths, ...target } = patch.target
@@ -126,3 +124,6 @@ export function expandPatchStub(
     }),
   )
 }
+
+export { orderInstrumentations, expandPatchStub }
+export type { StentInstrumentationConfig }

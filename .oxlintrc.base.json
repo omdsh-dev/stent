@@ -248,6 +248,7 @@
           "error",
           220
         ],
+        "stent/no-inline-exports": "error",
         "stent/min-function-lines": [
           "error",
           {

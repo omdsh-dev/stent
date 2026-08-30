@@ -10,7 +10,7 @@
 import type { PatchId, StentPatchStub } from './types.ts'
 
 /** Validate a patch id for diagnostics and generated bridge calls. */
-export function validatePatchId(id: PatchId): void {
+function validatePatchId(id: PatchId): void {
   if (!/^[A-Za-z0-9._:/+-]{1,120}$/.test(id)) {
     throw new Error(
       `stent: patch id ${JSON.stringify(id)} must be 1-120 chars of [A-Za-z0-9._:/+-]`,
@@ -90,7 +90,7 @@ function validateOperation(operation: StentPatchStub['operation']): void {
 }
 
 /** Validate static patch fields before an instrumentation is built. */
-export function validatePatchStatic(
+function validatePatchStatic(
   patch: Pick<StentPatchStub, 'target' | 'operation' | 'required'>,
 ): void {
   validateTargetModule(patch.target)
@@ -111,3 +111,5 @@ function isValidIndex(index: number | null | undefined): boolean {
   }
   return index >= 0
 }
+
+export { validatePatchId, validatePatchStatic }

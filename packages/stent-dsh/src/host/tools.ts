@@ -37,7 +37,7 @@ declare module '@deepseek-ai/cordis' {
  * and disposal semantics. The service never stores a parallel copy of tool
  * state.
  */
-export class StentToolsService extends Service {
+class StentToolsService extends Service {
   /** Service key under which this class registers on `ctx`. */
   static provide = 'stentTools'
   /** The authoritative tool registry must be mounted. */
@@ -97,3 +97,5 @@ export class StentToolsService extends Service {
     return this.ctx.on('tools/post-execute', listener)
   }
 }
+
+export { StentToolsService }

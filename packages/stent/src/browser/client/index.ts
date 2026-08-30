@@ -28,7 +28,7 @@ export { StentService, installBridge, runtime }
 export type { StentPatch, StentPatchInfo }
 
 /** Cordis plugin name used by Loader diagnostics. */
-export const name = 'stent'
+const name = 'stent'
 
 /**
  * Install the Stent runtime from the approved browser client entry.
@@ -38,8 +38,10 @@ export const name = 'stent'
  *
  * @param ctx - Cordis context that owns the service.
  */
-export async function apply(ctx: Context): Promise<void> {
+async function apply(ctx: Context): Promise<void> {
   markStentDshLaunch()
   installBridge()
   await ctx.plugin(StentService)
 }
+
+export { name, apply }

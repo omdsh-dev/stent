@@ -47,7 +47,7 @@ function internalLoader(): InternalLoader | undefined {
 }
 
 /** Return file-backed ESM module URLs currently held by Node's loader cache. */
-export function loadedEsmUrls(): string[] {
+function loadedEsmUrls(): string[] {
   const cache = internalLoader()?.loadCache
   if (cache === undefined) {
     return []
@@ -59,7 +59,7 @@ export function loadedEsmUrls(): string[] {
  * Re-evaluate a CommonJS module after clearing both Node caches and the
  * loader's per-installation seen marks.
  */
-export function retransformCommonJs(
+function retransformCommonJs(
   filename: string,
   clearSeen: (filename: string) => void,
 ): unknown {
@@ -78,7 +78,7 @@ export function retransformCommonJs(
  * import restores the previous module job so the old instance remains usable,
  * matching the host HMR rollback contract.
  */
-export async function retransformEsm(
+async function retransformEsm(
   url: string,
   clearSeen: (filename: string) => void,
 ): Promise<Record<string, unknown>> {
@@ -100,3 +100,5 @@ export async function retransformEsm(
     throw error
   }
 }
+
+export { loadedEsmUrls, retransformCommonJs, retransformEsm }

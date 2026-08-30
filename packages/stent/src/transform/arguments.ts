@@ -70,7 +70,7 @@ function mapOuterArgumentsChildren(
  *   detect references.
  * @returns True when at least one outer `arguments` reference was found.
  */
-export function mapOuterArguments(
+function mapOuterArguments(
   node: Node | undefined,
   name: string | undefined,
 ): boolean {
@@ -144,7 +144,7 @@ function patternBindsArguments(pattern: Pattern): boolean {
  * @param program - The matched file's Program node.
  * @returns A `unique(base)` allocator for that file.
  */
-export function namesOf(program: Program): NameAllocator {
+function namesOf(program: Program): NameAllocator {
   let names = programNames.get(program)
   if (!names) {
     names = new Set<string>()
@@ -204,3 +204,5 @@ function collectIdentifierValue(value: unknown, out: Set<string>): void {
 
 /** Per-file injected-name sets, keyed by the transformed Program node. */
 const programNames = new WeakMap<Program, Set<string>>()
+
+export { mapOuterArguments, namesOf }

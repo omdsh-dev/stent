@@ -1,4 +1,4 @@
-export type PatchRow = Record<string, unknown> & {
+type PatchRow = Record<string, unknown> & {
   id?: string
   disabled?: boolean
   config?: Record<string, unknown>
@@ -86,7 +86,7 @@ function addIntegrationOverlay(
   enableOverlay.push({ id: 'stent-dsh', disabled: false })
 }
 
-export function createEnableOverlay(
+function createEnableOverlay(
   rows: ReadonlyMap<string, PatchRow>,
   passthrough: readonly string[],
 ): PatchRow[] {
@@ -106,3 +106,6 @@ export function createEnableOverlay(
   addIntegrationOverlay(rows, enableOverlay)
   return enableOverlay
 }
+
+export { createEnableOverlay }
+export type { PatchRow }

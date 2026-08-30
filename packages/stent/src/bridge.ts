@@ -19,7 +19,7 @@ import type { StentOperation, PatchId } from './types.ts'
 export { GLOBAL_BRIDGE_KEY }
 
 /** Call record published by transformed code and consumed by the runtime. */
-export interface StentBridgeCall {
+interface StentBridgeCall {
   /** The patch id this transformed call belongs to. */
   id: PatchId
   /** Operation kind the transform was generated for. */
@@ -33,7 +33,7 @@ export interface StentBridgeCall {
 }
 
 /** One bridge listener: dispatches a call and returns its result. */
-export type BridgeListener = (call: StentBridgeCall) => unknown
+type BridgeListener = (call: StentBridgeCall) => unknown
 
 /** Bridge listeners in registration order (the runtime registers exactly one). */
 const listeners = new Set<BridgeListener>()
@@ -44,7 +44,7 @@ const listeners = new Set<BridgeListener>()
  * @param listener - Dispatch function for every published call.
  * @returns A disposer removing the listener.
  */
-export function subscribeBridge(listener: BridgeListener): () => void {
+function subscribeBridge(listener: BridgeListener): () => void {
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
@@ -64,7 +64,7 @@ export function subscribeBridge(listener: BridgeListener): () => void {
  * @param call - The call record assembled by the transform.
  * @returns The value to return from the wrapped function.
  */
-export function publish(call: StentBridgeCall): unknown {
+function publish(call: StentBridgeCall): unknown {
   if (listeners.size === 0) {
     // No handler is registered for this patch (disabled, disposed, or the
     // patch was never enabled): delegate to the original body untouched.
@@ -82,7 +82,7 @@ export function publish(call: StentBridgeCall): unknown {
  *
  * @param globalObject - Target global object; defaults to `globalThis`.
  */
-export function installBridge(globalObject: object = globalThis): void {
+function installBridge(globalObject: object = globalThis): void {
   Object.assign(globalObject, {
     [GLOBAL_BRIDGE_KEY]: { publish },
   })
@@ -102,8 +102,11 @@ export function installBridge(globalObject: object = globalThis): void {
  * @param globalObject - Target global object; defaults to `globalThis`.
  * @returns Whether the bridge handle is present.
  */
-export function isStentInstalled(globalObject: object = globalThis): boolean {
+function isStentInstalled(globalObject: object = globalThis): boolean {
   return (
     (globalObject as Record<string, unknown>)[GLOBAL_BRIDGE_KEY] !== undefined
   )
 }
+
+export { subscribeBridge, publish, installBridge, isStentInstalled }
+export type { StentBridgeCall }

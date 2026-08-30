@@ -48,7 +48,7 @@ let cached: { config: string; transforms: TransformFn[] } | undefined
  * @param data - `module.register` data carrying the shared config path and the
  *   main-thread binding channel end.
  */
-export function initialize(
+function initialize(
   data: { configPath?: string; port?: MessagePort } = {},
 ): void {
   configPath = data.configPath
@@ -121,7 +121,7 @@ function readTransforms(): TransformFn[] {
  * @param nextLoad - The next hook in the chain.
  * @returns The possibly transformed load result.
  */
-export async function load(
+async function load(
   url: string,
   context: { format?: string | null },
   nextLoad: (
@@ -176,3 +176,5 @@ export async function load(
   }
   return { ...result, source, shortCircuit: true }
 }
+
+export { initialize, load }

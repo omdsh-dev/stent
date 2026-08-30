@@ -11,15 +11,15 @@ import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 const PACKAGE_NAME = '@oh-my-dsh/stent-dsh'
 
 /** Cordis companion plugin name. */
-export const name = 'stent-dsh-invariant'
+const name = 'stent-dsh-invariant'
 /** Service required before the companion can reserve package ownership. */
-export const inject = ['invariants']
+const inject = ['invariants']
 
 /**
  * This package delegates invariant ownership to the authoritative DSH services;
  * its companion only reserves the package registration.
  */
-export const apply = (ctx: Context): Promise<() => void> => {
+const apply = (ctx: Context): Promise<() => void> => {
   return Promise.resolve(
     ctx.invariants.register(
       PACKAGE_NAME,
@@ -27,4 +27,6 @@ export const apply = (ctx: Context): Promise<() => void> => {
     ),
   )
 }
+
+export { name, inject, apply }
 /* jscpd:ignore-end */

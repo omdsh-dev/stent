@@ -32,7 +32,7 @@ declare module '@deepseek-ai/cordis' {
  * underlying disposer through untouched. A listener or injected message is
  * owned by the calling fiber and removed with it.
  */
-export class StentAgentService extends Service {
+class StentAgentService extends Service {
   /** Service key under which this class registers on `ctx`. */
   static provide = 'stentAgent'
 
@@ -98,3 +98,5 @@ export class StentAgentService extends Service {
     agent.inject(message)
   }
 }
+
+export { StentAgentService }

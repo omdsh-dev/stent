@@ -80,7 +80,7 @@ function handleBindingMessage(message: unknown): void {
 }
 
 /** Install the loader-thread hooks used when synchronous hooks are unavailable. */
-export function installAsyncHooks(baseUrl: string): void {
+function installAsyncHooks(baseUrl: string): void {
   if (asyncConfigPath === undefined) {
     asyncConfigPath = join(tmpdir(), `stent-config-${process.pid}.json`)
     scheduleAsyncConfigCleanup(asyncConfigPath)
@@ -110,7 +110,7 @@ export function installAsyncHooks(baseUrl: string): void {
 }
 
 /** Wait for binding reports posted by the loader thread to reach this thread. */
-export async function flushBindingReports(timeoutMs = 200): Promise<void> {
+async function flushBindingReports(timeoutMs = 200): Promise<void> {
   if (asyncBindingPort === undefined) {
     return
   }
@@ -131,7 +131,7 @@ export async function flushBindingReports(timeoutMs = 200): Promise<void> {
 }
 
 /** Write the active matcher snapshots consumed by the loader thread. */
-export function writeAsyncConfig(): void {
+function writeAsyncConfig(): void {
   if (asyncConfigPath === undefined) {
     return
   }
@@ -147,3 +147,5 @@ export function writeAsyncConfig(): void {
   )
   renameSync(nextPath, asyncConfigPath)
 }
+
+export { installAsyncHooks, flushBindingReports, writeAsyncConfig }

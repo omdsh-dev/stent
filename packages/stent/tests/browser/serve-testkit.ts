@@ -22,7 +22,7 @@ type TestRoute = {
   handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
 }
 
-export interface TestWebServer {
+interface TestWebServer {
   port: number
   register(route: TestRoute): () => void
   close: () => Promise<void>
@@ -113,7 +113,7 @@ async function createTestWebServer(): Promise<TestWebServer> {
   }
 }
 
-export function createTestContext(baseUrl?: string): Context {
+function createTestContext(baseUrl?: string): Context {
   const ctx = new Context()
   if (baseUrl !== undefined) {
     ctx.baseUrl = baseUrl
@@ -122,16 +122,14 @@ export function createTestContext(baseUrl?: string): Context {
   return ctx
 }
 
-export async function provideTestWebServer(
-  ctx: Context,
-): Promise<TestWebServer> {
+async function provideTestWebServer(ctx: Context): Promise<TestWebServer> {
   const server = await createTestWebServer()
   servers.push(server)
   ctx.provide('webServer', server as never)
   return server
 }
 
-export async function boot(
+async function boot(
   options: ServeBrowserTransformOptions,
   baseUrl = import.meta.url,
 ): Promise<{ ctx: Context; server: TestWebServer; port: number }> {
@@ -153,7 +151,7 @@ afterEach(async () => {
   }
 })
 
-export async function createWorld(): Promise<{
+async function createWorld(): Promise<{
   world: string
   packageDir: string
   configPath: string
@@ -167,7 +165,7 @@ export async function createWorld(): Promise<{
   return { world, packageDir, configPath }
 }
 
-export async function writeWorldPackage(packageDir: string): Promise<void> {
+async function writeWorldPackage(packageDir: string): Promise<void> {
   await writeFile(
     join(packageDir, 'package.json'),
     JSON.stringify({
@@ -182,9 +180,9 @@ export async function writeWorldPackage(packageDir: string): Promise<void> {
   )
 }
 
-export const ROUTE = '/plugins/@example/client-ui-conversation/client.js'
+const ROUTE = '/plugins/@example/client-ui-conversation/client.js'
 
-export const neutralizer = {
+const neutralizer = {
   id: 'serve-test/neutralize-sample',
   target: {
     module: '@oh-my-dsh/stent',
@@ -196,7 +194,7 @@ export const neutralizer = {
   operation: 'around',
 } as const
 
-export const missing = {
+const missing = {
   id: 'serve-test/missing',
   target: {
     module: '@oh-my-dsh/stent',
@@ -207,7 +205,7 @@ export const missing = {
   operation: 'before',
 } as const
 
-export const planNeutralizer = {
+const planNeutralizer = {
   id: 'serve-test/neutralize-plan',
   target: {
     module: '@oh-my-dsh/stent',
@@ -219,7 +217,7 @@ export const planNeutralizer = {
   operation: 'around',
 } as const
 
-export function compositionPatch() {
+function compositionPatch() {
   return {
     id: 'serve-test/composition-anchor',
     target: {
@@ -233,7 +231,7 @@ export function compositionPatch() {
   }
 }
 
-export function differentFilePatch() {
+function differentFilePatch() {
   return {
     ...neutralizer,
     id: 'serve-test/other-file',
@@ -242,4 +240,18 @@ export function differentFilePatch() {
       filePath: 'tests/fixtures/serve-target/nope.js',
     },
   }
+}
+
+export {
+  createTestContext,
+  provideTestWebServer,
+  boot,
+  createWorld,
+  writeWorldPackage,
+  ROUTE,
+  neutralizer,
+  missing,
+  planNeutralizer,
+  compositionPatch,
+  differentFilePatch,
 }

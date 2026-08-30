@@ -18,20 +18,20 @@ import {
 import { registerStentTransform } from './transform.ts'
 
 /** Matcher with the Stent custom transform registered. */
-export type StentMatcher = InstrumentationMatcher
+type StentMatcher = InstrumentationMatcher
 
 /** Transformer selected for one matching module. */
-export type StentTransformer = Transformer
+type StentTransformer = Transformer
 
 /** Order an instrumentation snapshot for the Orchestrion matcher and wire. */
-export function orderStentInstrumentations(
+function orderStentInstrumentations(
   instrumentations: readonly StentInstrumentationConfig[],
 ): StentInstrumentationConfig[] {
   return orderInstrumentations(instrumentations)
 }
 
 /** Build a matcher from one ordered instrumentation snapshot. */
-export function createStentMatcher(
+function createStentMatcher(
   instrumentations: readonly StentInstrumentationConfig[],
   onMatch?: (patchId: string) => void,
 ): StentMatcher {
@@ -43,7 +43,7 @@ export function createStentMatcher(
 }
 
 /** Select a transformer for a package identity, or return undefined on no match. */
-export function getStentTransformer(
+function getStentTransformer(
   matcher: StentMatcher,
   moduleName: string,
   version: string,
@@ -53,7 +53,7 @@ export function getStentTransformer(
 }
 
 /** Transform source with a selected module transformer. */
-export function transformStentSource(
+function transformStentSource(
   transformer: StentTransformer,
   source: string,
   moduleType: 'esm' | 'cjs',
@@ -63,3 +63,11 @@ export function transformStentSource(
     ? { code: result.code }
     : { code: result.code, map: result.map }
 }
+
+export {
+  orderStentInstrumentations,
+  createStentMatcher,
+  getStentTransformer,
+  transformStentSource,
+}
+export type { StentMatcher, StentTransformer }

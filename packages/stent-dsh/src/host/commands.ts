@@ -32,7 +32,7 @@ declare module '@deepseek-ai/cordis' {
  * keep its conflict and disposal semantics. The service never stores a parallel
  * copy of command state.
  */
-export class StentCommandsService extends Service {
+class StentCommandsService extends Service {
   /** Service key under which this class registers on `ctx`. */
   static provide = 'stentCommands'
   /** The authoritative command registry must be mounted. */
@@ -67,3 +67,5 @@ export class StentCommandsService extends Service {
     return this.ctx.commands.list(agent)
   }
 }
+
+export { StentCommandsService }

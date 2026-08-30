@@ -9,13 +9,13 @@
  */
 
 /** Function execution mode understood by a Stent function target. */
-export type StentFunctionKind = 'Sync' | 'Async' | 'Callback' | 'Auto'
+type StentFunctionKind = 'Sync' | 'Async' | 'Callback' | 'Auto'
 
 /**
  * Select a function, method, class, private method, or named expression.
  * `index` is null/omitted to transform every match; a number selects one.
  */
-export type StentFunctionQuery =
+type StentFunctionQuery =
   | {
       className: string
       methodName: string
@@ -53,13 +53,13 @@ export type StentFunctionQuery =
     }
 
 /** Stable identity of one Stent patch. */
-export type PatchId = string
+type PatchId = string
 
 /** Operation applied by a transformed function call. */
-export type StentOperation = 'before' | 'after' | 'around' | 'replace'
+type StentOperation = 'before' | 'after' | 'around' | 'replace'
 
 /** Static target descriptor consumed by the instrumentation builder. */
-export interface StentTarget {
+interface StentTarget {
   /** Npm package name matched against the resolved module's owner. */
   module: string
   /** Semver range the owning package version must satisfy. */
@@ -77,7 +77,7 @@ export interface StentTarget {
 }
 
 /** Static patch descriptor used by Node and browser transform entry points. */
-export interface StentPatchStub {
+interface StentPatchStub {
   /** Id stamped into transformed calls and binding reports. */
   id: PatchId
   /** Module and function selection metadata. */
@@ -91,7 +91,7 @@ export interface StentPatchStub {
 }
 
 /** One transformed file binding. */
-export interface StentBinding {
+interface StentBinding {
   /** Package name of the bound module. */
   module: string
   /** Package-relative file path that was transformed. */
@@ -101,7 +101,18 @@ export interface StentBinding {
 }
 
 /** One transformed file binding carrying its patch id. */
-export interface StentBindingReport extends StentBinding {
+interface StentBindingReport extends StentBinding {
   /** The patch id the node count belongs to. */
   patchId: PatchId
+}
+
+export type {
+  StentFunctionKind,
+  StentFunctionQuery,
+  PatchId,
+  StentOperation,
+  StentTarget,
+  StentPatchStub,
+  StentBinding,
+  StentBindingReport,
 }

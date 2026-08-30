@@ -57,7 +57,7 @@ const OUTER_ARGUMENTS = 'stentOuterArguments'
  *   the transform actually rewrites; the Node loader counts these into its
  *   load-time binding records.
  */
-export function registerStentTransform(
+function registerStentTransform(
   matcher: InstrumentationMatcher,
   onMatch?: (patchId: string) => void,
 ): void {
@@ -143,3 +143,5 @@ function prepareOuterArguments(
   mapOuterArguments(block, name)
   return name
 }
+
+export { registerStentTransform }

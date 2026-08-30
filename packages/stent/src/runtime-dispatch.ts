@@ -33,7 +33,7 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
  * `replace` decide whether the original body runs and may supply their own
  * result.
  */
-export function dispatch(entry: DispatchEntry, call: StentBridgeCall): unknown {
+function dispatch(entry: DispatchEntry, call: StentBridgeCall): unknown {
   const handler = entry.handler
   if (!handler) {
     return call.traced()
@@ -75,3 +75,5 @@ export function dispatch(entry: DispatchEntry, call: StentBridgeCall): unknown {
     }
   }
 }
+
+export { dispatch }

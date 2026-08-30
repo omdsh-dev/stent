@@ -52,7 +52,7 @@ interface PatchEntry {
 }
 
 /** A patch-registry change observed by the Node loader. */
-export interface StentPatchChange {
+interface StentPatchChange {
   type: 'register' | 'remove'
   id: PatchId
   previous?: StentPatchInfo
@@ -60,7 +60,7 @@ export interface StentPatchChange {
 }
 
 /** Listener notified after patch metadata changes. */
-export type StentPatchChangeListener = (change: StentPatchChange) => void
+type StentPatchChangeListener = (change: StentPatchChange) => void
 
 /** Registry of enabled Stent patches with the shared bridge subscription. */
 class StentRuntime {
@@ -320,4 +320,7 @@ function targetKey(target: StentTarget): string {
 }
 
 /** Singleton runtime shared by the Cordis service and the transform hooks. */
-export const runtime = new StentRuntime()
+const runtime = new StentRuntime()
+
+export { runtime }
+export type { StentPatchChange, StentPatchChangeListener }

@@ -3,7 +3,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { Command } from 'commander'
 
-export interface LauncherArgs {
+interface LauncherArgs {
   dshPath: URL | undefined
   profile: string | undefined
   dshHome: URL | undefined
@@ -14,7 +14,7 @@ export interface LauncherArgs {
   cwd: URL
 }
 
-export function parseOpt(
+function parseOpt(
   argv: readonly string[],
   env: NodeJS.ProcessEnv,
   launcherUrl: URL,
@@ -51,7 +51,7 @@ export function parseOpt(
     cwd: pathToFileURL(cwdPath + sep),
   }
 }
-export function buildCliArgs(
+function buildCliArgs(
   args: LauncherArgs,
   effectiveProfile: string | undefined,
   enablePath: URL,
@@ -94,3 +94,6 @@ export function buildCliArgs(
     ...args.passthrough,
   ]
 }
+
+export { parseOpt, buildCliArgs }
+export type { LauncherArgs }

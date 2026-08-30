@@ -16,6 +16,11 @@ import {
   isTransparentExpression,
 } from '../utils/comment-predicates.ts'
 import {
+  exportedNamesOf,
+  isExportDeclaration,
+  isExportedNode,
+} from '../utils/exported-bindings.ts'
+import {
   asNode,
   countLines,
   functionName,
@@ -41,38 +46,6 @@ interface FunctionTarget {
   exported: boolean
 }
 
-/** Return whether a node is an export wrapper. */
-function isExportDeclaration(node: AstNode | undefined): boolean {
-  return (
-    node?.type === 'ExportNamedDeclaration'
-    || node?.type === 'ExportDefaultDeclaration'
-  )
-}
-
-/** Return whether a node is a function boundary. */
-function isFunctionNode(node: AstNode): boolean {
-  return (
-    node.type === 'FunctionDeclaration'
-    || node.type === 'FunctionExpression'
-    || node.type === 'ArrowFunctionExpression'
-  )
-}
-
-/** Return whether a node is contained by an export declaration. */
-function isExported(node: AstNode): boolean {
-  let current = asNode(node.parent)
-  while (current !== undefined) {
-    if (isExportDeclaration(current)) {
-      return true
-    }
-    if (isFunctionNode(current)) {
-      return false
-    }
-    current = asNode(current.parent)
-  }
-  return false
-}
-
 /** Return an export wrapper around transparent expression syntax, if present. */
 function exportAnchor(node: AstNode): AstNode | undefined {
   let current = asNode(node.parent)
@@ -89,10 +62,16 @@ function exportAnchor(node: AstNode): AstNode | undefined {
 }
 
 /** Find the source anchor whose leading comments document a function. */
-function functionTarget(node: AstNode): FunctionTarget {
+function functionTarget(
+  node: AstNode,
+  exportedNames: ReadonlySet<string>,
+): FunctionTarget {
   const parent = asNode(node.parent)
   if (parent?.type === 'MethodDefinition' && asNode(parent.value) === node) {
-    return { commentAnchor: parent, exported: isExported(parent) }
+    return {
+      commentAnchor: parent,
+      exported: isExportedNode(parent, exportedNames),
+    }
   }
 
   if (parent?.type === 'VariableDeclarator' && asNode(parent.init) === node) {
@@ -102,7 +81,10 @@ function functionTarget(node: AstNode): FunctionTarget {
       if (exportedAnchor !== undefined) {
         return { commentAnchor: exportedAnchor, exported: true }
       }
-      return { commentAnchor: declaration, exported: isExported(declaration) }
+      return {
+        commentAnchor: declaration,
+        exported: isExportedNode(declaration, exportedNames),
+      }
     }
   }
 
@@ -111,7 +93,10 @@ function functionTarget(node: AstNode): FunctionTarget {
     return { commentAnchor: exportedAnchor, exported: true }
   }
 
-  return { commentAnchor: node, exported: false }
+  return {
+    commentAnchor: node,
+    exported: isExportedNode(node, exportedNames),
+  }
 }
 
 /** Return whether a source gap contains a blank line. */
@@ -278,9 +263,10 @@ const commentShorterThanFunction: Rule = {
     const includeAnonymous = options.includeAnonymous ?? false
     const includeExported = options.includeExported ?? false
     const countDelimiters = options.countCommentDelimiters ?? false
+    const exportedNames = exportedNamesOf(context.sourceCode)
 
     function check(node: AstNode): void {
-      const target = functionTarget(node)
+      const target = functionTarget(node, exportedNames)
       if (target.exported && !includeExported) {
         return
       }

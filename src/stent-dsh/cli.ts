@@ -178,7 +178,7 @@ function resolveInstalledCli(cwd: URL, pathEnv: string | undefined): URL {
 }
 
 /** Resolve a source checkout, package directory, bin file, or PATH command. */
-export function resolveDshPath(
+function resolveDshPath(
   input: URL | undefined,
   cwd: URL,
   pathEnv: string | undefined,
@@ -218,7 +218,7 @@ export function resolveDshPath(
   process.exit(1)
 }
 
-export function sourceRootFor(bin: URL): URL | undefined {
+function sourceRootFor(bin: URL): URL | undefined {
   const binPath = fileURLToPath(bin)
   if (!binPath.endsWith('.ts')) {
     return undefined
@@ -238,11 +238,7 @@ export function sourceRootFor(bin: URL): URL | undefined {
 }
 
 /** Resolve the final DSH entry and the Node settings needed to run it. */
-export function resolveHost({
-  dshPath,
-  pathEnv,
-  cwd,
-}: ResolveOptions): ResolvedHost {
+function resolveHost({ dshPath, pathEnv, cwd }: ResolveOptions): ResolvedHost {
   const resolvedDshPath = resolveDshPath(dshPath, cwd, pathEnv)
   const realBin = pathToFileURL(realpathSync(resolvedDshPath))
   const sourceRoot = sourceRootFor(realBin)
@@ -265,3 +261,5 @@ export function resolveHost({
     cwd: sourceRoot,
   }
 }
+
+export { resolveDshPath, sourceRootFor, resolveHost }

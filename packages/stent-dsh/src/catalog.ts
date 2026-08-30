@@ -7,7 +7,7 @@
 
 type CatalogEntry = { key: string } | { name: string; declaration: string }
 /** The stent catalog entries (verbatim from the host patch). */
-export const STENT_CATALOG_ENTRIES = [
+const STENT_CATALOG_ENTRIES = [
   {
     key: 'stent',
     summary: 'The Stent registry service.',
@@ -322,7 +322,7 @@ interface ApiCatalogModule {
 }
 
 /** Push the stent entries into the official catalog once (idempotent). */
-export async function registerCatalogEntries(): Promise<void> {
+async function registerCatalogEntries(): Promise<void> {
   try {
     // Variable specifier: the official package is host-provided only, never
     // a trio dependency, so the import stays out of the type graph.
@@ -346,3 +346,5 @@ export async function registerCatalogEntries(): Promise<void> {
     // lists the live stent services, just without signatures.
   }
 }
+
+export { STENT_CATALOG_ENTRIES, registerCatalogEntries }

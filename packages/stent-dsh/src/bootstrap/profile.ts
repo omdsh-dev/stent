@@ -14,7 +14,7 @@ import { isStentDshLaunch } from '@oh-my-dsh/stent/activation'
 import type { StentBinding, StentPatchInfo } from '@oh-my-dsh/stent/types'
 
 /** One composed profile row's config surface (the loader row shape). */
-export interface StentProfileRow {
+interface StentProfileRow {
   name?: string
   /** Row config; `config.stent` is an activation marker, never a patch list. */
   config?: unknown
@@ -22,7 +22,7 @@ export interface StentProfileRow {
 }
 
 /** The composed profile rows this bootstrap reads (id → row). */
-export type StentProfileRows = ReadonlyMap<string, StentProfileRow>
+type StentProfileRows = ReadonlyMap<string, StentProfileRow>
 
 /** Reject removed YAML patch descriptors at every bootstrap boundary. */
 function assertDynamicProfile(rows: StentProfileRows): void {
@@ -55,9 +55,7 @@ function assertDynamicProfile(rows: StentProfileRows): void {
  * plugin code. Calling it from a launcher boot is skipped because the preload
  * installation already handles the target modules.
  */
-export async function installStentBootstrap(
-  rows: StentProfileRows,
-): Promise<void> {
+async function installStentBootstrap(rows: StentProfileRows): Promise<void> {
   assertDynamicProfile(rows)
   if (!rows.has('stent') || isStentDshLaunch()) {
     return
@@ -67,7 +65,7 @@ export async function installStentBootstrap(
 }
 
 /** Verify all dynamically registered required patches after profile boot. */
-export async function checkStentRequiredPatches(
+async function checkStentRequiredPatches(
   rows: StentProfileRows,
 ): Promise<void> {
   assertDynamicProfile(rows)
@@ -109,7 +107,7 @@ function logHookSummary(
  * generated row overlay; those plugins register their own metadata while the
  * dynamic hooks are already active.
  */
-export function scheduleRequiredPatchCheck(ctx: Context): void {
+function scheduleRequiredPatchCheck(ctx: Context): void {
   if (!isStentDshLaunch()) {
     return
   }
@@ -129,3 +127,10 @@ export function scheduleRequiredPatchCheck(ctx: Context): void {
     }
   }, 'stent: required patch check')
 }
+
+export {
+  installStentBootstrap,
+  checkStentRequiredPatches,
+  scheduleRequiredPatchCheck,
+}
+export type { StentProfileRow, StentProfileRows }

@@ -3,7 +3,7 @@
 import type { StentInstrumentationConfig } from './config.ts'
 
 /** Wire form that preserves RegExp file paths through JSON. */
-export interface StentWireInstrumentation extends Omit<
+interface StentWireInstrumentation extends Omit<
   StentInstrumentationConfig,
   'module'
 > {
@@ -13,7 +13,7 @@ export interface StentWireInstrumentation extends Omit<
 }
 
 /** Serialize one instrumentation for the loader-thread configuration file. */
-export function serializeInstrumentation(
+function serializeInstrumentation(
   config: StentInstrumentationConfig,
 ): StentWireInstrumentation {
   const filePath = config.module.filePath
@@ -30,7 +30,7 @@ export function serializeInstrumentation(
 }
 
 /** Revive a serialized RegExp file path for the matcher. */
-export function reviveInstrumentation(
+function reviveInstrumentation(
   config: StentWireInstrumentation,
 ): StentInstrumentationConfig {
   const filePath = config.module.filePath
@@ -45,3 +45,6 @@ export function reviveInstrumentation(
   }
   return config as StentInstrumentationConfig
 }
+
+export { serializeInstrumentation, reviveInstrumentation }
+export type { StentWireInstrumentation }

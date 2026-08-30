@@ -61,6 +61,14 @@ ruleTester.run('comment-shorter-than-function', commentShorterThanFunction, {
       code: '/**\n * First line.\n * Second line.\n */\nexport const valid = () => {\n  const value = 1\n  return value\n}',
     },
     {
+      name: 'explicitly listed function is skipped by default',
+      code: '/**\n * First line.\n * Second line.\n */\nfunction valid() {\n  return 1\n}\nexport { valid }',
+    },
+    {
+      name: 'explicitly listed arrow is skipped by default',
+      code: '/**\n * First line.\n * Second line.\n */\nconst valid = () => {\n  const value = 1\n  return value\n}\nexport { valid }',
+    },
+    {
       name: 'class method with shorter documentation',
       code: 'class Example {\n  /** Describe the method. */\n  valid() {\n    const value = 1\n    return value\n  }\n}',
     },

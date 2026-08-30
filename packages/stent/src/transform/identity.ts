@@ -13,7 +13,7 @@ import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /** One module's package identity: name, version, and package-relative path. */
-export interface PackageIdentity {
+interface PackageIdentity {
   /** Npm package name from the owning manifest. */
   name: string
   /** Version from the owning manifest. */
@@ -46,7 +46,7 @@ const manifestCache = new Map<string, { name: string; version: string }>()
  * @param urlOrPath - An absolute path or file URL.
  * @returns The owning package identity, or undefined outside any package.
  */
-export function resolvePackageIdentity(
+function resolvePackageIdentity(
   urlOrPath: string,
 ): PackageIdentity | undefined {
   const filename = urlOrPath.startsWith('file:')
@@ -85,9 +85,12 @@ export function resolvePackageIdentity(
 }
 
 /** Detect the module kind of a source file from its extension. */
-export function detectModuleType(id: string): 'esm' | 'cjs' {
+function detectModuleType(id: string): 'esm' | 'cjs' {
   if (id.endsWith('.cjs')) {
     return 'cjs'
   }
   return 'esm'
 }
+
+export { resolvePackageIdentity, detectModuleType }
+export type { PackageIdentity }

@@ -36,16 +36,16 @@ export {
 export { STENT_CATALOG_ENTRIES, registerCatalogEntries } from './catalog.ts'
 
 /** Cordis plugin name used by Loader diagnostics. */
-export const name = 'stent-dsh'
+const name = 'stent-dsh'
 /** The four authoritative Host services the modules delegate to. */
-export const inject = ['tools', 'systemPrompt', 'commands']
+const inject = ['tools', 'systemPrompt', 'commands']
 
 /**
  * Mount all four Host Stent API modules.
  *
  * @param ctx - Cordis context that owns the services.
  */
-export async function apply(ctx: Context): Promise<void> {
+async function apply(ctx: Context): Promise<void> {
   void registerCatalogEntries()
   await ctx.plugin(StentAgentService)
   await ctx.plugin(StentToolsService)
@@ -56,3 +56,5 @@ export async function apply(ctx: Context): Promise<void> {
   // plugin code owns metadata, handlers, and required-patch declarations.
   scheduleRequiredPatchCheck(ctx)
 }
+
+export { name, inject, apply }

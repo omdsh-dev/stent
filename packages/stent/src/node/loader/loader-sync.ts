@@ -11,7 +11,7 @@ import { flushBindings, states } from './loader-state.ts'
 import type { CompileFn, LoaderState } from './loader-types.ts'
 
 /** Register synchronous ESM and CJS load hooks for one installation. */
-export function installSynchronousHooks(state: LoaderState): void {
+function installSynchronousHooks(state: LoaderState): void {
   registerHooks({
     resolve: (specifier, context, nextResolve) => {
       const resolved = nextResolve(specifier, context)
@@ -72,7 +72,7 @@ export function installSynchronousHooks(state: LoaderState): void {
 let compileWrapperInstalled = false
 
 /** Install the process-wide CommonJS compile wrapper once. */
-export function installCompileWrapper(): void {
+function installCompileWrapper(): void {
   if (compileWrapperInstalled) {
     return
   }
@@ -134,3 +134,5 @@ function readSource(
   }
   return readFileSync(fileURLToPath(url), 'utf8')
 }
+
+export { installSynchronousHooks, installCompileWrapper }

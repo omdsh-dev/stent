@@ -33,7 +33,7 @@ import {
 import type { LoaderState } from './loader-types.ts'
 
 /** Verify that every required patch recorded at least one load-time binding. */
-export function checkRequiredPatches(): void {
+function checkRequiredPatches(): void {
   const missing = runtime
     .list()
     .filter(
@@ -53,7 +53,7 @@ export function checkRequiredPatches(): void {
 }
 
 /** Install the process-wide dynamic Stent transformation hooks and bridge. */
-export function installStentHooks(): () => void {
+function installStentHooks(): () => void {
   if (arguments.length !== 0) {
     throw new Error(
       'stent: installStentHooks does not accept arguments; use installStentHooks()',
@@ -126,15 +126,21 @@ export function installStentHooks(): () => void {
 
 /** Re-evaluate an already-loaded CommonJS module under the current matcher. */
 // oxlint-disable-next-line stent/min-function-lines -- HMR adapter delegates to shared reload logic.
-export function retransformCommonJs(filename: string): unknown {
+function retransformCommonJs(filename: string): unknown {
   return reloadCommonJs(filename, clearSeen)
 }
 
 /** Re-evaluate an already-loaded ESM module under the current matcher. */
-export async function retransformEsm(
-  url: string,
-): Promise<Record<string, unknown>> {
+// oxlint-disable-next-line stent/min-function-lines -- HMR adapter delegates to shared reload logic.
+async function retransformEsm(url: string): Promise<Record<string, unknown>> {
   return reloadEsm(url, clearSeen)
 }
 
 export { flushBindingReports }
+
+export {
+  checkRequiredPatches,
+  installStentHooks,
+  retransformCommonJs,
+  retransformEsm,
+}

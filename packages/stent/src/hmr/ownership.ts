@@ -5,10 +5,12 @@ import type { Context } from '@deepseek-ai/cordis'
  * identity survives HMR generations; the callback/runtime fallbacks keep the
  * same ownership semantics in unit tests and child processes.
  */
-export function registrationOwner(ctx: Context): unknown {
+function registrationOwner(ctx: Context): unknown {
   const entry = (ctx.fiber as { entry?: unknown }).entry
   if (entry !== undefined) {
     return entry
   }
   return ctx.fiber.runtime?.callback ?? ctx.fiber
 }
+
+export { registrationOwner }

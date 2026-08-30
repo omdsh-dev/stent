@@ -10,7 +10,7 @@ import type {
 import type { MatchedFunction } from './ast-types.ts'
 
 /** Whether the matched node selects a class constructor. */
-export function isConstructorTarget(node: Node, parent: Node): boolean {
+function isConstructorTarget(node: Node, parent: Node): boolean {
   return (
     (node.type === 'MethodDefinition' && node.kind === 'constructor')
     || (parent.type === 'MethodDefinition' && parent.kind === 'constructor')
@@ -24,7 +24,7 @@ export function isConstructorTarget(node: Node, parent: Node): boolean {
  * @param node - The matched AST node.
  * @returns The function with its body and params, or `undefined` to skip.
  */
-export function matchFunction(node: Node): MatchedFunction | undefined {
+function matchFunction(node: Node): MatchedFunction | undefined {
   const fn =
     node.type === 'MethodDefinition' || node.type === 'Property'
       ? node.value
@@ -73,7 +73,7 @@ export function matchFunction(node: Node): MatchedFunction | undefined {
  * @returns The array element expression (spread for rest), or null for a
  *   pattern shape the transform does not convert (never a parameter list).
  */
-export function patternToExpression(
+function patternToExpression(
   pattern: Pattern,
 ): Expression | SpreadElement | null {
   switch (pattern.type) {
@@ -173,3 +173,5 @@ function collectPatternNames(pattern: Pattern, out: Set<string>): void {
       break
   }
 }
+
+export { isConstructorTarget, matchFunction, patternToExpression }

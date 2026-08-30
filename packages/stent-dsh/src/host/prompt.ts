@@ -36,7 +36,7 @@ declare module '@deepseek-ai/cordis' {
  * authoritative contract. The service never holds a parallel copy of prompt
  * state.
  */
-export class StentPromptService extends Service {
+class StentPromptService extends Service {
   /** Service key under which this class registers on `ctx`. */
   static provide = 'stentPrompt'
   /** The authoritative system-prompt registry must be mounted. */
@@ -98,3 +98,5 @@ export class StentPromptService extends Service {
     return this.ctx.systemPrompt.variable(name, provider)
   }
 }
+
+export { StentPromptService }

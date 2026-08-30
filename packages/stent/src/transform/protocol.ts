@@ -5,4 +5,6 @@
  */
 
 /** Global handle called by transformed target functions. */
-export const GLOBAL_BRIDGE_KEY = '__stentBridge'
+const GLOBAL_BRIDGE_KEY = '__stentBridge'
+
+export { GLOBAL_BRIDGE_KEY }
