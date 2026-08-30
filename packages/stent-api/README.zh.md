@@ -37,7 +37,7 @@ Mod 仍然是普通 Cordis 插件,只声明它所消费的 Stent 模块 service 
 | `./invariant` | invariant 伴生插件 | Host | 宿主 `invariants` service |
 | `./bootstrap/profile` | `installStentBootstrap` | Host | 组合后的 profile rows → `stent` hooks |
 
-`stent-dsh` 的 root entry 是标准 Host bundle；每个新的分层 subpath 都可以单独挂载，适合精简 composition。浏览器 entry 保留为 `./client`，因为 client-module 契约只发现这个固定 export；其实现位于 `src/browser/client`。旧的 Host 与 compat 平铺 subpath 已有意移除；请使用上方的分层入口，仓库不再提供兼容 re-export 模块。
+`stent-dsh` 的 root entry 是标准 Host bundle；每个新的分层 subpath 都可以单独挂载，适合精简 composition。浏览器 entry 保留为 `./client`，因为 client-module 契约只发现这个固定 export；实现位于 `packages/stent-dsh/src/browser/client`。旧的 Host 与 compat 平铺 subpath 已有意移除；请使用上方的分层入口，仓库不再提供兼容 re-export 模块。
 
 ## 安装
 
@@ -69,10 +69,10 @@ Mod 只声明它消费的模块:
 import type { Context } from 'cordis'
 import type { StentAgentService, StentPromptService } from '@oh-my-dsh/stent-dsh'
 
-export const name = 'my-mod'
-export const inject = ['stentAgent', 'stentPrompt']
+const name = 'my-mod'
+const inject = ['stentAgent', 'stentPrompt']
 
-export function apply(ctx: Context & { stentAgent: StentAgentService; stentPrompt: StentPromptService }): void {
+function apply(ctx: Context & { stentAgent: StentAgentService; stentPrompt: StentPromptService }): void {
   ctx.stentAgent.onStatus((agent, status) => {
     ctx.logger.info('agent %s is %s', agent.id, status)
   })
@@ -82,6 +82,8 @@ export function apply(ctx: Context & { stentAgent: StentAgentService; stentPromp
     text: 'my-mod is active',
   })
 }
+
+export { name, inject, apply }
 ```
 
 ## 契约
@@ -128,4 +130,4 @@ preload 通常会更早安装该 matcher。`checkStentRequiredPatches(rows)` 在
 
 - **Facade 是经过策划的子集,不是完整镜像。** 只有真实 Mod consumer 需要 domain service 本身没有承诺的兼容边界时,模块才进入协作层;其余一切以 domain service 为权威面。
 - **Client slot face 是窄子集。** `ctx.stentClient.registerSlot` 接受稳定的 option 形状(`StentSlotOptions`);声明合并和 composed-props 推断保留在宿主 slot service,需要完整类型化 register 契约的 Mod 直接使用该 service。
-- **Cordis service catalog 不收录模块 service。** Catalog projector 只记录位于 `src/index.ts` 或 `src/service.ts` 的 service 类;每个模块位于自己的 entry 文件,因此 `ctx.stentAgent` 等在此文档记录,而不是在生成的 catalog 中。
+- **Cordis service catalog 不收录模块 service。** Catalog projector 只记录位于 `packages/stent-dsh/src/index.ts` 或 `packages/stent-dsh/src/service.ts` 的 service 类;每个模块位于自己的 entry 文件,因此 `ctx.stentAgent` 等在此文档记录,而不是在生成的 catalog 中。

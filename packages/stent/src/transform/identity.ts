@@ -41,10 +41,18 @@ function findPackageRoot(filename: string): string | undefined {
 const manifestCache = new Map<string, { name: string; version: string }>()
 
 /**
- * Resolve the package identity of a module from its filesystem path or URL.
+ * Resolve the package identity of a module from a path or file URL.
  *
- * @param urlOrPath - An absolute path or file URL.
- * @returns The owning package identity, or undefined outside any package.
+ * The first ancestor containing `package.json` is the package root. Unreadable,
+ * malformed, or unnamed manifests return `undefined`; a missing or non-string
+ * version becomes an empty string, while any existing string is preserved even
+ * if it is not valid semver. Manifest name/version results are cached for the
+ * process.
+ *
+ * @param urlOrPath - A path (normally absolute) or a `file:` URL. Invalid file
+ *   URLs can throw during conversion.
+ * @returns The owning package identity, or undefined when no usable manifest is
+ *   found.
  */
 function resolvePackageIdentity(
   urlOrPath: string,
@@ -84,7 +92,13 @@ function resolvePackageIdentity(
   }
 }
 
-/** Detect the module kind of a source file from its extension. */
+/**
+ * Detect the module kind from a bundler or loader id.
+ *
+ * @param id - Module id to classify.
+ * @returns `cjs` only when `id` literally ends in `.cjs`; every other id is
+ *   `esm`.
+ */
 function detectModuleType(id: string): 'esm' | 'cjs' {
   if (id.endsWith('.cjs')) {
     return 'cjs'

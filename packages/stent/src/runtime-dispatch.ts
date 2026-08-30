@@ -16,7 +16,10 @@ interface DispatchEntry {
   handler: StentHandler | undefined
 }
 
-/** Whether a value is a thenable (the async-target result shape). */
+/**
+ * Whether a value is a thenable result (including one from a synchronous
+ * target).
+ */
 function isThenable(value: unknown): value is PromiseLike<unknown> {
   if (typeof value !== 'object' || value === null) {
     return false
@@ -29,7 +32,8 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
 
 /**
  * Run the enabled handler for one transformed call. `before` mutates arguments
- * then delegates; `after` delegates then mutates the result; `around` and
+ * then delegates; `after` delegates, exposes the settled result, and uses
+ * either the handler return value or an in-place result mutation; `around` and
  * `replace` decide whether the original body runs and may supply their own
  * result.
  */

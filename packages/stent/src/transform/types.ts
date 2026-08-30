@@ -8,12 +8,27 @@
  * @module @oh-my-dsh/stent/transform/types
  */
 
-/** Function execution mode understood by a Stent function target. */
+/**
+ * Function kind accepted by name-query metadata. Name-query expansion preserves
+ * the four upstream modes for compatibility, but raw-`astQuery` expansion
+ * carries only index behavior and the Stent custom transform selects from AST
+ * flags and operation.
+ */
 type StentFunctionKind = 'Sync' | 'Async' | 'Callback' | 'Auto'
 
 /**
  * Select a function, method, class, private method, or named expression.
- * `index` is null/omitted to transform every match; a number selects one.
+ * `index` is null (or omitted on a public stub, which expansion normalizes to
+ * null) to transform every match; a number selects one zero-based match.
+ * Low-level configs should set null explicitly because the upstream default is
+ * the first match.
+ *
+ * This union mirrors the upstream query shape. The current Stent selector
+ * builder implements `methodName`, `privateMethodName`, `functionName`, and
+ * `expressionName`; `className` is not used to narrow those selectors and a
+ * class-only query is unsupported. Because Stent supplies an explicit
+ * `astQuery`, `isExportAlias` is not resolved by this adapter; use a precise
+ * AST selector for class-specific or aliased targets.
  */
 type StentFunctionQuery =
   | {
@@ -55,38 +70,77 @@ type StentFunctionQuery =
 /** Stable identity of one Stent patch. */
 type PatchId = string
 
-/** Operation applied by a transformed function call. */
+/**
+ * Operation applied by a transformed function call: `before` mutates arguments
+ * then delegates, `after` observes the successful result, and
+ * `around`/`replace` may delegate or veto the original body.
+ */
 type StentOperation = 'before' | 'after' | 'around' | 'replace'
 
-/** Static target descriptor consumed by the instrumentation builder. */
+/**
+ * Static module and function selector consumed by the instrumentation builder.
+ * Expansion requires one file selector and either a name query or an AST
+ * query.
+ */
 interface StentTarget {
   /** Npm package name matched against the resolved module's owner. */
   module: string
   /** Semver range the owning package version must satisfy. */
   versionRange: string
-  /** File path or pattern relative to the package root. */
+  /**
+   * Literal matcher path or regular expression; callers conventionally provide
+   * a package-relative path, but validation performs no path normalization or
+   * traversal check. Cannot be combined with `filePaths`; an empty string
+   * currently passes static validation.
+   */
   filePath?: string | RegExp
-  /** Package-relative paths expanded into separate instrumentations. */
+  /**
+   * Literal matcher paths; callers conventionally provide package-relative
+   * paths, but validation does no normalization or traversal check. Expansion
+   * creates one instrumentation per path and this field cannot be combined with
+   * `filePath`.
+   */
   filePaths?: string[]
-  /** Name-based function query. */
+  /**
+   * Name-based function query. The current builder supports only the four name
+   * fields described by {@link StentFunctionQuery}.
+   */
   functionQuery?: StentFunctionQuery
-  /** Raw esquery selector, taking precedence over functionQuery. */
+  /**
+   * Raw esquery selector. It chooses the matched node and takes precedence over
+   * the name-matching fields of `functionQuery`.
+   */
   astQuery?: string
-  /** Match index; null/omitted transforms every match. */
+  /**
+   * Zero-based match index for raw AST queries; public expansion normalizes
+   * omission to null (all matches).
+   */
   index?: number | null
 }
 
-/** Static patch descriptor used by Node and browser transform entry points. */
+/**
+ * Public patch metadata converted into one or more instrumentation configs.
+ * Handlers are intentionally absent: runtime code binds them after a target is
+ * transformed and uses the `id` to associate binding reports with the patch.
+ */
 interface StentPatchStub {
   /** Id stamped into transformed calls and binding reports. */
   id: PatchId
-  /** Module and function selection metadata. */
+  /** Module, file, and function selector to expand and match. */
   target: StentTarget
-  /** Runtime operation stamped into the transformed call. */
+  /** Operation encoded into the bridge call and used by runtime dispatch. */
   operation: StentOperation
-  /** Whether startup must observe a binding for this patch. */
+  /**
+   * Whether Node startup requires a binding for this patch. It is validated on
+   * the public stub, then omitted from internal instrumentation; browser
+   * transforms ignore it.
+   */
   required?: boolean
-  /** Numeric ordering key for stacked instrumentations. */
+  /**
+   * Ordering key, defaulting to `0`. Configs sort ascending so higher
+   * priorities are nested outermost; entry order for equal priorities belongs
+   * to the adapter.
+   */
   priority?: number
 }
 
@@ -96,7 +150,7 @@ interface StentBinding {
   module: string
   /** Package-relative file path that was transformed. */
   file: string
-  /** Function nodes rewritten in that file. */
+  /** Number of AST function nodes successfully rewritten. */
   nodes: number
 }
 

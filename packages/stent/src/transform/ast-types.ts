@@ -13,7 +13,7 @@ import type {
   Pattern,
 } from 'estree'
 
-/** One matched function with its parameter list. */
+/** Normalized function selected by a matcher query. */
 interface MatchedFunction {
   /** The function-like node (MethodDefinition/Property unwrapped). */
   node: FunctionDeclaration | FunctionExpression | ArrowFunctionExpression
@@ -29,7 +29,13 @@ interface MatchedFunction {
   generator: boolean
 }
 
-/** Allocator for names that are unique within one transformed program. */
+/**
+ * Allocate identifiers that do not collide with the transformed program.
+ *
+ * @param base - Preferred identifier prefix.
+ * @returns `base` when free, otherwise a unique `base_N` name; each result is
+ *   reserved for later allocations in the same program.
+ */
 interface NameAllocator {
   unique(base: string): string
 }

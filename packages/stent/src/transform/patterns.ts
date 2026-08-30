@@ -1,3 +1,13 @@
+/**
+ * Match supported function-shaped AST nodes and rebuild parameter patterns.
+ *
+ * The matcher normalizes methods and object properties to their function value.
+ * Pattern conversion is used only for arrow functions, where the transform must
+ * reconstruct an argument array without an own `arguments` object.
+ *
+ * @module @oh-my-dsh/stent/transform/patterns
+ */
+
 import type {
   Expression,
   Identifier,
@@ -9,7 +19,13 @@ import type {
 
 import type { MatchedFunction } from './ast-types.ts'
 
-/** Whether the matched node selects a class constructor. */
+/**
+ * Return whether the matcher selected a class constructor.
+ *
+ * @param node - The selected AST node.
+ * @param parent - The selected node's parent in the matcher walk.
+ * @returns Whether either node represents a constructor method.
+ */
 function isConstructorTarget(node: Node, parent: Node): boolean {
   return (
     (node.type === 'MethodDefinition' && node.kind === 'constructor')
@@ -19,7 +35,10 @@ function isConstructorTarget(node: Node, parent: Node): boolean {
 
 /**
  * Extract a transformable function from the matched node. Class methods and
- * object properties are wrapped; the actual function lives in their `value`.
+ * object properties are unwrapped to their `value`. Unsupported nodes return
+ * `undefined`; an arrow whose parameter pattern binds `arguments` also returns
+ * `undefined` so the transform does not guess which binding its body means.
+ * Constructor detection is separate and is not performed by this helper.
  *
  * @param node - The matched AST node.
  * @returns The function with its body and params, or `undefined` to skip.
@@ -62,16 +81,15 @@ function matchFunction(node: Node): MatchedFunction | undefined {
 
 /**
  * Convert a bound parameter pattern into the expression that rebuilds its value
- * for the reconstructed arrow argument array. Patterns bind their names before
- * the injected statements run (defaults are evaluated during binding), so every
- * shape is representable as an expression over the bound names: an identifier
- * is a reference, object/array patterns become their literal shape over the
- * bound names, an assignment pattern is its bound pattern, and a rest element
- * becomes a spread (the array element position only).
+ * for the synthetic arrow argument array. Patterns bind their names before the
+ * injected statements run, so identifiers, defaults, rest, and destructuring
+ * can be reconstructed. The result is a new partial object/array for
+ * destructured parameters; computed destructuring keys are evaluated again
+ * during reconstruction.
  *
  * @param pattern - A parameter pattern.
  * @returns The array element expression (spread for rest), or null for a
- *   pattern shape the transform does not convert (never a parameter list).
+ *   pattern shape the transform does not convert.
  */
 function patternToExpression(
   pattern: Pattern,
@@ -169,7 +187,7 @@ function collectPatternNames(pattern: Pattern, out: Set<string>): void {
       }
       break
     default:
-      // No other Pattern shape binds names (defensive: never a parameter list).
+      // Other ESTree Pattern variants do not bind parameter names here.
       break
   }
 }

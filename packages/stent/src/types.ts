@@ -25,19 +25,25 @@ export type {
 
 /** Runtime call record published to a patch's tracing channel. */
 interface StentCall {
-  /** Actual call arguments; subscribers may mutate them in place. */
+  /**
+   * Arguments exposed to handlers. Ordinary functions receive a shallow copy of
+   * the arguments object (its values keep their identity); arrows receive a
+   * synthetic array rebuilt from bound parameter patterns, so destructured
+   * values are represented by partial copies rather than the caller object.
+   */
   arguments: unknown[]
   /** `this` receiver of the original call. */
   self: unknown
-  /** Version of the owning package captured at transformation time. */
+  /** Optional package version metadata; current transform path leaves it unset. */
   moduleVersion?: string
-  /** Successful result of the traced body (a thenable for async targets). */
+  /** Successful traced result exposed to `after` (settled for thenable calls). */
   result?: unknown
 }
 
 /**
  * Call the original traced body with the (possibly mutated) call arguments. The
- * returned value is a thenable exactly when the original target is async.
+ * returned value follows the traced body; async functions normally return a
+ * thenable, but a synchronous target may also return one explicitly.
  */
 type StentInvoke = () => unknown
 
@@ -50,9 +56,10 @@ type StentInvoke = () => unknown
 type StentBeforeHandler = (call: StentCall) => void
 
 /**
- * `after` handler: observes and rewrites the successful result. May return a
- * replacement value (a promise for async targets) or mutate the call's `result`
- * field in place and return `undefined`.
+ * `after` handler: observes the successful result; a thenable result is settled
+ * before the handler runs. It may return any replacement value, so it need not
+ * return a Promise for an async target, or mutate `call.result` and return
+ * `undefined` to keep the original value.
  *
  * @param call - The call record whose `result` holds the original outcome.
  */
@@ -90,9 +97,9 @@ type StentHandler =
  */
 interface StentPatch {
   /**
-   * Id within one Stent runtime. Re-registering an id updates the metadata and
-   * reports not-first; the first registration's fiber effect still owns
-   * disposal.
+   * Id within one Stent runtime. Each registration installs a fiber effect;
+   * same-owner re-registration updates metadata and transfers fiber ownership,
+   * so the stale disposer becomes a no-op. A different owner's claim fails.
    */
   id: PatchId
   /** The module, file, and function this patch transforms. */
@@ -100,17 +107,19 @@ interface StentPatch {
   /** Behavior kind of this patch. */
   operation: StentOperation
   /**
-   * Load-time contract: when true, the bootstrap must observe at least one
-   * transformed file for this patch after the application boots. A required
-   * patch that bound nothing fails startup loud (naming the patch id) instead
-   * of silently shipping an inert transform — the filePath may be the wrong
-   * launch form (src vs lib) or the function may have moved. Defaults to
-   * false.
+   * Load-time contract for the Node bootstrap: when true, it must observe at
+   * least one transformed file for this patch after the application boots. A
+   * required patch that bound nothing fails startup loud (naming the patch id)
+   * instead of silently shipping an inert transform; browser transforms carry
+   * this flag but do not enforce it. The filePath may be the wrong launch form
+   * (src vs lib) or the function may have moved. Defaults to false.
    */
   required?: boolean
   /**
-   * Numeric ordering key; higher priorities run first, equal priorities
-   * preserve stable registration order.
+   * Numeric ordering key; higher priorities become outer layers. Entry order
+   * for equal priorities is chosen by the adapter: static browser snapshots
+   * preserve input order, while dynamic Node snapshots sort patch ids. Defaults
+   * to 0.
    */
   priority?: number
   /** Runtime behavior installed for this patch. */
@@ -125,9 +134,9 @@ interface StentPatchInfo {
   target: StentTarget
   /** Behavior kind. */
   operation: StentOperation
-  /** Registration priority (defaults to 0); higher runs first. */
+  /** Registration priority (defaults to 0); higher priorities are outer layers. */
   priority: number
-  /** Whether this patch must bind a target during startup. */
+  /** Whether this Node bootstrap patch must bind a target during startup. */
   required?: boolean
   /** Whether the patch is currently installed. */
   enabled: boolean

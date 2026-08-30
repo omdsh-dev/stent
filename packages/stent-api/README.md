@@ -37,7 +37,7 @@ A Mod remains an ordinary Cordis plugin that declares injection of only the Sten
 | `./invariant` | invariant companion | Host | the host `invariants` service |
 | `./bootstrap/profile` | `installStentBootstrap` | Host | composed profile rows → `stent` hooks |
 
-The root entry of `stent-dsh` is the standard Host bundle; each new layer subpath is directly mountable for thin compositions. The browser entry remains `./client` because the client-module contract discovers that exact export; its implementation lives under `src/browser/client`. The old flat Host and compat subpaths are intentionally gone. Import the layer-specific entries above; no compatibility re-export modules are shipped.
+The root entry of `stent-dsh` is the standard Host bundle; each new layer subpath is directly mountable for thin compositions. The browser entry remains `./client` because the client-module contract discovers that exact export; its implementation lives under `packages/stent-dsh/src/browser/client`. The old flat Host and compat subpaths are intentionally gone. Import the layer-specific entries above; no compatibility re-export modules are shipped.
 
 ## Installation
 
@@ -69,10 +69,10 @@ A Mod declares only the modules it consumes:
 import type { Context } from 'cordis'
 import type { StentAgentService, StentPromptService } from '@oh-my-dsh/stent-dsh'
 
-export const name = 'my-mod'
-export const inject = ['stentAgent', 'stentPrompt']
+const name = 'my-mod'
+const inject = ['stentAgent', 'stentPrompt']
 
-export function apply(ctx: Context & { stentAgent: StentAgentService; stentPrompt: StentPromptService }): void {
+function apply(ctx: Context & { stentAgent: StentAgentService; stentPrompt: StentPromptService }): void {
   ctx.stentAgent.onStatus((agent, status) => {
     ctx.logger.info('agent %s is %s', agent.id, status)
   })
@@ -82,6 +82,8 @@ export function apply(ctx: Context & { stentAgent: StentAgentService; stentPromp
     text: 'my-mod is active',
   })
 }
+
+export { name, inject, apply }
 ```
 
 ## Contracts
@@ -129,4 +131,4 @@ None; the layer neither assembles nor sends a provider request.
 
 - **The facades are curated subsets, not complete mirrors.** A module enters the cooperative layer only when a real Mod consumer needs a compatibility boundary the domain service itself does not promise; the domain services remain the authoritative surface for everything else.
 - **The client slot face is a narrow subset.** `ctx.stentClient.registerSlot` accepts a stable option shape (`StentSlotOptions`); declaration merging and composed-props inference stay in the host slot service, so a Mod that needs the full typed register contract uses that service directly.
-- **The Cordis service catalog does not list the module services.** The catalog projector records service classes living in `src/index.ts` or `src/service.ts`; each module lives in its own entry file, so `ctx.stentAgent` and friends are documented here rather than in the generated catalog.
+- **The Cordis service catalog does not list the module services.** The catalog projector records service classes living in `packages/stent-dsh/src/index.ts` or `packages/stent-dsh/src/service.ts`; each module lives in its own entry file, so `ctx.stentAgent` and friends are documented here rather than in the generated catalog.

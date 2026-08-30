@@ -37,8 +37,10 @@ interface ServeBrowserTransformOptions {
    * Static patch descriptors whose targets select the rewrites. Every patch
    * must resolve to the SAME bundle file (same `module` and `filePath` — the
    * route serves one file), and the patches stack on that file exactly like
-   * Node-side patches: ascending priority wraps outermost, equal priorities
-   * keep registration order. Pass an array even when there is one patch.
+   * Node-side patches: ascending priority wraps outermost, while this static
+   * patch array preserves supplied order for equal priorities. Node dynamic
+   * snapshots sort equal-priority ids. Pass an array even when there is one
+   * patch.
    */
   patches: readonly StentPatchStub[]
   /**
@@ -66,7 +68,9 @@ class BundleUnreadableError extends Error {
  * cleanup). The bundle path is resolved from the patches' `module` package
  * through the Loader composition anchor (`ctx.baseUrl`), not through Stent's
  * own dependency tree; the transforms and matcher are built once at
- * registration, and the served bytes are cached per source content.
+ * registration, and the served bytes are cached per source content. Each call
+ * owns one exact route; callers must aggregate descriptors to avoid duplicate
+ * route registration when several plugins target the same bundle.
  *
  * @param ctx - The Host context providing the webserver and composition base
  *   URL.

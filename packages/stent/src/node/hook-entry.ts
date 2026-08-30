@@ -5,16 +5,15 @@
  * thread), it transforms matching ESM modules at load time and defers CommonJS
  * to the `_compile` patch installed by the Node loader.
  *
- * The entry reads the shared configuration file (written by the main thread on
- * every installation and disposal) on each load, so the loader thread's
- * transform always reflects the current installation stack: new installations
- * replace the transform on the next module evaluation, disposed ones drop their
- * instrumentations, and an evicted module re-imports under the latest stack.
- * Each active installation gets its own transform and the source chains through
- * them in installation order — the same stacking the sync hook chain and the
- * CJS `_compile` wrapper produce, so installation order (not a globally merged
- * priority sort) decides the nesting across installations on every path. The
- * chain is rebuilt only when the configuration content changes.
+ * The entry reads the shared configuration file (written by the main thread
+ * when the single active installation changes or is disposed) on each load, so
+ * the loader thread reflects the current state: a new installation after
+ * disposal replaces the transform on the next module evaluation, and an evicted
+ * module re-imports under the latest configuration. The public
+ * `installStentHooks()` API rejects a second active installation; the
+ * configuration is represented as an array for the wire format, but this entry
+ * normally consumes one active state. The chain is rebuilt only when the
+ * configuration content changes.
  *
  * @module @oh-my-dsh/stent/node/hook-entry
  */
@@ -36,10 +35,10 @@ let configPath: string | undefined
 /** Main-thread binding channel end, passed through `module.register` data. */
 let bindingPort: MessagePort | undefined
 
-/** One installation's transform in the per-installation chain. */
+/** Transform for the active installation's loader-thread snapshot. */
 type TransformFn = ReturnType<typeof createInstrumentedTransform>
 
-/** Cached transform chain for the last-read configuration content. */
+/** Cached transform for the last-read configuration content. */
 let cached: { config: string; transforms: TransformFn[] } | undefined
 
 /**
@@ -68,11 +67,12 @@ function initialize(
 }
 
 /**
- * Read the shared configuration and return the per-installation transform chain
- * for the currently active installations, in installation order. The chain is
- * rebuilt only when the configuration content changed since the last load.
+ * Read the shared configuration and return the transform list for the currently
+ * active installation. The wire shape is an array, but the public loader
+ * permits only one active dynamic installation. The list is rebuilt only when
+ * the configuration content changed since the last load.
  *
- * @returns The transform chain (empty when no installation is active or the
+ * @returns The transform list (empty when no installation is active or the
  *   configuration cannot be read).
  */
 function readTransforms(): TransformFn[] {

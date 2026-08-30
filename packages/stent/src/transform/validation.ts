@@ -9,7 +9,17 @@
 
 import type { PatchId, StentPatchStub } from './types.ts'
 
-/** Validate a patch id for diagnostics and generated bridge calls. */
+/**
+ * Validate the patch id embedded in generated bridge calls and diagnostics.
+ *
+ * @remarks
+ *   The TypeScript signature requires `PatchId`/`string`, but the
+ *   regular-expression check itself coerces a JavaScript non-string value;
+ *   later transform metadata still expects a string.
+ * @param id - Patch identifier to validate.
+ * @throws If `id` is empty, longer than 120 characters, or contains a character
+ *   outside `[A-Za-z0-9._:/+-]`.
+ */
 function validatePatchId(id: PatchId): void {
   if (!/^[A-Za-z0-9._:/+-]{1,120}$/.test(id)) {
     throw new Error(
@@ -20,12 +30,14 @@ function validatePatchId(id: PatchId): void {
 
 type PatchTarget = StentPatchStub['target']
 
+/** Validate the target module name. */
 function validateTargetModule(target: PatchTarget): void {
   if (typeof target.module !== 'string' || target.module.length === 0) {
     throw new Error('stent: patch target.module must be a non-empty string')
   }
 }
 
+/** Validate the target version range as a non-empty string. */
 function validateVersionRange(target: PatchTarget): void {
   if (
     typeof target.versionRange !== 'string'
@@ -37,6 +49,10 @@ function validateVersionRange(target: PatchTarget): void {
   }
 }
 
+/**
+ * Validate the mutually exclusive file selector fields without path
+ * normalization.
+ */
 function validateFilePaths(target: PatchTarget): void {
   const hasFilePath =
     typeof target.filePath === 'string' || target.filePath instanceof RegExp
@@ -64,12 +80,14 @@ function validateFilePaths(target: PatchTarget): void {
   }
 }
 
+/** Validate the optional required flag. */
 function validateRequired(required: unknown): void {
   if (required !== undefined && typeof required !== 'boolean') {
     throw new Error('stent: patch.required must be a boolean when present')
   }
 }
 
+/** Validate match indices on the target and function query. */
 function validateTargetIndices(target: PatchTarget): void {
   if (!isValidIndex(target.index)) {
     throw new Error(
@@ -83,13 +101,23 @@ function validateTargetIndices(target: PatchTarget): void {
   }
 }
 
+/** Validate the operation encoded into the bridge call. */
 function validateOperation(operation: StentPatchStub['operation']): void {
   if (!['before', 'after', 'around', 'replace'].includes(operation)) {
     throw new Error(`stent: unknown operation ${JSON.stringify(operation)}`)
   }
 }
 
-/** Validate static patch fields before an instrumentation is built. */
+/**
+ * Validate static module, file, index, required, and operation fields.
+ *
+ * This is intentionally a partial guard: it does not validate the patch id,
+ * query syntax or shape, semver grammar, priority, or an executable handler.
+ * Those checks belong to the caller and to `expandPatchStub`.
+ *
+ * @param patch - Static fields to check.
+ * @throws If one of the supported static fields has an invalid shape.
+ */
 function validatePatchStatic(
   patch: Pick<StentPatchStub, 'target' | 'operation' | 'required'>,
 ): void {

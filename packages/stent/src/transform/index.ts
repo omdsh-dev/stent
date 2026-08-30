@@ -1,13 +1,13 @@
 /**
- * Unified export for the self-contained Stent transformation layer.
+ * Source-only convenience barrel for the self-contained Stent transformation
+ * layer.
  *
- * This boundary re-exports only the symbols the package actually consumes
- * outside the transform layer (Node loader, browser entries, runtime bridge,
- * and the package's public type surface). Implementation-only symbols stay in
- * their owning modules: the Orchestrion adapter boundary (`./orchestrion.ts`),
- * the custom-transform registration (`./transform.ts`), the instrumentation
- * ordering helper (`./config.ts`), and the module-type detector
- * (`./identity.ts`) remain reachable only from their internal consumers.
+ * This file is not a published package entry: `packages/stent/package.json`
+ * does not expose `./transform`, and the build has no `transform/index.ts`
+ * artifact. It collects the symbols used by package-internal consumers with
+ * explicit export lists; implementation-only Orchestrion and AST helpers stay
+ * private to their owning modules. Public callers use
+ * `@oh-my-dsh/stent/browser` or the package root instead.
  *
  * @module @oh-my-dsh/stent/transform
  */

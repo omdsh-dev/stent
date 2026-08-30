@@ -1,9 +1,26 @@
+/**
+ * Build the ESTree statements injected into a matched Stent function.
+ *
+ * The builders keep AST construction separate from matching and orchestration:
+ * they create argument capture, replay closure, call record, and
+ * generator-aware publish result; generated code assumes unshadowed
+ * `arguments`, `Array`, `Symbol`, and `globalThis`.
+ *
+ * @module @oh-my-dsh/stent/transform/statements
+ */
+
 import type { Expression, Property, Statement } from 'estree'
 
 import type { MatchedFunction, NameAllocator } from './ast-types.ts'
 import { patternToExpression } from './patterns.ts'
 import { GLOBAL_BRIDGE_KEY } from './protocol.ts'
 
+/**
+ * Build an optional capture of an arrow's enclosing `arguments` object.
+ *
+ * @param name - Capture binding; `undefined` produces no statement.
+ * @returns A declaration, or `undefined` when no capture is needed.
+ */
 function createOuterArgumentsCapture(
   name: string | undefined,
 ): Statement | undefined {
@@ -23,6 +40,10 @@ function createOuterArgumentsCapture(
   }
 }
 
+/**
+ * Build the ordinary-function slice (requiring unshadowed `arguments`) or arrow
+ * pattern array.
+ */
 function createArgumentsStatement(
   matched: MatchedFunction,
   name: string,
@@ -69,6 +90,11 @@ function createArgumentsStatement(
   }
 }
 
+/**
+ * Build an anonymous function closure that replays the original body with
+ * `.apply(this, args)`. Ordinary-body `arguments` introspection consequently
+ * observes the replay function, not the outer function.
+ */
 function createTracedStatement(
   matched: MatchedFunction,
   body: Statement[],
@@ -124,6 +150,7 @@ function createTracedStatement(
   }
 }
 
+/** Build the bridge call record; `operation` passes through unvalidated. */
 function createCallStatement(
   patchId: string,
   operation: string,
@@ -153,6 +180,7 @@ function createCallStatement(
   }
 }
 
+/** Build the global bridge member expression used by generated code. */
 function bridgeExpression(): Expression {
   return {
     type: 'MemberExpression',
@@ -163,6 +191,7 @@ function bridgeExpression(): Expression {
   }
 }
 
+/** Build the bridge-present/fallback conditional expression. */
 function publishExpression(callName: string, tracedName: string): Expression {
   const bridge = bridgeExpression()
   return {
@@ -189,6 +218,7 @@ function publishExpression(callName: string, tracedName: string): Expression {
   }
 }
 
+/** Build publish/fallback code; generators delegate iterable results. */
 function createPublishStatement(
   matched: MatchedFunction,
   names: NameAllocator,
@@ -241,6 +271,7 @@ function createPublishStatement(
   } as unknown as Statement
 }
 
+/** Detect sync or async iteration for generator delegation. */
 function iterableExpression(name: string, async: boolean): Expression {
   const check = (symbol: 'iterator' | 'asyncIterator'): Expression => ({
     type: 'BinaryExpression',
@@ -275,6 +306,12 @@ function iterableExpression(name: string, async: boolean): Expression {
     : check('iterator')
 }
 
+/**
+ * Assemble capture, arguments, replay, call, and publish statements in order.
+ *
+ * @param capture - Optional outer-arguments declaration.
+ * @returns The injected list with `undefined` captures removed.
+ */
 function createInjectedStatements(
   capture: Statement | undefined,
   args: Statement,

@@ -10,7 +10,12 @@ import type { InstrumentationConfig } from './orchestrion.ts'
 import type { StentPatchStub } from './types.ts'
 import { validatePatchId, validatePatchStatic } from './validation.ts'
 
-/** Orchestrion config extended with Stent's bridge metadata. */
+/**
+ * Internal Orchestrion config enriched with Stent bridge metadata.
+ *
+ * The `stent*` fields are trusted inputs to the custom transform and are broad
+ * strings because this type is also used after the loader wire boundary.
+ */
 type StentInstrumentationConfig = InstrumentationConfig & {
   /** Patch id stamped into every generated call. */
   stentPatchId: string
@@ -24,7 +29,17 @@ type StentInstrumentationConfig = InstrumentationConfig & {
   astQuery: string
 }
 
-/** Build one Orchestrion instrumentation from a static Stent patch. */
+/**
+ * Build one Orchestrion instrumentation after the caller validates a static
+ * patch.
+ *
+ * @param patch - Patch whose file selector has already been reduced to
+ *   `filePath`. The raw-query branch emits only `{ index }`; the name-query
+ *   branch copies the function query and normalizes its index to `null` when
+ *   omitted.
+ * @throws If the AST query is blank, no supported name query is present, or the
+ *   file selector has not been expanded.
+ */
 function patchInstrumentation(
   patch: StentPatchStub,
 ): StentInstrumentationConfig {
@@ -58,7 +73,12 @@ function patchInstrumentation(
   }
 }
 
-/** Order instrumentations so higher priority handlers wrap first. */
+/**
+ * Order an instrumentation snapshot by priority.
+ *
+ * @param instrumentations - Configs to copy and sort.
+ * @returns A new ascending-priority array; the input is not mutated.
+ */
 function orderInstrumentations(
   instrumentations: readonly StentInstrumentationConfig[],
 ): StentInstrumentationConfig[] {
@@ -67,7 +87,15 @@ function orderInstrumentations(
   )
 }
 
-/** Derive the esquery selector for a name-based function query. */
+/**
+ * Derive the esquery selector for a supported name-based function query. Names
+ * are interpolated as supplied; callers needing escaping or class/alias
+ * narrowing should use an explicit `astQuery` instead.
+ *
+ * @param patch - Patch whose target carries the name query.
+ * @returns Comma-separated selectors for method, function, or expression forms.
+ * @throws If no supported name field is present.
+ */
 function queryFromFunction(patch: StentPatchStub): string {
   const q = patch.target.functionQuery
   if (!q) {
@@ -109,7 +137,16 @@ function queryFromFunction(patch: StentPatchStub): string {
   return queries.join(', ')
 }
 
-/** Expand filePaths targets into one instrumentation per package-relative file. */
+/**
+ * Validate and expand one public patch stub into matcher configurations.
+ *
+ * @param patch - Static patch metadata without an executable handler.
+ * @returns One config for `filePath`, or one config per `filePaths` entry. The
+ *   public `required` flag is validated before expansion but is intentionally
+ *   not emitted into this internal config.
+ * @throws If static fields or file-path expansion fails, the AST query is
+ *   blank, or no supported name query is available.
+ */
 function expandPatchStub(patch: StentPatchStub): StentInstrumentationConfig[] {
   validatePatchId(patch.id)
   validatePatchStatic(patch)

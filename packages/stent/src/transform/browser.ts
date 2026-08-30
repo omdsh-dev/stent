@@ -1,16 +1,10 @@
 /**
- * Browser build transform for Stent: a bundler-agnostic code transform that
- * applies the Stent rewrite to target modules during a client bundle build.
+ * Build-time Stent transform for a Node-capable bundler.
  *
- * Client bundles build from repository source paths, so this factory accepts a
- * caller-provided identity resolver: map a module id to `{ name, version, path
- * }` (package name, version, package-relative path) and the matcher runs
- * exactly as it does for the Node loader.
- *
- * Like the Node path, the transform parses emitted JavaScript: TypeScript
- * sources must be compiled before transformation, or the parse fails loudly.
- * This module is an internal implementation used by the public
- * `@oh-my-dsh/stent/browser` entry.
+ * `.ts`/`.tsx` source is transpiled with `ts.transpileModule` (including JSX)
+ * before Orchestrion parses it; other syntax must be compiled by the caller.
+ * Matcher selection is shared with Node, while module type detection here is
+ * extension-based. This internal module backs `@oh-my-dsh/stent/browser`.
  *
  * @module @oh-my-dsh/stent/transform/browser
  */
@@ -30,12 +24,13 @@ import {
 import type { StentBindingReport, StentPatchStub } from './types.ts'
 
 /**
- * Strip TypeScript type annotations so the code transformer (a plain JavaScript
- * parser) can parse `.ts`/`.tsx` sources. Type stripping only removes
- * annotations; the emitted JavaScript keeps module and function shapes intact.
+ * Transpile TypeScript/JSX so the JavaScript AST transformer can parse it. This
+ * performs emit only, not type checking; any transformer map describes emitted
+ * JavaScript and is not chained back to the original TypeScript source.
  *
- * @param code - TypeScript source.
- * @returns The equivalent JavaScript source.
+ * @param code - TypeScript or TSX source.
+ * @param fileName - Filename used for TypeScript emit context.
+ * @returns Emitted JavaScript source.
  */
 function stripTypes(code: string, fileName: string): string {
   const output = ts.transpileModule(code, {
@@ -73,16 +68,17 @@ type IdentityResolver = (id: string) => ModuleIdentity | undefined
 interface RepoSourceResolverOptions {
   /** Npm package name of the built client plugin. */
   packageName: string
-  /** Absolute source root of the package. */
+  /** Source root used for exact prefix matching; normally an absolute path. */
   packageRoot: string
-  /** Package version stamped into transformed calls. */
+  /** Package version used for `versionRange` matching; not put in bridge calls. */
   version: string
 }
 
 /**
  * Resolve repository source modules: any id under `packageRoot` maps to the
- * given package name and version. This is the resolver client plugin builds
- * use, since their sources live at `packages/<group>/<name>/src/...`.
+ * given package name and version. Matching is a raw `packageRoot + '/'` prefix;
+ * virtual ids and query-suffixed ids are not normalized by this resolver. This
+ * is the resolver client plugin builds use for repository source layouts.
  *
  * @param options - Package identity and source-root options.
  * @returns An identity resolver for that package's sources.
@@ -128,7 +124,7 @@ interface BrowserTransformOptions {
 
 /** Options for {@link createWatchedBrowserTransform}. */
 interface WatchedBrowserTransformOptions {
-  /** Absolute path of the JSON patch-stub file to watch. */
+  /** Patch-stub JSON path to read and register; relative paths are accepted. */
   patchesPath: string
   /** Resolver mapping a bundler module id to its package identity. */
   resolve: IdentityResolver
@@ -140,9 +136,12 @@ interface WatchedBrowserTransformOptions {
  * browser consumers should use {@link createBrowserTransform} with patch
  * stubs.
  *
- * @param instrumentations - Expanded Stent instrumentation configs.
+ * @param instrumentations - Already-expanded internal instrumentation configs.
  * @param resolve - Module identity resolver for the build's source layout.
- * @returns A transform function `(code, id) => output | null`.
+ * @returns A transform function `(code, id) => output | null`; an output may
+ *   omit `bindings` when no selected node was rewritten.
+ * @throws When the returned transform is called and the selected source cannot
+ *   be parsed or its injection fails.
  */
 function createInstrumentedTransform(
   instrumentations: readonly StentInstrumentationConfig[],
@@ -195,10 +194,14 @@ function createInstrumentedTransform(
 }
 
 /**
- * Build a browser bundle transform from public Stent patch stubs.
+ * Build a browser bundle transform from public Stent patch stubs. Static fields
+ * are expanded eagerly; `required` is validated on the public stub, then
+ * dropped from the internal instrumentation and is not enforced by this browser
+ * factory.
  *
  * @param options - Patch stubs and the build's identity resolver.
  * @returns A transform function `(code, id) => output | null`.
+ * @throws If static metadata or a name/query selector cannot be expanded.
  */
 function createBrowserTransform({
   patches,
@@ -219,16 +222,17 @@ type WatchedBrowserTransform = (
 ) => TransformOutput | null
 
 /**
- * Parse the watched patches file: a JSON array of static patch stubs for the
- * browser build API. The Node DSH launcher does not read profile patch
- * descriptors; browser transforms are explicitly assembled from this file when
- * a bundle needs static instrumentation. JSON cannot express a `RegExp`
- * `filePath`, so file paths are strings here. Every malformed entry fails loud
- * at build time rather than installing a never-matching transform.
+ * Parse the watched patches file's outer JSON shape. The result is checked for
+ * an array and an object `target`; full static/query validation is deferred to
+ * `createBrowserTransform` when the file content causes a matcher rebuild. JSON
+ * cannot express a `RegExp` `filePath`; serialized path values must therefore
+ * be strings, while `filePaths` remains supported as a string array.
  *
  * @param content - Raw file content.
  * @param patchesPath - File path, used in error messages.
- * @returns The validated patch stubs.
+ * @returns Patch stubs with the minimally validated outer shape.
+ * @throws If JSON is invalid, the root is not an array, or an entry lacks an
+ *   object target.
  */
 function parsePatchesFile(
   content: string,
@@ -263,30 +267,24 @@ function parsePatchesFile(
         `stent: watched patches file ${patchesPath} entry ${index} must be a patch stub object with a target`,
       )
     }
-    // patchInstrumentation (called by the caller's transform rebuild)
-    // validates the remaining fields: id, module, versionRange, filePath,
-    // operation, and the function/AST query.
+    // createBrowserTransform validates the remaining static fields and expands
+    // the query when this entry is rebuilt from the watched content.
     return entry as StentPatchStub
   })
 }
 
 /**
- * Build a bundler transform whose patch set lives in a JSON file, for the dev
- * rebuild chain: the returned transform registers the file in the bundler's
- * watch graph on every module (a patch edit can make a previously unmatched
- * module match, so every module must re-run), re-reads it per module, and
- * rebuilds the underlying matcher only when the content changed — the same
- * read-per-use, rebuild-on-content-change pattern the async loader-thread entry
- * uses for its shared configuration file.
- *
- * Wired through `clientBundle(id, libEntry, { transform })`, an edit to the
- * patches file triggers a bundle rebuild under `tsdown --watch`
- * (`scripts/dev-web.ts`), and the rebuilt bundle rides the client-hmr chain
- * (stat poll → `rebuilt` frame → invalidate/prefetch/fiber swap) into the
- * browser: the build trigger for browser re-transformation.
+ * Build a bundler transform whose patch set lives in a JSON file. The returned
+ * callback registers the file with the optional watch hook on every module,
+ * rereads it on every call, and rebuilds the matcher only when raw content
+ * changes. A host bundler must honor `addWatchFile` and connect its watcher/HMR
+ * chain for edits to trigger a rebuild; this helper does not provide that
+ * integration.
  *
  * @param options - Watched patch file and the build's identity resolver.
  * @returns A transform function `(code, id, addWatchFile?) => output | null`.
+ * @throws When the returned callback is called and the file cannot be
+ *   read/parsed or its rebuilt patch set is invalid.
  */
 function createWatchedBrowserTransform({
   patchesPath,

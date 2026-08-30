@@ -4,24 +4,21 @@
  * making `around`/`replace` vetoes impossible), this transform rewrites the
  * matched function to call the Stent bridge directly.
  *
- * The function keeps its name, `.length`, and `this` binding. The original body
- * moves into a `traced` closure that replays it via `apply(this, args)` over
- * the reconstructed arguments array, and the body becomes a single conditional
- * return: `globalThis[<bridge key>]` present → publish the call, absent →
- * delegate to the traced body untouched. The bridge-absent fallback makes
- * transformed code safe before the bootstrap runs (and in browsers before the
- * bridge is installed), at the cost of the patch only taking effect for calls
- * that happen after the bridge exists.
+ * The outer node keeps its name and parameter list (and therefore its declared
+ * `.length`). For ordinary functions, replay forwards the call receiver through
+ * `apply(this, args)`; the original body moves into a traced closure. Ordinary
+ * functions use a conditional publish/fallback return, while generators use a
+ * result block and `yield*` delegation so iterator semantics remain intact.
  *
- * Matched nodes must be function declarations, function expressions, methods,
- * or arrow functions with a block (or, for arrows, expression) body. Arrows
- * have no own `arguments` binding, so the argument array is rebuilt from the
- * parameter patterns (identifiers, rest, defaults, and destructuring all work —
- * the patterns bind their names before the injected statements run) and `this`
- * stays lexical; a body referencing the enclosing `arguments` object is
- * preserved by capturing it first. Generator functions transform through
- * delegation (`yield*` over the traced generator), so iteration semantics
- * survive the no-handler and delegated paths.
+ * Arrows rebuild arguments from bound parameter patterns and preserve a lexical
+ * receiver; a body reference to an enclosing `arguments` object is captured
+ * heuristically. Constructor targets are rejected. Replay does not currently
+ * preserve `new.target` or `super`, and moving a strict-CJS directive into the
+ * traced closure can change receiver semantics; ordinary parameters or local
+ * declarations that shadow `arguments`, and non-strict
+ * `arguments.callee`/`caller` introspection, are not preserved. Broad raw
+ * selectors must also exclude the injected replay closure to avoid recursive
+ * matches during upstream AST traversal.
  *
  * @module @oh-my-dsh/stent/transform/transform
  */
@@ -56,6 +53,9 @@ const OUTER_ARGUMENTS = 'stentOuterArguments'
  * @param onMatch - Optional callback invoked with the patch id for every node
  *   the transform actually rewrites; the Node loader counts these into its
  *   load-time binding records.
+ * @returns Nothing; the matcher is mutated in place with the `stent` operator.
+ * @throws During a later source transformation, if the merged config lacks the
+ *   required Stent metadata or the matcher selects a constructor target.
  */
 function registerStentTransform(
   matcher: InstrumentationMatcher,
@@ -75,6 +75,7 @@ function registerStentTransform(
   })
 }
 
+/** Rewrite one matcher hit and report its patch binding. */
 function transformMatchedFunction(
   patchId: string,
   operation: string,
@@ -119,6 +120,7 @@ function transformMatchedFunction(
   return true
 }
 
+/** Wrap an expression-bodied arrow in a return-bearing block. */
 function ensureBlockBody(matched: MatchedFunction): BlockStatement {
   if (matched.body.type !== 'BlockStatement') {
     const synthesized: BlockStatement = {
@@ -131,6 +133,7 @@ function ensureBlockBody(matched: MatchedFunction): BlockStatement {
   return matched.body
 }
 
+/** Capture and rewrite enclosing `arguments` references for an arrow. */
 function prepareOuterArguments(
   matched: MatchedFunction,
   block: BlockStatement,

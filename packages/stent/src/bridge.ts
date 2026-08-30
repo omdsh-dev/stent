@@ -24,7 +24,10 @@ interface StentBridgeCall {
   id: PatchId
   /** Operation kind the transform was generated for. */
   operation: StentOperation
-  /** Call arguments; `before` handlers mutate them in place. */
+  /**
+   * Handler-visible arguments: a shallow slice for ordinary functions or a
+   * synthetic parameter-pattern array for arrows.
+   */
   arguments: unknown[]
   /** `this` receiver of the original call. */
   self: unknown
@@ -57,9 +60,9 @@ function subscribeBridge(listener: BridgeListener): () => void {
  * body's result (rewritten by `after` handlers) for `before`/`after`.
  *
  * With multiple listeners (e.g. several `StentRuntime` instances in one
- * process), every listener sees the call in registration order — earlier
- * listeners' argument/result mutations are visible to later ones — and the last
- * listener's result is returned.
+ * process), every listener sees the call in registration order and argument
+ * mutations are visible to later ones; each listener's return becomes the
+ * current result, and the last listener's result is returned.
  *
  * @param call - The call record assembled by the transform.
  * @returns The value to return from the wrapped function.

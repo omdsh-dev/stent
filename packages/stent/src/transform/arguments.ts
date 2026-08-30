@@ -1,3 +1,17 @@
+/**
+ * AST utilities for heuristically preserving `arguments` and allocating safe
+ * names.
+ *
+ * Arrow functions do not create their own `arguments` binding, so the transform
+ * scans their bodies before injecting a captured outer value. The structural
+ * scan is not a complete lexical-scope resolver: computed property/method keys
+ * are skipped, and local shadowing needs explicit care from callers. The
+ * allocator shares the same program-wide identifier set to keep every injected
+ * binding collision-free.
+ *
+ * @module @oh-my-dsh/stent/transform/arguments
+ */
+
 import type { Node, Pattern, Program } from 'estree'
 
 import type { NameAllocator } from './ast-types.ts'
@@ -8,6 +22,7 @@ const argumentBoundaryTypes = new Set([
   'FunctionExpression',
 ])
 
+/** Optionally rename one `arguments` identifier and report that it was found. */
 function mapArgumentIdentifier(
   node: { name: string },
   name: string | undefined,
@@ -18,6 +33,7 @@ function mapArgumentIdentifier(
   return true
 }
 
+/** Identify a nested function that owns or shadows `arguments`. */
 function isArgumentBoundary(node: Node): boolean {
   if (argumentBoundaryTypes.has(node.type)) {
     return true
@@ -28,6 +44,7 @@ function isArgumentBoundary(node: Node): boolean {
   return node.params.some(patternBindsArguments)
 }
 
+/** Exclude AST metadata and all Property/MethodDefinition keys from the walk. */
 function shouldSkipArgumentKey(node: Node, key: string): boolean {
   if (AST_METADATA_KEYS.has(key)) {
     return true
@@ -41,6 +58,7 @@ function shouldSkipArgumentKey(node: Node, key: string): boolean {
   return node.type === 'MemberExpression' && !node.computed
 }
 
+/** Walk AST children while preserving the first-found result. */
 function mapOuterArgumentsChildren(
   node: Node,
   name: string | undefined,
@@ -59,11 +77,12 @@ function mapOuterArgumentsChildren(
 }
 
 /**
- * Whether a node references the enclosing scope's `arguments` object, and
- * optionally rewrites those references to a capture name. Nested non-arrow
- * functions own their `arguments` and are not descended into; nested arrows
- * still resolve lexically and are descended into. Property keys and
- * non-computed member properties are not references.
+ * Whether a node contains an identifier named `arguments` outside the
+ * structural boundaries this helper recognizes, and optionally rewrites it to a
+ * capture name. Nested ordinary functions and arrows whose parameters bind
+ * `arguments` are boundaries; Property/MethodDefinition keys (computed or not)
+ * and non-computed MemberExpression properties are skipped. This is not a full
+ * lexical-scope analysis, so local declarations are not scope-resolved.
  *
  * @param node - The node to scan (and rewrite when `name` is given).
  * @param name - Capture name to rewrite `arguments` references to; omit to only
@@ -89,7 +108,7 @@ function mapOuterArguments(
   return mapOuterArgumentsChildren(node, name)
 }
 
-/** Scan an AST child value for enclosing-scope `arguments` references. */
+/** Scan an AST child value for structurally visible `arguments` identifiers. */
 function mapOuterArgumentsValue(
   value: unknown,
   name: string | undefined,
@@ -113,6 +132,7 @@ function mapOuterArgumentsValue(
   return false
 }
 
+/** Test whether a parameter pattern binds the identifier `arguments`. */
 function patternBindsArguments(pattern: Pattern): boolean {
   switch (pattern.type) {
     case 'Identifier':
@@ -187,7 +207,7 @@ function collectIdentifiers(node: Node, out: Set<string>): void {
   }
 }
 
-/** Collect identifiers from an AST child value. */
+/** Collect identifiers from an array-or-object AST child value. */
 function collectIdentifierValue(value: unknown, out: Set<string>): void {
   if (Array.isArray(value)) {
     for (const child of value) {
