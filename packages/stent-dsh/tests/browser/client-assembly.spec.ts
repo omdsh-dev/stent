@@ -93,7 +93,11 @@ const sameCommand = (): CommandContribution => ({
   name: 'modclientcmd',
   description: 'fixture client command',
   available: () => true,
-  ui: { kind: 'popupSelect', options: async () => [], onSelect: () => {} },
+  ui: {
+    kind: 'popupSelect',
+    options: () => Promise.resolve([]),
+    onSelect: () => {},
+  },
 })
 
 describe('Stent API browser assembly', () => {

@@ -31,10 +31,10 @@
         "**/*.{ts,tsx}"
       ],
       "rules": {
-        "no-var": "error",
-        "prefer-const": "error",
-        "prefer-rest-params": "error",
-        "prefer-spread": "error",
+        "curly": [
+          "error",
+          "all"
+        ],
         "no-array-constructor": "error",
         "no-unused-expressions": "error",
         "no-unused-vars": [
@@ -46,6 +46,36 @@
           }
         ],
         "no-useless-constructor": "error",
+        "no-var": "error",
+        "no-void": "off",
+        "prefer-const": "error",
+        "prefer-rest-params": "error",
+        "prefer-spread": "error",
+        "eslint/complexity": "error",
+        "eslint/max-lines": [
+          "error",
+          {
+            "max": 350,
+            "skipBlankLines": false,
+            "skipComments": false
+          }
+        ],
+        "eslint/max-lines-per-function": [
+          "error",
+          {
+            "IIFEs": true,
+            "max": 120,
+            "skipBlankLines": false,
+            "skipComments": false
+          }
+        ],
+        "eslint/max-statements": [
+          "error",
+          60
+        ],
+        "eslint/no-constant-condition": "error",
+        "eslint/no-nested-ternary": "error",
+        "eslint/no-unneeded-ternary": "error",
         "typescript/await-thenable": "error",
         "typescript/ban-ts-comment": [
           "error",
@@ -67,7 +97,7 @@
         "typescript/no-floating-promises": "error",
         "typescript/no-for-in-array": "error",
         "typescript/no-implied-eval": "error",
-        "typescript/no-invalid-void-type": "off",
+        "typescript/no-invalid-void-type": "error",
         "typescript/no-meaningless-void-operator": "error",
         "typescript/no-misused-new": "error",
         "typescript/no-misused-promises": "error",
@@ -76,10 +106,17 @@
         "typescript/no-namespace": "off",
         "typescript/no-non-null-asserted-nullish-coalescing": "error",
         "typescript/no-non-null-asserted-optional-chain": "error",
+        "typescript/no-non-null-assertion": "error",
         "typescript/no-redundant-type-constituents": "error",
         "typescript/no-require-imports": "error",
         "typescript/no-this-alias": "error",
         "typescript/no-unnecessary-boolean-literal-compare": "error",
+        "typescript/no-unnecessary-condition": [
+          "error",
+          {
+            "allowConstantLoopConditions": true
+          }
+        ],
         "typescript/no-unnecessary-template-expression": "error",
         "typescript/no-unnecessary-type-arguments": "error",
         "typescript/no-unnecessary-type-assertion": "error",
@@ -97,6 +134,7 @@
         "typescript/no-unsafe-unary-minus": "error",
         "typescript/no-useless-default-assignment": "error",
         "typescript/no-wrapper-object-types": "error",
+        "typescript/only-throw-error": "error",
         "typescript/prefer-as-const": "error",
         "typescript/prefer-literal-enum-member": "error",
         "typescript/prefer-namespace-keyword": "error",
@@ -104,6 +142,7 @@
         "typescript/prefer-reduce-type-parameter": "error",
         "typescript/prefer-return-this-type": "error",
         "typescript/related-getter-setter-pairs": "error",
+        "typescript/require-await": "error",
         "typescript/restrict-plus-operands": [
           "error",
           {
@@ -114,64 +153,6 @@
             "allowRegExp": false
           }
         ],
-        "typescript/return-await": [
-          "error",
-          "error-handling-correctness-only"
-        ],
-        "typescript/triple-slash-reference": "error",
-        "typescript/unbound-method": "error",
-        "typescript/unified-signatures": "error",
-        "typescript/use-unknown-in-catch-callback-variable": "error",
-        "no-void": "off"
-      },
-      "plugins": [
-        "typescript"
-      ]
-    },
-    {
-      "files": [
-        "src/**/*.{ts,tsx}",
-        "packages/*/src/**/*.{ts,tsx}"
-      ],
-      "rules": {
-        "eslint/max-lines-per-function": [
-          "error",
-          {
-            "IIFEs": true,
-            "max": 120,
-            "skipBlankLines": false,
-            "skipComments": false
-          }
-        ],
-        "eslint/max-lines": [
-          "error",
-          {
-            "max": 350,
-            "skipBlankLines": false,
-            "skipComments": false
-          }
-        ],
-        "eslint/max-statements": [
-          "error",
-          60
-        ],
-        "eslint/complexity": "error",
-        "eslint/no-constant-condition": "error",
-        "eslint/no-nested-ternary": "error",
-        "eslint/no-unneeded-ternary": "error",
-        "stent/max-statements-per-file": [
-          "error",
-          220
-        ],
-        "typescript/no-non-null-assertion": "error",
-        "typescript/no-unnecessary-condition": [
-          "error",
-          {
-            "allowConstantLoopConditions": true
-          }
-        ],
-        "typescript/only-throw-error": "error",
-        "typescript/require-await": "error",
         "typescript/restrict-template-expressions": [
           "error",
           {
@@ -179,65 +160,20 @@
             "allowBoolean": true
           }
         ],
+        "typescript/return-await": [
+          "error",
+          "error-handling-correctness-only"
+        ],
         "typescript/switch-exhaustiveness-check": [
           "error",
           {
             "considerDefaultExhaustiveForUnions": true
           }
         ],
-        "stent/comment-shorter-than-function": [
-          "error",
-          {
-            "includeAnonymous": false,
-            "includeExported": false,
-            "countCommentDelimiters": false
-          }
-        ],
-        "stent/min-function-lines": [
-          "error",
-          {
-            "minLines": 5,
-            "minimums": {
-              "declaration": 5,
-              "expression": 3,
-              "method": 2,
-              "arrow": 3
-            },
-            "includeAnonymous": false,
-            "skipBlankLines": true,
-            "skipComments": true
-          }
-        ]
-      },
-      "plugins": [
-        "typescript"
-      ],
-      "jsPlugins": [
-        "./tools/oxlint/stent-plugin.ts"
-      ]
-    },
-    {
-      "files": [
-        "tests/**/*.{ts,tsx}",
-        "packages/*/tests/**/*.{ts,tsx}"
-      ],
-      "rules": {
-        "typescript/no-invalid-void-type": "error",
-        "typescript/no-non-null-assertion": "off",
-        "typescript/no-unnecessary-condition": "off",
-        "typescript/only-throw-error": "off",
-        "typescript/require-await": "off",
-        "typescript/restrict-template-expressions": "off"
-      },
-      "plugins": [
-        "typescript"
-      ]
-    },
-    {
-      "files": [
-        "**/*.{ts,tsx}"
-      ],
-      "rules": {
+        "typescript/triple-slash-reference": "error",
+        "typescript/unbound-method": "error",
+        "typescript/unified-signatures": "error",
+        "typescript/use-unknown-in-catch-callback-variable": "error",
         "sonarjs/duplicates-in-character-class": "error",
         "sonarjs/no-all-duplicated-branches": "error",
         "sonarjs/no-duplicate-in-composite": "error",
@@ -245,21 +181,7 @@
         "sonarjs/no-identical-conditions": "error",
         "sonarjs/no-identical-expressions": "error",
         "sonarjs/no-identical-functions": "error",
-        "sonarjs/no-duplicated-branches": "error"
-      },
-      "jsPlugins": [
-        "eslint-plugin-sonarjs"
-      ]
-    },
-    {
-      "files": [
-        "**/*.{ts,tsx}"
-      ],
-      "rules": {
-        "curly": [
-          "error",
-          "all"
-        ],
+        "sonarjs/no-duplicated-branches": "error",
         "@stylistic/indent": "off",
         "@stylistic/semi": [
           "error",
@@ -306,9 +228,41 @@
             "ignoreStrings": true,
             "ignoreTemplateLiterals": true
           }
+        ],
+        "stent/comment-shorter-than-function": [
+          "error",
+          {
+            "includeAnonymous": false,
+            "includeExported": false,
+            "countCommentDelimiters": false
+          }
+        ],
+        "stent/max-statements-per-file": [
+          "error",
+          220
+        ],
+        "stent/min-function-lines": [
+          "error",
+          {
+            "minLines": 5,
+            "minimums": {
+              "declaration": 5,
+              "expression": 3,
+              "method": 2,
+              "arrow": 3
+            },
+            "includeAnonymous": false,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
         ]
       },
+      "plugins": [
+        "typescript"
+      ],
       "jsPlugins": [
+        "./tools/oxlint/stent-plugin.ts",
+        "eslint-plugin-sonarjs",
         "@stylistic/eslint-plugin"
       ]
     }

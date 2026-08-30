@@ -25,25 +25,33 @@ const stub = {
   operation: 'before',
 }
 
-describe('createWatchedBrowserTransform', () => {
-  const roots: string[] = []
-  afterEach(() => {
-    for (const root of roots.splice(0)) {
-      rmSync(root, { recursive: true, force: true })
-    }
-  })
+const roots: string[] = []
 
-  function patchesFile(entries: unknown): string {
-    const root = mkdtempSync(join(tmpdir(), 'stent-watched-'))
-    roots.push(root)
-    const path = join(root, 'stent.patches.json')
-    writeFileSync(
-      path,
-      typeof entries === 'string' ? entries : JSON.stringify(entries),
-    )
-    return path
+function patchesFile(entries: unknown): string {
+  const root = mkdtempSync(join(tmpdir(), 'stent-watched-'))
+  roots.push(root)
+  const path = join(root, 'stent.patches.json')
+  writeFileSync(
+    path,
+    typeof entries === 'string' ? entries : JSON.stringify(entries),
+  )
+  return path
+}
+
+function requireOutput<T>(output: T | null): T {
+  if (output === null) {
+    throw new Error('expected transform output')
   }
+  return output
+}
 
+afterEach(() => {
+  for (const root of roots.splice(0)) {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+describe('createWatchedBrowserTransform', () => {
   it('transforms matching modules from the file-backed patch set', () => {
     const path = patchesFile([stub])
     const transform = createWatchedBrowserTransform({
@@ -51,12 +59,11 @@ describe('createWatchedBrowserTransform', () => {
       resolve: resolvePackageIdentity,
     })
     const id = `${fixtureDir}index.mjs`
-    const output = transform(readFileSync(id, 'utf8'), id)
-    expect(output).not.toBeNull()
-    expect(output!.code).toContain('globalThis["__stentBridge"]')
-    expect(output!.code).toContain('id: "web/before-add"')
-    expect(output!.code).toContain('operation: "before"')
-    expect(output!.code).toContain('return a + b')
+    const output = requireOutput(transform(readFileSync(id, 'utf8'), id))
+    expect(output.code).toContain('globalThis["__stentBridge"]')
+    expect(output.code).toContain('id: "web/before-add"')
+    expect(output.code).toContain('operation: "before"')
+    expect(output.code).toContain('return a + b')
   })
 
   it('returns null for modules no patch targets', () => {
@@ -99,15 +106,17 @@ describe('createWatchedBrowserTransform', () => {
     })
     const id = `${fixtureDir}index.mjs`
     const source = readFileSync(id, 'utf8')
-    expect(transform(source, id)!.code).toContain('operation: "before"')
+    expect(requireOutput(transform(source, id)).code).toContain(
+      'operation: "before"',
+    )
 
     writeFileSync(
       path,
       JSON.stringify([{ ...stub, id: 'web/after-add', operation: 'after' }]),
     )
-    const output = transform(source, id)
-    expect(output!.code).toContain('id: "web/after-add"')
-    expect(output!.code).toContain('operation: "after"')
+    const output = requireOutput(transform(source, id))
+    expect(output.code).toContain('id: "web/after-add"')
+    expect(output.code).toContain('operation: "after"')
 
     // An emptied patch set leaves the module untouched.
     writeFileSync(path, '[]')

@@ -6,7 +6,9 @@ import { StentAgentService } from '../../src/host/agent.ts'
 
 /** Minimal live-agent stand-in: the facade touches only the listed members. */
 function fakeAgent(inject = vi.fn()): Agent {
-  return { inject } as unknown as Agent
+  return {
+    inject,
+  } as unknown as Agent
 }
 
 async function setup() {

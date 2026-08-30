@@ -59,7 +59,10 @@ function minimumFor(
 }
 
 function isRuleOptions(value: unknown): value is RuleOptions {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  return !Array.isArray(value)
 }
 
 const minFunctionLines: Rule = {
@@ -123,12 +126,14 @@ const minFunctionLines: Rule = {
 
   create(context: RuleContext): VisitorObject {
     const raw = context.options[0]
-    const options =
-      typeof raw === 'number'
-        ? { minLines: raw }
-        : isRuleOptions(raw)
-          ? raw
-          : {}
+    let options: RuleOptions
+    if (typeof raw === 'number') {
+      options = { minLines: raw }
+    } else if (isRuleOptions(raw)) {
+      options = raw
+    } else {
+      options = {}
+    }
     const includeAnonymous = options.includeAnonymous ?? false
     const skipBlankLines = options.skipBlankLines ?? true
     const skipComments = options.skipComments ?? true

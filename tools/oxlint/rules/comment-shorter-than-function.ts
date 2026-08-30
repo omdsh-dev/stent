@@ -37,11 +37,6 @@ interface FunctionTarget {
   exported: boolean
 }
 
-/** Convert the local structural node shape to Oxlint's comment API input. */
-function commentTarget(node: AstNode): CommentTarget {
-  return node as unknown as CommentTarget
-}
-
 /** Return whether a node is an export wrapper. */
 function isExportDeclaration(node: AstNode | undefined): boolean {
   return (
@@ -164,13 +159,15 @@ function leadingComments(
   sourceCode: SourceCode,
 ): CommentToken[] {
   const source = sourceCode.getText()
-  const comments = sourceCode.getCommentsBefore(commentTarget(node))
+  const comments = sourceCode.getCommentsBefore(
+    node as unknown as CommentTarget,
+  )
   const selected: CommentToken[] = []
   let nextStart = node.range[0]
 
   for (let index = comments.length - 1; index >= 0; index--) {
     const comment = comments[index]
-    if (comment === undefined || !isAdjacent(comment, nextStart, source)) {
+    if (!isAdjacent(comment, nextStart, source)) {
       break
     }
     selected.unshift(comment)
@@ -179,14 +176,11 @@ function leadingComments(
   return selected
 }
 
-/** Normalize one comment line for directive detection. */
-function directiveLine(line: string): string {
-  return line.trim().replace(/^\*+/, '').trim()
-}
-
 /** Return whether a comment is a tool directive rather than documentation. */
 function isDirective(comment: CommentToken): boolean {
-  const lines = comment.value.split(/\r\n|\r|\n/).map(directiveLine)
+  const lines = comment.value
+    .split(/\r\n|\r|\n/)
+    .map((line) => line.trim().replace(/^\*+/, '').trim())
   return lines.some(
     (line) =>
       /^(?:eslint|oxlint)-/i.test(line)
@@ -220,7 +214,10 @@ function documentationLine(
 
 /** Return whether a documentation line is meaningful rather than a divider. */
 function isMeaningfulDocumentation(content: string): boolean {
-  return content !== '' && !/^[-_=~*]{3,}$/.test(content)
+  if (content === '') {
+    return false
+  }
+  return !/^[-_=~*]{3,}$/.test(content)
 }
 
 /** Count meaningful documentation lines in one comment token. */
@@ -264,7 +261,10 @@ function commentLineCount(
 }
 
 function isRuleOptions(value: unknown): value is RuleOptions {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  return !Array.isArray(value)
 }
 
 const commentShorterThanFunction: Rule = {
@@ -347,5 +347,4 @@ const commentShorterThanFunction: Rule = {
     }
   },
 }
-
 export { commentShorterThanFunction }

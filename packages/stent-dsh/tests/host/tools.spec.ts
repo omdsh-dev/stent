@@ -22,8 +22,8 @@ const echoTool = defineTool({
     schema: { type: 'string' },
     render: (_args, value) => [{ type: 'text', text: value }],
   },
-  async execute(args) {
-    return args.text ?? ''
+  execute(args) {
+    return Promise.resolve(args.text ?? '')
   },
 })
 

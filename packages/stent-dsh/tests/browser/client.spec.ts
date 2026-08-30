@@ -80,7 +80,7 @@ const commandContribution = (name: string): CommandContribution => ({
   available: () => true,
   ui: {
     kind: 'popupSelect',
-    options: async () => [],
+    options: () => Promise.resolve([]),
     onSelect: () => {},
   },
 })
@@ -117,7 +117,9 @@ describe('stent-dsh browser entry', () => {
   it('delegates slot registration and its disposer', async () => {
     const { ctx, slots } = await bench()
     const service = ctx.get('stentClient') as StentClientService
-    const component = () => null
+    const component = () => {
+      return null
+    }
     const dispose = service.registerSlot({ name: 'root' }, component)
     expect(slots.get('root')?.component).toBe(component)
     dispose()

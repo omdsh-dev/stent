@@ -63,7 +63,10 @@ export function functionName(node: AstNode): string | undefined {
 /** Return the name bound by a simple variable declarator. */
 function bindingName(pattern: unknown): string | undefined {
   const node = asNode(pattern)
-  return node?.type === 'Identifier' ? node.name : undefined
+  if (node?.type !== 'Identifier') {
+    return undefined
+  }
+  return node.name
 }
 
 /** Return a class method's identifier or literal property name. */

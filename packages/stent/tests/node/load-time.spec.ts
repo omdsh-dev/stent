@@ -98,7 +98,9 @@ describe('stent load-time transformation (child processes)', () => {
     const out = runCase('afterMutate')
     expect(out).toContain('PASS afterMutate greet(world): "HELLO WORLD"')
   })
+})
 
+describe('stent load-time async and dynamic cases', () => {
   it('keeps the settled value when an async after handler mutates in place', () => {
     const out = runCase('afterAsyncMutate')
     expect(out).toContain('PASS afterAsyncMutate fetchCount(ab): "COUNT:2"')
@@ -173,6 +175,9 @@ describe('stent load-time transformation (child processes)', () => {
     expect(out).toContain('PASS dynamicRemove patched add(2,3): 23')
     expect(out).toContain('PASS dynamicRemove original add(2,3): 5')
   })
+})
+
+describe('stent load-time cache and required cases', () => {
   it('checks required flags from the dynamic runtime registry', () => {
     const out = runCase('dynamicRequired')
     expect(out).toContain('PASS dynamicRequired no throw: ""')
@@ -212,7 +217,9 @@ describe('stent load-time transformation (child processes)', () => {
       'PASS retransformEsmRollback restores cached instance: true',
     )
   })
+})
 
+describe('stent load-time binding requirements', () => {
   it('invalidates both the require cache and the ESM load cache for CommonJS', () => {
     const out = runCase('retransformCjsDual')
     expect(out).toContain('PASS retransformCjsDual shared instance: true')

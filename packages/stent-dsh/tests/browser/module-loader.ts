@@ -63,7 +63,10 @@ export function seedMap(entries: Record<string, unknown>): void {
 
 /** Registration ids drop the `/client` suffix (mirrors client-modules). */
 function stripClientSuffix(spec: string): string {
-  return spec.endsWith('/client') ? spec.slice(0, -'/client'.length) : spec
+  if (!spec.endsWith('/client')) {
+    return spec
+  }
+  return spec.slice(0, -'/client'.length)
 }
 
 function resolve(spec: string): unknown {
