@@ -11,8 +11,6 @@
     "tests/**/*.ts"
   ],
   "ignoreDependencies": [
-    "@stylistic/eslint-plugin",
-    "eslint-plugin-sonarjs",
     "stent-compat-target"
   ]
 }

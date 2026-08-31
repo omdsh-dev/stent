@@ -47,9 +47,7 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1-0",
     "@oh-my-dsh/stent": "workspace:^",
-    "@stylistic/eslint-plugin": "^5.10.0",
     "@types/node": "^22.20.0",
-    "eslint-plugin-sonarjs": "^4.1.0",
     "knip": "^6.16.1",
     "oxfmt": "0.64.0",
     "oxlint": "1.76.0",

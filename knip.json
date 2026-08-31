@@ -17,8 +17,6 @@
       "ignoreDependencies": [
         "@oh-my-dsh/stent-api",
         "@oh-my-dsh/stent-dsh",
-        "@stylistic/eslint-plugin",
-        "eslint-plugin-sonarjs",
         "stent-target-fixture"
       ]
     }
