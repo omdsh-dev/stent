@@ -4,6 +4,7 @@
     "../../.oxlintrc.base.json"
   ],
   "ignorePatterns": [
-    "tests/fixtures/**"
+    "tests/fixtures/**",
+    "**/*.mjs"
   ]
 }

@@ -4,6 +4,20 @@
     "../../.oxlintrc.base.json"
   ],
   "ignorePatterns": [
-    "tests/fixtures/**"
-  ]
+    "tests/fixtures/**",
+    "**/*.mjs"
+  ],
+  "rules": {
+    "eslint/no-await-in-loop": "off", // Perf
+
+    "eslint/max-params": ["error", { "max": 4 }], // Restriction
+    "node/no-process-env": "off", // Restriction
+    "node/no-top-level-await": "off", // Restriction
+    "unicorn/no-process-exit": "off", // Restriction
+    "import/no-dynamic-require": "off", // Restriction
+    "typescript/no-dynamic-delete": "off", // Restriction
+    "eslint/class-methods-use-this": "off", // Restriction
+
+    "unicorn/no-null": "off" // Style
+  }
 }

@@ -4,6 +4,12 @@
     "../../.oxlintrc.base.json"
   ],
   "ignorePatterns": [
-    "tests/fixtures/**"
-  ]
+    "tests/fixtures/**",
+    "**/*.mjs"
+  ],
+  "rules": {
+    "node/no-top-level-await": "off", // Restriction
+    "eslint/class-methods-use-this": "off", // Restriction
+    "typescript/no-explicit-any": "off" // Restriction
+  }
 }

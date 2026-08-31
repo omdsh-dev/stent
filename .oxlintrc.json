@@ -5,6 +5,14 @@
   ],
   "ignorePatterns": [
     "tests/fixtures/**",
-    "packages/*/tests/fixtures/**"
-  ]
+    "packages/**"
+  ],
+  "rules": {
+    "node/no-process-env": "off", // Restriction
+    "node/no-top-level-await": "off", // Restriction
+    "unicorn/no-process-exit": "off", // Restriction
+    "import/no-default-export": "off", // Restriction
+    
+    "vitest/require-hook": ["error", { "allowedFunctionCalls": ["ruleTester.run"] }] // Style
+  }
 }
