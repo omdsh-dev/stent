@@ -9,15 +9,46 @@
  */
 
 import type {
+  ArrayPattern,
+  ArrowFunctionExpression,
   Expression,
-  Identifier,
-  Literal,
+  FunctionDeclaration,
+  FunctionExpression,
   Node,
+  ObjectPattern,
   Pattern,
   SpreadElement,
 } from 'estree'
 
 import type { MatchedFunction } from './ast-types.ts'
+
+/** A function-like estree node after method/property unwrapping. */
+type FunctionNode =
+  | FunctionDeclaration
+  | FunctionExpression
+  | ArrowFunctionExpression
+
+/**
+ * Unwrap a method or object property to its function value.
+ *
+ * @param node - The selected AST node.
+ * @returns The node itself when it is already function-shaped, its `value` for
+ *   MethodDefinition/Property nodes, or `undefined` for any other shape.
+ */
+function functionValue(node: Node): FunctionNode | undefined {
+  let fn: Node = node
+  if (node.type === 'MethodDefinition' || node.type === 'Property') {
+    fn = node.value
+  }
+  if (
+    fn.type !== 'FunctionDeclaration'
+    && fn.type !== 'FunctionExpression'
+    && fn.type !== 'ArrowFunctionExpression'
+  ) {
+    return undefined
+  }
+  return fn
+}
 
 /**
  * Return whether the matcher selected a class constructor.
@@ -33,116 +64,55 @@ function isConstructorTarget(node: Node, parent: Node): boolean {
   )
 }
 
-/**
- * Extract a transformable function from the matched node. Class methods and
- * object properties are unwrapped to their `value`. Unsupported nodes return
- * `undefined`; an arrow whose parameter pattern binds `arguments` also returns
- * `undefined` so the transform does not guess which binding its body means.
- * Constructor detection is separate and is not performed by this helper.
- *
- * @param node - The matched AST node.
- * @returns The function with its body and params, or `undefined` to skip.
- */
-function matchFunction(node: Node): MatchedFunction | undefined {
-  let fn: Node = node
-  if (node.type === 'MethodDefinition' || node.type === 'Property') {
-    fn = node.value
-  }
-  const type = fn.type
-  if (
-    type !== 'FunctionDeclaration'
-    && type !== 'FunctionExpression'
-    && type !== 'ArrowFunctionExpression'
-  ) {
-    return undefined
-  }
-  const functionNode = fn
-  const arrow = type === 'ArrowFunctionExpression'
-  if (arrow) {
-    // A parameter literally named `arguments` would shadow the outer
-    // `arguments` object the body may reference; skip rather than guess which
-    // one the body means. All other pattern shapes (rest, defaults,
-    // destructuring) are supported.
-    if (
-      functionNode.params.some((param) => patternNames(param).has('arguments'))
-    ) {
-      return undefined
+/** Patterns bound by one object-pattern property list. */
+function objectNestedPatterns(pattern: ObjectPattern): Pattern[] {
+  const nested: Pattern[] = []
+  for (const property of pattern.properties) {
+    if (property.type === 'RestElement') {
+      nested.push(property.argument)
+    } else {
+      nested.push(property.value)
     }
   }
-  return {
-    node: functionNode,
-    arrow,
-    body: functionNode.body,
-    params: functionNode.params,
-    async: functionNode.async ?? false,
-    generator: functionNode.generator ?? false,
+  return nested
+}
+
+/** Patterns a bound pattern directly nests (empty for leaves). */
+function nestedPatterns(pattern: Pattern): Pattern[] {
+  switch (pattern.type) {
+    case 'Identifier': {
+      return []
+    }
+    case 'AssignmentPattern': {
+      return [pattern.left]
+    }
+    case 'RestElement': {
+      return [pattern.argument]
+    }
+    case 'ObjectPattern': {
+      return objectNestedPatterns(pattern)
+    }
+    case 'ArrayPattern': {
+      return pattern.elements.filter(
+        (element): element is Pattern => element !== null,
+      )
+    }
+    case 'MemberExpression': {
+      return []
+    }
+    default: {
+      return []
+    }
   }
 }
 
-/**
- * Convert a bound parameter pattern into the expression that rebuilds its value
- * for the synthetic arrow argument array. Patterns bind their names before the
- * injected statements run, so identifiers, defaults, rest, and destructuring
- * can be reconstructed. The result is a new partial object/array for
- * destructured parameters; computed destructuring keys are evaluated again
- * during reconstruction.
- *
- * @param pattern - A parameter pattern.
- * @returns The array element expression (spread for rest), or null for a
- *   pattern shape the transform does not convert.
- */
-function patternToExpression(
-  pattern: Pattern,
-): Expression | SpreadElement | null {
-  switch (pattern.type) {
-    case 'Identifier':
-      return { type: 'Identifier', name: pattern.name }
-    case 'AssignmentPattern':
-      return patternToExpression(pattern.left)
-    case 'RestElement':
-      return {
-        type: 'SpreadElement',
-        argument: patternToExpression(pattern.argument) as Expression,
-      }
-    case 'ObjectPattern':
-      return {
-        type: 'ObjectExpression',
-        properties: pattern.properties.map((prop) => {
-          if (prop.type === 'RestElement') {
-            return {
-              type: 'SpreadElement',
-              argument: patternToExpression(prop.argument) as Expression,
-            }
-          }
-          return {
-            type: 'Property',
-            kind: 'init',
-            method: false,
-            shorthand: false,
-            computed: prop.computed,
-            key: prop.key as Identifier | Literal,
-            value: patternToExpression(prop.value) as Expression,
-          }
-        }),
-      }
-    case 'ArrayPattern':
-      return {
-        type: 'ArrayExpression',
-        elements: pattern.elements.map((element) => {
-          if (element === null) {
-            return null
-          }
-          if (element.type === 'RestElement') {
-            return {
-              type: 'SpreadElement',
-              argument: patternToExpression(element.argument) as Expression,
-            }
-          }
-          return patternToExpression(element)
-        }),
-      }
-    default:
-      return null
+/** Recursive helper for {@link patternNames}. */
+function collectPatternNames(pattern: Pattern, out: Set<string>): void {
+  if (pattern.type === 'Identifier') {
+    out.add(pattern.name)
+  }
+  for (const nested of nestedPatterns(pattern)) {
+    collectPatternNames(nested, out)
   }
 }
 
@@ -158,38 +128,141 @@ function patternNames(pattern: Pattern): Set<string> {
   return out
 }
 
-/** Recursive helper for {@link patternNames}. */
-function collectPatternNames(pattern: Pattern, out: Set<string>): void {
-  switch (pattern.type) {
-    case 'Identifier':
-      out.add(pattern.name)
-      break
-    case 'AssignmentPattern':
-      collectPatternNames(pattern.left, out)
-      break
-    case 'RestElement':
-      collectPatternNames(pattern.argument, out)
-      break
-    case 'ObjectPattern':
-      for (const prop of pattern.properties) {
-        if (prop.type === 'RestElement') {
-          collectPatternNames(prop.argument, out)
-        } else {
-          collectPatternNames(prop.value, out)
-        }
-      }
-      break
-    case 'ArrayPattern':
-      for (const element of pattern.elements) {
-        if (element !== null) {
-          collectPatternNames(element, out)
-        }
-      }
-      break
-    default:
-      // Other ESTree Pattern variants do not bind parameter names here.
-      break
+/** Whether any parameter binds the identifier `arguments`. */
+function bindsArgumentsName(params: Pattern[]): boolean {
+  for (const param of params) {
+    if (patternNames(param).has('arguments')) {
+      return true
+    }
   }
+  return false
+}
+
+/**
+ * Extract a transformable function from the matched node. Class methods and
+ * object properties are unwrapped to their `value`; unsupported nodes return
+ * `undefined`. An arrow whose parameter pattern binds `arguments` also returns
+ * `undefined` so the transform does not guess which binding its body means.
+ */
+function matchFunction(node: Node): MatchedFunction | undefined {
+  const functionNode = functionValue(node)
+  if (functionNode === undefined) {
+    return undefined
+  }
+  const arrow = functionNode.type === 'ArrowFunctionExpression'
+  /* A parameter literally named `arguments` would shadow the outer `arguments`
+     object the body may reference; skip rather than guess which one the body
+     means. All other pattern shapes (rest, defaults, destructuring) work. */
+  if (arrow && bindsArgumentsName(functionNode.params)) {
+    return undefined
+  }
+  return {
+    node: functionNode,
+    arrow,
+    body: functionNode.body,
+    params: functionNode.params,
+    async: functionNode.async ?? false,
+    generator: functionNode.generator ?? false,
+  }
+}
+
+/** Rebuilt value for pattern shapes that cannot produce a real value. */
+const UNSUPPORTED_PATTERN_VALUE: Expression = {
+  type: 'Identifier',
+  name: 'undefined',
+}
+
+/** Rebuild one object-pattern property value list. */
+function objectPatternExpression(
+  pattern: ObjectPattern,
+  rebuild: (pattern: Pattern) => Expression,
+): Expression {
+  return {
+    type: 'ObjectExpression',
+    properties: pattern.properties.map((property) => {
+      if (property.type === 'RestElement') {
+        return { type: 'SpreadElement', argument: rebuild(property.argument) }
+      }
+      return {
+        type: 'Property',
+        kind: 'init',
+        method: false,
+        shorthand: false,
+        computed: property.computed,
+        key: property.key,
+        value: rebuild(property.value),
+      }
+    }),
+  }
+}
+
+/** Rebuild one array-pattern element list. */
+function arrayPatternExpression(
+  pattern: ArrayPattern,
+  rebuild: (pattern: Pattern) => Expression,
+): Expression {
+  return {
+    type: 'ArrayExpression',
+    elements: pattern.elements.map((element) => {
+      if (element === null) {
+        return null
+      }
+      if (element.type === 'RestElement') {
+        return { type: 'SpreadElement', argument: rebuild(element.argument) }
+      }
+      return rebuild(element)
+    }),
+  }
+}
+
+/**
+ * Rebuild a pattern as a plain value expression; no spread or hole is produced,
+ * and shapes that cannot be a value fall back to an identifier evaluating to
+ * `undefined`.
+ */
+function patternValue(pattern: Pattern): Expression {
+  switch (pattern.type) {
+    case 'Identifier': {
+      return { type: 'Identifier', name: pattern.name }
+    }
+    case 'AssignmentPattern': {
+      return patternValue(pattern.left)
+    }
+    case 'ObjectPattern': {
+      return objectPatternExpression(pattern, patternValue)
+    }
+    case 'ArrayPattern': {
+      return arrayPatternExpression(pattern, patternValue)
+    }
+    case 'RestElement': {
+      return UNSUPPORTED_PATTERN_VALUE
+    }
+    case 'MemberExpression': {
+      return UNSUPPORTED_PATTERN_VALUE
+    }
+    default: {
+      return UNSUPPORTED_PATTERN_VALUE
+    }
+  }
+}
+/**
+ * Convert a bound parameter pattern into the expression that rebuilds its value
+ * for the synthetic arrow argument array. Patterns bind their names before the
+ * injected statements run, so identifiers, defaults, rest, and destructuring
+ * can be reconstructed. The result is a new partial object/array for
+ * destructured parameters; computed destructuring keys are evaluated again
+ * during reconstruction.
+ */
+function patternToExpression(
+  pattern: Pattern,
+): Expression | SpreadElement | null {
+  if (pattern.type === 'RestElement') {
+    return { type: 'SpreadElement', argument: patternValue(pattern.argument) }
+  }
+  if (pattern.type === 'MemberExpression') {
+    return null
+  }
+  return patternValue(pattern)
 }
 
 export { isConstructorTarget, matchFunction, patternToExpression }

@@ -9,10 +9,20 @@
 
 import type { RuleTester } from 'oxlint/plugins-dev'
 
-type Rule = Parameters<RuleTester['run']>[1]
+type Rule = RuleTester['run'] extends (
+  ruleName: string,
+  rule: infer InferredRule,
+  tests: never,
+) => void
+  ? InferredRule
+  : never
 type RuleFactory = Extract<Rule, { create: (...args: never[]) => unknown }>
 type VisitorObject = ReturnType<RuleFactory['create']>
-type RuleContext = Parameters<RuleFactory['create']>[0]
+type RuleContext = RuleFactory['create'] extends (
+  context: infer InferredContext,
+) => unknown
+  ? InferredContext
+  : never
 
 const statementTypes = new Set([
   'BreakStatement',
@@ -55,6 +65,10 @@ const moduleDeclarationTypes = new Set([
   'ExportNamedDeclaration',
 ])
 
+const defaultMaximum = 220
+const oneStatement = 1
+const noStatements = 0
+
 function isObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object') {
     return false
@@ -62,25 +76,18 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null
 }
 
-function countArrayStatements(
-  values: unknown[],
-  seen: WeakSet<object>,
-): number {
-  let count = 0
-  for (const child of values) {
-    count += countStatements(child, seen)
-  }
-  return count
-}
-
 function nodeType(value: Record<string, unknown>): string | undefined {
-  const type = value.type
+  const { type } = value
   if (typeof type !== 'string') {
     return undefined
   }
   return type
 }
 
+/**
+ * Report whether a key holds the declaration of a module statement, whose own
+ * statement is already counted through its export wrapper.
+ */
 function isModuleDeclarationKey(
   key: string,
   type: string | undefined,
@@ -94,56 +101,48 @@ function isModuleDeclarationKey(
   return moduleDeclarationTypes.has(type)
 }
 
-function countNodeChildren(
-  node: Record<string, unknown>,
-  seen: WeakSet<object>,
-  type: string | undefined,
-): number {
-  let count = 0
-  for (const [key, child] of Object.entries(node)) {
-    if (key === 'parent') {
-      continue
-    }
-    count += countStatements(child, seen, !isModuleDeclarationKey(key, type))
+/** Return the statement one node contributes on its own. */
+function ownStatements(type: string | undefined, includeSelf: boolean): number {
+  if (!includeSelf || type === undefined) {
+    return noStatements
   }
-  return count
+  if (statementTypes.has(type)) {
+    return oneStatement
+  }
+  return noStatements
 }
 
 function countStatements(
   value: unknown,
-  seen = new WeakSet(),
-  includeSelf = true,
+  seen: WeakSet<object>,
+  includeSelf: boolean,
 ): number {
-  if (Array.isArray(value)) {
-    return countArrayStatements(value, seen)
-  }
   if (!isObject(value) || seen.has(value)) {
-    return 0
+    return noStatements
   }
   seen.add(value)
-  const node = value
-  const type = nodeType(node)
-  let own = 0
-  if (includeSelf && type !== undefined && statementTypes.has(type)) {
-    own = 1
+  const type = nodeType(value)
+  let count = ownStatements(type, includeSelf)
+  for (const [key, child] of Object.entries(value)) {
+    if (key !== 'parent') {
+      count += countStatements(child, seen, !isModuleDeclarationKey(key, type))
+    }
   }
-  return own + countNodeChildren(node, seen, type)
+  return count
 }
 
 function configuredMaximum(options: readonly unknown[]): number {
-  const option = options[0]
+  const [option] = options
   if (typeof option === 'number') {
     return option
   }
-  if (
-    typeof option === 'object'
-    && option !== null
-    && !Array.isArray(option)
-    && typeof (option as { max?: unknown }).max === 'number'
-  ) {
-    return (option as { max: number }).max
+  if (isObject(option) && !Array.isArray(option)) {
+    const { max } = option
+    if (typeof max === 'number') {
+      return max
+    }
   }
-  return 220
+  return defaultMaximum
 }
 
 const maxStatementsPerFile: Rule = {
@@ -175,7 +174,7 @@ const maxStatementsPerFile: Rule = {
     const max = configuredMaximum(context.options)
     return {
       Program(node) {
-        const actual = countStatements(node)
+        const actual = countStatements(node, new WeakSet(), true)
         if (actual > max) {
           context.report({
             node,

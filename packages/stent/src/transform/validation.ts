@@ -9,6 +9,11 @@
 
 import type { PatchId, StentPatchStub } from './types.ts'
 
+/** Length of an empty string or an empty path list. */
+const EMPTY_LENGTH = 0
+/** The smallest valid zero-based match index. */
+const MINIMUM_INDEX = 0
+
 /**
  * Validate the patch id embedded in generated bridge calls and diagnostics.
  *
@@ -21,7 +26,7 @@ import type { PatchId, StentPatchStub } from './types.ts'
  *   outside `[A-Za-z0-9._:/+-]`.
  */
 function validatePatchId(id: PatchId): void {
-  if (!/^[A-Za-z0-9._:/+-]{1,120}$/.test(id)) {
+  if (!/^[A-Za-z0-9._:/+-]{1,120}$/u.test(id)) {
     throw new Error(
       `stent: patch id ${JSON.stringify(id)} must be 1-120 chars of [A-Za-z0-9._:/+-]`,
     )
@@ -32,7 +37,10 @@ type PatchTarget = StentPatchStub['target']
 
 /** Validate the target module name. */
 function validateTargetModule(target: PatchTarget): void {
-  if (typeof target.module !== 'string' || target.module.length === 0) {
+  if (
+    typeof target.module !== 'string'
+    || target.module.length === EMPTY_LENGTH
+  ) {
     throw new Error('stent: patch target.module must be a non-empty string')
   }
 }
@@ -41,7 +49,7 @@ function validateTargetModule(target: PatchTarget): void {
 function validateVersionRange(target: PatchTarget): void {
   if (
     typeof target.versionRange !== 'string'
-    || target.versionRange.length === 0
+    || target.versionRange.length === EMPTY_LENGTH
   ) {
     throw new Error(
       'stent: patch target.versionRange must be a non-empty string',
@@ -69,9 +77,9 @@ function validateFilePaths(target: PatchTarget): void {
   }
   if (
     !Array.isArray(target.filePaths)
-    || target.filePaths.length === 0
+    || target.filePaths.length === EMPTY_LENGTH
     || target.filePaths.some(
-      (path) => typeof path !== 'string' || path.length === 0,
+      (path) => typeof path !== 'string' || path.length === EMPTY_LENGTH,
     )
   ) {
     throw new Error(
@@ -85,6 +93,17 @@ function validateRequired(required: unknown): void {
   if (required !== undefined && typeof required !== 'boolean') {
     throw new Error('stent: patch.required must be a boolean when present')
   }
+}
+
+/** Whether an index is unset, null, or a non-negative integer. */
+function isValidIndex(index: number | null | undefined): boolean {
+  if (index === undefined || index === null) {
+    return true
+  }
+  if (!Number.isInteger(index)) {
+    return false
+  }
+  return index >= MINIMUM_INDEX
 }
 
 /** Validate match indices on the target and function query. */
@@ -127,17 +146,6 @@ function validatePatchStatic(
   validateRequired(patch.required)
   validateTargetIndices(patch.target)
   validateOperation(patch.operation)
-}
-
-/** Whether an index is unset, null, or a non-negative integer. */
-function isValidIndex(index: number | null | undefined): boolean {
-  if (index === undefined || index === null) {
-    return true
-  }
-  if (!Number.isInteger(index)) {
-    return false
-  }
-  return index >= 0
 }
 
 export { validatePatchId, validatePatchStatic }

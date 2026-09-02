@@ -17,37 +17,20 @@
  * @module @oh-my-dsh/stent-api/compat/service
  */
 
-import { Service } from '@deepseek-ai/cordis'
 import type { Context, Fiber } from '@deepseek-ai/cordis'
-import { getStent, isStentInstalled } from '@oh-my-dsh/stent'
+import { Service } from '@deepseek-ai/cordis'
 import type {
-  StentService,
+  PatchId,
   StentCall,
   StentHandler,
   StentPatch,
-  PatchId,
+  StentService,
 } from '@oh-my-dsh/stent'
-import { serveBrowserTransform } from '@oh-my-dsh/stent/browser'
+import { getStent, isStentInstalled } from '@oh-my-dsh/stent'
 import type { ServeBrowserTransformOptions } from '@oh-my-dsh/stent/browser'
+import { serveBrowserTransform } from '@oh-my-dsh/stent/browser'
 
 import type { StentCompatConfig, StentCompatTarget } from './types.ts'
-
-export type {
-  StentCompatConfig,
-  StentCompatPatch,
-  StentCompatTarget,
-} from './types.ts'
-
-export type {
-  StentCall,
-  StentHandler,
-  StentInvoke,
-  StentOperation,
-  StentPatch,
-  StentTarget,
-  PatchId,
-} from '@oh-my-dsh/stent'
-export type { ServeBrowserTransformOptions } from '@oh-my-dsh/stent/browser'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -56,9 +39,18 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+/** Listener-set size at which a declared target's patch is enabled or disabled. */
+const NO_LISTENERS = 0
+
+/**
+ * One observation listener registered through
+ * {@link StentCompatService.observe}.
+ */
+type StentCompatObserver = (call: StentCall) => void
+
 class StentCompatService extends Service {
   /** Service key under which this class registers on `ctx`. */
-  static provide = 'stentCompat'
+  public static provide = 'stentCompat'
 
   /** The low-level Stent registry this facade drives (mounted on demand). */
   private readonly stent: StentService
@@ -75,7 +67,7 @@ class StentCompatService extends Service {
   private readonly targetIds = new Set<PatchId>()
   /** Runtime patch ids registered through this service. */
   private readonly registered = new Set<PatchId>()
-  private readonly observers = new Map<string, Set<(call: StentCall) => void>>()
+  private readonly observers = new Map<string, Set<StentCompatObserver>>()
 
   /**
    * Create and install the compat adapter.
@@ -83,41 +75,54 @@ class StentCompatService extends Service {
    * @param ctx - Cordis context that owns the service.
    * @param config - Declared observation targets; duplicate names fail loud.
    */
-  constructor(ctx: Context, config: StentCompatConfig) {
+  public constructor(ctx: Context, config: StentCompatConfig) {
     super(ctx, 'stentCompat')
-    // The low-level registry is optional and mounted on demand: a consumer
-    // mounts this facade alone and never imports the low-level package. It
-    // resolves from the MOUNTING fiber's context (this fiber's parent), so
-    // patch registrations are owned by the plugin that mounted the facade —
-    // the identity the low-level service uses to keep a patch id exclusive
-    // to one owner across HMR generations — instead of by this child fiber.
+    /* The low-level registry is optional and mounted on demand: a consumer
+       mounts this facade alone and never imports the low-level package. It
+       resolves from the MOUNTING fiber's context (this fiber's parent), so
+       patch registrations are owned by the plugin that mounted the facade —
+       the identity the low-level service uses to keep a patch id exclusive
+       to one owner across HMR generations — instead of by this child fiber. */
     const owner = ctx.fiber.parent
     this.ownerFiber = owner.fiber
     this.stent = getStent(owner)
     for (const target of config.targets ?? []) {
-      if (this.targets.has(target.name)) {
-        throw new Error(
-          `stent-compat: target "${target.name}" is declared more than once`,
-        )
-      }
-      if (this.targetIds.has(target.patch.id)) {
-        throw new Error(
-          `stent-compat: patch id "${target.patch.id}" is declared more than once`,
-        )
-      }
-      this.targets.set(target.name, target)
-      this.targetIds.add(target.patch.id)
-      // Claim the metadata while the facade mounts, before target modules are
-      // evaluated. The placeholder stays disabled until the first observer
-      // subscribes; this keeps observation lazy without a static installer.
-      this.stent.register({
-        id: target.patch.id,
-        target: target.patch.target,
-        operation: target.patch.operation,
-        handler: () => undefined,
-      })
-      this.stent.disable(target.patch.id)
+      this.claimTarget(target)
     }
+  }
+
+  /**
+   * Claim one declared target's metadata with a disabled placeholder.
+   *
+   * The claim happens while the facade mounts, before target modules are
+   * evaluated. The placeholder stays disabled until the first observer
+   * subscribes; this keeps observation lazy without a static installer.
+   *
+   * @param target - The declared observation target.
+   * @throws When the target name or its patch id is declared twice.
+   */
+  private claimTarget(target: StentCompatTarget): void {
+    if (this.targets.has(target.name)) {
+      throw new Error(
+        `stent-compat: target "${target.name}" is declared more than once`,
+      )
+    }
+    if (this.targetIds.has(target.patch.id)) {
+      throw new Error(
+        `stent-compat: patch id "${target.patch.id}" is declared more than once`,
+      )
+    }
+    this.targets.set(target.name, target)
+    this.targetIds.add(target.patch.id)
+    this.stent.register({
+      id: target.patch.id,
+      target: target.patch.target,
+      operation: target.patch.operation,
+      handler: () => {
+        /* Placeholder claim: observe() swaps in the live listener handler. */
+      },
+    })
+    this.stent.disable(target.patch.id)
   }
 
   /**
@@ -135,15 +140,15 @@ class StentCompatService extends Service {
    * @returns The registered patch id.
    * @throws When the id is already claimed.
    */
-  registerPatch(patch: StentPatch): PatchId {
+  public registerPatch(patch: StentPatch): PatchId {
     if (this.registered.has(patch.id) || this.targetIds.has(patch.id)) {
       throw new Error(
         `stent-compat: patch id "${patch.id}" is already claimed (registerPatch or a declared observation target)`,
       )
     }
-    // No bridge check here: binding a handler is harmless when the
-    // transforms are absent (the low-level registry has the same posture) —
-    // the bridge check belongs to observe, whose contract promises delivery.
+    /* No bridge check here: binding a handler is harmless when the
+       transforms are absent (the low-level registry has the same posture) —
+       the bridge check belongs to observe, whose contract promises delivery. */
     this.stent.register(patch)
     this.registered.add(patch.id)
     return patch.id
@@ -158,7 +163,7 @@ class StentCompatService extends Service {
    *
    * @param id - The patch id.
    */
-  unregisterPatch(id: PatchId): void {
+  public unregisterPatch(id: PatchId): void {
     if (!this.registered.has(id)) {
       return
     }
@@ -173,7 +178,7 @@ class StentCompatService extends Service {
    *
    * @param id - The patch id.
    */
-  disablePatch(id: PatchId): void {
+  public disablePatch(id: PatchId): void {
     this.stent.disable(id)
   }
 
@@ -183,7 +188,7 @@ class StentCompatService extends Service {
    * @param id - The patch id.
    * @param handler - The trusted runtime handler.
    */
-  enablePatch(id: PatchId, handler: StentHandler): void {
+  public enablePatch(id: PatchId, handler: StentHandler): void {
     this.stent.enable(id, handler)
   }
 
@@ -195,26 +200,22 @@ class StentCompatService extends Service {
    * @param options - Route, patches array, and degradation policy.
    * @returns A disposer removing the route.
    */
-  serveBundle(options: ServeBrowserTransformOptions): () => void {
+  public serveBundle(options: ServeBrowserTransformOptions): () => void {
     return serveBrowserTransform(this.ctx, options)
   }
 
   /**
-   * Observe calls to a declared target.
+   * Resolve a declared target that is ready to be observed.
    *
    * Fails loud when the Stent bridge is not installed: resolving `ctx.stent`
    * alone does not imply the load-time hooks or browser bridge are active, and
-   * an adapter must not register a patch that can never take effect. The
-   * low-level registration is owned by the plugin that mounted this facade;
-   * another plugin's observe of the same target patch id fails loud at the
-   * low-level registry (a patch id is exclusive to one owner).
+   * an adapter must not register a patch that can never take effect.
    *
    * @param name - The declared target name.
-   * @param listener - Called with each observed call record.
-   * @returns A disposer removing this listener (the patch stays enabled while
-   *   other listeners remain).
+   * @returns The declared target.
+   * @throws When the name is unknown or the Stent bridge is not installed.
    */
-  observe(name: string, listener: (call: StentCall) => void): () => void {
+  private resolveTarget(name: string): StentCompatTarget {
     const target = this.targets.get(name)
     if (target === undefined) {
       throw new Error(
@@ -226,15 +227,34 @@ class StentCompatService extends Service {
         'stent-compat: the Stent bridge is not installed; install the dynamic Stent hooks before loading the target module',
       )
     }
-    const listeners =
-      this.observers.get(name) ?? new Set<(call: StentCall) => void>()
-    if (listeners.size === 0) {
-      // First listener for this name: enable the metadata claimed during
-      // construction. The listener joins only after the claim/enable step so
-      // a cross-owner failure cannot leave stale listener state behind.
+    return target
+  }
+
+  /**
+   * Observe calls to a declared target.
+   *
+   * Fails loud when the Stent bridge is not installed (see
+   * {@link StentCompatService.resolveTarget}). The low-level registration is
+   * owned by the plugin that mounted this facade; another plugin's observe of
+   * the same target patch id fails loud at the low-level registry (a patch id
+   * is exclusive to one owner).
+   *
+   * @param name - The declared target name.
+   * @param listener - Called with each observed call record.
+   * @returns A disposer removing this listener (the patch stays enabled while
+   *   other listeners remain).
+   */
+  public observe(name: string, listener: StentCompatObserver): () => void {
+    const target = this.resolveTarget(name)
+    const listeners = this.observers.get(name) ?? new Set<StentCompatObserver>()
+    if (listeners.size === NO_LISTENERS) {
+      /* First listener for this name: enable the metadata claimed during
+         construction. The listener joins only after the claim/enable step so
+         a cross-owner failure cannot leave stale listener state behind. */
       this.stent.enable(target.patch.id, (call: StentCall) => {
-        for (const current of [...listeners]) {
-          current(call)
+        const current = [...listeners]
+        for (const observer of current) {
+          observer(call)
         }
       })
     }
@@ -242,11 +262,11 @@ class StentCompatService extends Service {
     this.observers.set(name, listeners)
     return () => {
       listeners.delete(listener)
-      if (listeners.size === 0) {
+      if (listeners.size === NO_LISTENERS) {
         this.observers.delete(name)
-        // Only disable while this facade's generation still owns the patch:
-        // a newer HMR generation may have taken the entry over, and its
-        // observation must survive this cleanup.
+        /* Only disable while this facade's generation still owns the patch:
+           a newer HMR generation may have taken the entry over, and its
+           observation must survive this cleanup. */
         if (this.stent.owns(target.patch.id, this.ownerFiber)) {
           this.stent.disable(target.patch.id)
         }
@@ -256,3 +276,18 @@ class StentCompatService extends Service {
 }
 
 export { StentCompatService }
+export type {
+  StentCompatConfig,
+  StentCompatPatch,
+  StentCompatTarget,
+} from './types.ts'
+export type {
+  PatchId,
+  StentCall,
+  StentHandler,
+  StentInvoke,
+  StentOperation,
+  StentPatch,
+  StentTarget,
+} from '@oh-my-dsh/stent'
+export type { ServeBrowserTransformOptions } from '@oh-my-dsh/stent/browser'

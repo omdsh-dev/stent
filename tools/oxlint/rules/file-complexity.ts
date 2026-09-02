@@ -12,11 +12,33 @@
 
 import type { RuleTester } from 'oxlint/plugins-dev'
 
-type Rule = Parameters<RuleTester['run']>[1]
+type Rule = RuleTester['run'] extends (
+  ruleName: string,
+  rule: infer InferredRule,
+  tests: never,
+) => void
+  ? InferredRule
+  : never
 type RuleFactory = Extract<Rule, { create: (...args: never[]) => unknown }>
 type VisitorObject = ReturnType<RuleFactory['create']>
-type RuleContext = Parameters<RuleFactory['create']>[0]
+type RuleContext = RuleFactory['create'] extends (
+  context: infer InferredContext,
+) => unknown
+  ? InferredContext
+  : never
 type VisitorKeys = Readonly<Record<string, readonly string[]>>
+
+/** Traversal state shared by one file-complexity walk. */
+interface ComplexityScan {
+  readonly seen: WeakSet<object>
+  readonly visitorKeys: VisitorKeys
+}
+
+/** The score of one value plus the children still to visit. */
+interface ComplexityStep {
+  readonly score: number
+  readonly children: readonly unknown[]
+}
 
 const functionTypes = new Set([
   'ArrowFunctionExpression',
@@ -39,6 +61,12 @@ const decisionTypes = new Set([
 const logicalAssignmentOperators = new Set(['&&=', '||=', '??='])
 const optionalChainTypes = new Set(['CallExpression', 'MemberExpression'])
 
+const defaultMaximum = 100
+const baseComplexity = 1
+const decisionPoint = 1
+const noComplexity = 0
+const emptyStep: ComplexityStep = { score: noComplexity, children: [] }
+
 function isObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object') {
     return false
@@ -47,11 +75,20 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 function nodeType(node: Record<string, unknown>): string | undefined {
-  const type = node.type
+  const { type } = node
   if (typeof type !== 'string') {
     return undefined
   }
   return type
+}
+
+/** Report whether an assignment uses one of the logical operators. */
+function isLogicalAssignment(node: Record<string, unknown>): boolean {
+  const { operator } = node
+  if (typeof operator !== 'string') {
+    return false
+  }
+  return logicalAssignmentOperators.has(operator)
 }
 
 function isDecisionNode(node: Record<string, unknown>, type: string): boolean {
@@ -62,10 +99,7 @@ function isDecisionNode(node: Record<string, unknown>, type: string): boolean {
     return true
   }
   if (type === 'AssignmentExpression') {
-    if (typeof node.operator !== 'string') {
-      return false
-    }
-    return logicalAssignmentOperators.has(node.operator)
+    return isLogicalAssignment(node)
   }
   if (decisionTypes.has(type)) {
     return true
@@ -73,88 +107,73 @@ function isDecisionNode(node: Record<string, unknown>, type: string): boolean {
   return optionalChainTypes.has(type) && node.optional === true
 }
 
-function nodeComplexity(node: Record<string, unknown>): number {
-  const type = nodeType(node)
-  if (type === undefined) {
-    return 0
-  }
-  let score = 0
+function nodeComplexity(node: Record<string, unknown>, type: string): number {
+  let score = noComplexity
   if (functionTypes.has(type)) {
-    score++
+    score += decisionPoint
   }
   if (isDecisionNode(node, type)) {
-    score++
+    score += decisionPoint
   }
   return score
 }
 
-function countArrayComplexity(
-  values: unknown[],
-  seen: WeakSet<object>,
-  visitorKeys: VisitorKeys,
-): number {
-  let score = 0
-  for (const value of values) {
-    score += countComplexity(value, seen, visitorKeys)
-  }
-  return score
-}
-
-function countObjectComplexity(
+/** Return the child values Oxlint's visitor keys declare for a node. */
+function keyedChildren(
   node: Record<string, unknown>,
-  seen: WeakSet<object>,
-  visitorKeys: VisitorKeys,
-): number {
-  const type = nodeType(node)
-  if (type === undefined) {
-    return 0
-  }
-  let score = nodeComplexity(node)
-  const keys = visitorKeys[type] ?? []
-  for (const key of keys) {
-    score += countComplexity(node[key], seen, visitorKeys)
-  }
-  return score
+  keys: readonly string[],
+): readonly unknown[] {
+  return keys.map((key) => node[key])
 }
 
-function countComplexity(
-  value: unknown,
-  seen: WeakSet<object>,
-  visitorKeys: VisitorKeys,
-): number {
+/** Score one value and return the children that still have to be visited. */
+function complexityStep(value: unknown, scan: ComplexityScan): ComplexityStep {
   if (Array.isArray(value)) {
-    return countArrayComplexity(value, seen, visitorKeys)
+    return { score: noComplexity, children: value }
   }
-  if (!isObject(value) || seen.has(value)) {
-    return 0
+  if (!isObject(value) || scan.seen.has(value)) {
+    return emptyStep
   }
-  seen.add(value)
-  return countObjectComplexity(value, seen, visitorKeys)
+  scan.seen.add(value)
+  const type = nodeType(value)
+  if (type === undefined) {
+    return emptyStep
+  }
+  return {
+    score: nodeComplexity(value, type),
+    children: keyedChildren(value, scan.visitorKeys[type] ?? []),
+  }
+}
+
+function countComplexity(value: unknown, scan: ComplexityScan): number {
+  const { children, score } = complexityStep(value, scan)
+  let total = score
+  for (const child of children) {
+    total += countComplexity(child, scan)
+  }
+  return total
 }
 
 function calculateFileComplexity(
   value: unknown,
   visitorKeys: VisitorKeys,
 ): number {
-  const seen = new WeakSet()
-  const complexity = countComplexity(value, seen, visitorKeys)
-  return 1 + complexity
+  const scan: ComplexityScan = { seen: new WeakSet(), visitorKeys }
+  return baseComplexity + countComplexity(value, scan)
 }
 
 function configuredMaximum(options: readonly unknown[]): number {
-  const option = options[0]
+  const [option] = options
   if (typeof option === 'number') {
     return option
   }
-  if (
-    typeof option === 'object'
-    && option !== null
-    && !Array.isArray(option)
-    && typeof (option as { max?: unknown }).max === 'number'
-  ) {
-    return (option as { max: number }).max
+  if (isObject(option) && !Array.isArray(option)) {
+    const { max } = option
+    if (typeof max === 'number') {
+      return max
+    }
   }
-  return 100
+  return defaultMaximum
 }
 
 const fileComplexity: Rule = {

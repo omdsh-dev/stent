@@ -14,9 +14,7 @@
  */
 
 import { GLOBAL_BRIDGE_KEY } from './transform/protocol.ts'
-import type { StentOperation, PatchId } from './types.ts'
-
-export { GLOBAL_BRIDGE_KEY }
+import type { PatchId, StentOperation } from './types.ts'
 
 /** Call record published by transformed code and consumed by the runtime. */
 interface StentBridgeCall {
@@ -68,13 +66,15 @@ function subscribeBridge(listener: BridgeListener): () => void {
  * @returns The value to return from the wrapped function.
  */
 function publish(call: StentBridgeCall): unknown {
-  if (listeners.size === 0) {
-    // No handler is registered for this patch (disabled, disposed, or the
-    // patch was never enabled): delegate to the original body untouched.
+  const pending = listeners.values()
+  const first = pending.next()
+  if (first.done === true) {
+    /* No handler is registered for this patch (disabled, disposed, or the
+       patch was never enabled): delegate to the original body untouched. */
     return call.traced()
   }
-  let result: unknown
-  for (const listener of listeners) {
+  let result = first.value(call)
+  for (const listener of pending) {
     result = listener(call)
   }
   return result
@@ -106,10 +106,12 @@ function installBridge(globalObject: object = globalThis): void {
  * @returns Whether the bridge handle is present.
  */
 function isStentInstalled(globalObject: object = globalThis): boolean {
-  return (
-    (globalObject as Record<string, unknown>)[GLOBAL_BRIDGE_KEY] !== undefined
-  )
+  if (!(GLOBAL_BRIDGE_KEY in globalObject)) {
+    return false
+  }
+  return globalObject[GLOBAL_BRIDGE_KEY] !== undefined
 }
 
-export { subscribeBridge, publish, installBridge, isStentInstalled }
+export { installBridge, isStentInstalled, publish, subscribeBridge }
+export { GLOBAL_BRIDGE_KEY } from './transform/protocol.ts'
 export type { StentBridgeCall }

@@ -1,5 +1,3 @@
-import type { AstNode } from './function-lines.ts'
-
 const transparentExpressionTypes = new Set([
   'ParenthesizedExpression',
   'TSAsExpression',
@@ -9,17 +7,21 @@ const transparentExpressionTypes = new Set([
 ])
 
 const directivePatterns = [
-  /^(?:eslint|oxlint)-/i,
-  /^@ts-/i,
-  /^(?:istanbul|c8)\b/i,
-  /^jscpd(?::|-|\s|$)/i,
-  /^[@#]?__PURE__\b/i,
-  /^@?vite-ignore\b/i,
-  /^webpack(?:ignore|chunkname)\b/i,
+  /^(?:eslint|oxlint)-/iu,
+  /^@ts-/iu,
+  /^(?:istanbul|c8)\b/iu,
+  /^jscpd(?::|-|\s|$)/iu,
+  /^[@#]?__PURE__\b/iu,
+  /^@?vite-ignore\b/iu,
+  /^webpack(?:ignore|chunkname)\b/iu,
 ]
 
+interface ReadableNode {
+  readonly type?: string
+}
+
 /** Return whether a node is a transparent export expression. */
-function isTransparentExpression(node: AstNode): boolean {
+function isTransparentExpression(node: ReadableNode): boolean {
   if (node.type === undefined) {
     return false
   }
@@ -27,10 +29,10 @@ function isTransparentExpression(node: AstNode): boolean {
 }
 
 /** Return whether a comment is a tool directive rather than documentation. */
-function isDirective(comment: { value: string }): boolean {
+function isDirective(comment: Readonly<{ value: string }>): boolean {
   const lines = comment.value
-    .split(/\r\n|\r|\n/)
-    .map((line) => line.trim().replace(/^\*+/, '').trim())
+    .split(/\r\n|\r|\n/u)
+    .map((line) => line.trim().replace(/^\*+/u, '').trim())
   for (const line of lines) {
     for (const pattern of directivePatterns) {
       if (pattern.test(line)) {

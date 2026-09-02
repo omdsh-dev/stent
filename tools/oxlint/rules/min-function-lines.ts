@@ -13,24 +13,40 @@ import {
   asNode,
   countLines,
   functionName,
-  type AstNode,
-  type RuleContext,
-} from '../utils/function-lines.ts'
+} from '#tools/oxlint/utils/function-lines'
 
-type Rule = Parameters<RuleTester['run']>[1]
+type Rule = RuleTester['run'] extends (
+  ruleName: string,
+  rule: infer InferredRule,
+  tests: never,
+) => void
+  ? InferredRule
+  : never
 type RuleFactory = Extract<Rule, { create: (...args: never[]) => unknown }>
 type VisitorObject = ReturnType<RuleFactory['create']>
+type RuleContext = RuleFactory['create'] extends (
+  context: infer InferredContext,
+) => unknown
+  ? InferredContext
+  : never
+
+/* The node type is derived from the imported helper: eslint/no-duplicate-imports
+   rejects a second `import type` statement for the same module, and
+   import/consistent-type-specifier-style rejects inline type specifiers. */
+type AstNode = NonNullable<ReturnType<typeof asNode>>
 
 type FunctionKind = 'declaration' | 'expression' | 'method' | 'arrow'
 type MinimumLines = number | false
 
 interface RuleOptions {
-  minLines?: number
-  minimums?: Partial<Record<FunctionKind, MinimumLines>>
-  includeAnonymous?: boolean
-  skipBlankLines?: boolean
-  skipComments?: boolean
+  readonly minLines?: number
+  readonly minimums?: Readonly<Partial<Record<FunctionKind, MinimumLines>>>
+  readonly includeAnonymous?: boolean
+  readonly skipBlankLines?: boolean
+  readonly skipComments?: boolean
 }
+
+const defaultMinimumLines = 5
 
 /** Classify a function so each syntax can have an independent threshold. */
 function functionKind(node: AstNode): FunctionKind {
@@ -56,7 +72,7 @@ function minimumFor(
   if (configured === false) {
     return undefined
   }
-  return configured ?? options.minLines ?? 5
+  return configured ?? options.minLines ?? defaultMinimumLines
 }
 
 function isRuleOptions(value: unknown): value is RuleOptions {
@@ -64,6 +80,44 @@ function isRuleOptions(value: unknown): value is RuleOptions {
     return false
   }
   return !Array.isArray(value)
+}
+
+/** Accept both the numeric shorthand and the object form of the options. */
+function resolveOptions(raw: unknown): RuleOptions {
+  if (typeof raw === 'number') {
+    return { minLines: raw }
+  }
+  if (isRuleOptions(raw)) {
+    return raw
+  }
+  return {}
+}
+
+/** Report one function whose body is shorter than its threshold. */
+function checkFunction(
+  node: AstNode,
+  context: RuleContext,
+  options: RuleOptions,
+): void {
+  const minLines = minimumFor(functionKind(node), options)
+  if (minLines === undefined) {
+    return
+  }
+  const name = functionName(node)
+  if (name === undefined && options.includeAnonymous !== true) {
+    return
+  }
+  const actual = countLines(node, context.sourceCode, {
+    skipBlankLines: options.skipBlankLines ?? true,
+    skipComments: options.skipComments ?? true,
+  })
+  if (actual < minLines) {
+    context.report({
+      node,
+      messageId: 'tooShort',
+      data: { name: name ?? '<anonymous>', actual, min: minLines },
+    })
+  }
 }
 
 const minFunctionLines: Rule = {
@@ -126,50 +180,18 @@ const minFunctionLines: Rule = {
   },
 
   create(context: RuleContext): VisitorObject {
-    const raw = context.options[0]
-    let options: RuleOptions
-    if (typeof raw === 'number') {
-      options = { minLines: raw }
-    } else if (isRuleOptions(raw)) {
-      options = raw
-    } else {
-      options = {}
-    }
-    const includeAnonymous = options.includeAnonymous ?? false
-    const skipBlankLines = options.skipBlankLines ?? true
-    const skipComments = options.skipComments ?? true
-
-    function check(node: AstNode): void {
-      const minLines = minimumFor(functionKind(node), options)
-      if (minLines === undefined) {
-        return
-      }
-      const name = functionName(node)
-      if (name === undefined && !includeAnonymous) {
-        return
-      }
-      const actual = countLines(node, context.sourceCode, {
-        skipBlankLines,
-        skipComments,
-      })
-      if (actual < minLines) {
-        context.report({
-          node,
-          messageId: 'tooShort',
-          data: { name: name ?? '<anonymous>', actual, min: minLines },
-        })
-      }
-    }
+    const [raw] = context.options
+    const options = resolveOptions(raw)
 
     return {
       FunctionDeclaration(node) {
-        check(node)
+        checkFunction(node, context, options)
       },
       FunctionExpression(node) {
-        check(node)
+        checkFunction(node, context, options)
       },
       ArrowFunctionExpression(node) {
-        check(node)
+        checkFunction(node, context, options)
       },
     }
   },

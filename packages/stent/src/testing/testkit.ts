@@ -21,21 +21,24 @@ import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-import type { StentBinding, StentPatchStub } from '../types.ts'
+import type { StentBinding, StentPatchStub } from '#src/types'
+
+/** Exit status of a child that completed its run and wrote an envelope. */
+const COMPLETED_EXIT_CODE = 0
 
 /** Options for {@link runPatchFixture}. */
 interface RunPatchFixtureOptions {
   /** Patch metadata the child registers dynamically before importing the entry. */
-  patches: StentPatchStub[]
+  readonly patches: readonly StentPatchStub[]
   /**
    * Module specifier (path or URL) the child imports after bootstrapping; its
    * default export is the async function run with `args`.
    */
-  entry: string
+  readonly entry: string
   /** Arguments passed to the entry's default export. */
-  args?: unknown
+  readonly args?: unknown
   /** Working directory for the child (module resolution base). */
-  cwd?: string
+  readonly cwd?: string
 }
 
 /** One fixture run's outcome: bindings, result or error, and exit code. */
@@ -48,6 +51,71 @@ interface PatchFixtureResult {
   error?: { name: string; message: string }
   /** Child exit code (0 for a completed run, even when the entry threw). */
   exitCode: number
+}
+
+/** The JSON envelope the child runner writes to stdout. */
+interface FixtureEnvelope {
+  readonly bindings?: Record<string, StentBinding[]>
+  readonly result?: unknown
+  readonly error?: { name: string; message: string }
+}
+
+/** Resolve the child runner, preferring the built sibling over the source. */
+function resolveRunner(): string {
+  const built = fileURLToPath(new URL('testkit-runner.js', import.meta.url))
+  if (existsSync(built)) {
+    return built
+  }
+  return fileURLToPath(new URL('testkit-runner.ts', import.meta.url))
+}
+
+/** Parse JSON text, or return undefined when it is not valid JSON. */
+function parseJson(text: string): unknown {
+  try {
+    const value: unknown = JSON.parse(text)
+    return value
+  } catch {
+    return undefined
+  }
+}
+
+/* The envelope is written by this package's own runner, so the kit validates
+   the JSON container and leaves the field shapes to that contract. */
+
+/** Whether a parsed stdout value is the runner's envelope. */
+function isFixtureEnvelope(value: unknown): value is FixtureEnvelope {
+  if (typeof value !== 'object' || !value) {
+    return false
+  }
+  return true
+}
+
+/**
+ * Turn the child's stdout into the fixture outcome.
+ *
+ * @param stdout - The child's stdout, expected to be one JSON envelope.
+ * @param exitCode - The child's exit code.
+ * @returns The fixture outcome, or undefined when stdout is not an envelope.
+ */
+function parseFixtureResult(
+  stdout: string,
+  exitCode: number,
+): PatchFixtureResult | undefined {
+  const envelope = parseJson(stdout)
+  if (!isFixtureEnvelope(envelope)) {
+    return undefined
+  }
+  const fixtureResult: PatchFixtureResult = {
+    bindings: envelope.bindings ?? {},
+    exitCode,
+  }
+  if (envelope.result !== undefined) {
+    fixtureResult.result = envelope.result
+  }
+  if (envelope.error !== undefined) {
+    fixtureResult.error = envelope.error
+  }
+  return fixtureResult
 }
 
 /**
@@ -65,49 +133,26 @@ interface PatchFixtureResult {
  * @throws When the child process fails or answers no parseable envelope.
  */
 function runPatchFixture(options: RunPatchFixtureOptions): PatchFixtureResult {
-  let runnerName = './testkit-runner.ts'
-  if (
-    existsSync(fileURLToPath(new URL('./testkit-runner.js', import.meta.url)))
-  ) {
-    runnerName = './testkit-runner.js'
-  }
-  const runner = fileURLToPath(new URL(runnerName, import.meta.url))
-  const result = spawnSync(process.execPath, ['--import', 'tsx/esm', runner], {
-    input: JSON.stringify({
-      patches: options.patches,
-      entry: options.entry,
-      args: options.args,
-    }),
-    cwd: options.cwd,
-    encoding: 'utf8',
-    env: { ...process.env },
+  const input = JSON.stringify({
+    patches: options.patches,
+    entry: options.entry,
+    args: options.args,
   })
-  if (result.status !== 0) {
+  const child = spawnSync(
+    process.execPath,
+    ['--import', 'tsx/esm', resolveRunner()],
+    { input, cwd: options.cwd, encoding: 'utf8', env: { ...process.env } },
+  )
+  if (child.status !== COMPLETED_EXIT_CODE) {
     throw new Error(
-      `stent testkit: child exited ${result.status ?? 'non-zero'} (${result.signal ?? 'no signal'})\n${result.stderr}`,
+      `stent testkit: child exited ${child.status ?? 'non-zero'} (${child.signal ?? 'no signal'})\n${child.stderr}`,
     )
   }
-  let envelope: {
-    bindings?: Record<string, StentBinding[]>
-    result?: unknown
-    error?: { name: string; message: string }
-  }
-  try {
-    envelope = JSON.parse(result.stdout) as typeof envelope
-  } catch {
+  const fixtureResult = parseFixtureResult(child.stdout, child.status)
+  if (fixtureResult === undefined) {
     throw new Error(
-      `stent testkit: child answered no parseable envelope\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+      `stent testkit: child answered no parseable envelope\nstdout: ${child.stdout}\nstderr: ${child.stderr}`,
     )
-  }
-  const fixtureResult: PatchFixtureResult = {
-    bindings: envelope.bindings ?? {},
-    exitCode: result.status,
-  }
-  if (envelope.result !== undefined) {
-    fixtureResult.result = envelope.result
-  }
-  if (envelope.error !== undefined) {
-    fixtureResult.error = envelope.error
   }
   return fixtureResult
 }

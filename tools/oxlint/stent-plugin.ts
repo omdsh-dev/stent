@@ -14,7 +14,7 @@ import { minFunctionLines } from './rules/min-function-lines.ts'
 import { noInlineExports } from './rules/no-inline-exports.ts'
 
 type Rule = typeof minFunctionLines
-type OxlintPlugin = {
+interface OxlintPlugin {
   meta: {
     name: string
   }

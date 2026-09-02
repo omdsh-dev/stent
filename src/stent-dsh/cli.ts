@@ -1,24 +1,37 @@
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { delimiter, dirname, join, resolve, sep } from 'node:path'
+import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import type { LauncherArgs } from './args.ts'
 
+const EXIT_FAILURE = 1
+const ONE_LEVEL = 1
+const MAX_PACKAGE_DEPTH = 5
+const CMD_SHIM_TARGET = /^# cmd-shim-target=(?<target>.+)$/mu
+const BASEDIR_TARGET =
+  /\$basedir["']?\/(?<target>\.\.[^"']*?@deepseek-ai\/dsh\/[^\s"']*?\.js)/u
+
+type DirectoryMatcher = (dir: string) => boolean
+
 interface ResolveOptions {
-  dshPath: LauncherArgs['dshPath']
-  pathEnv: LauncherArgs['pathEnv']
-  cwd: LauncherArgs['cwd']
+  readonly dshPath: LauncherArgs['dshPath']
+  readonly pathEnv: LauncherArgs['pathEnv']
+  readonly cwd: LauncherArgs['cwd']
 }
 
 interface ResolvedHost {
-  cliPkgJson: URL
-  fromCli: NodeJS.Require
-  cwd: URL | undefined
+  readonly cliPkgJson: URL
+  readonly fromCli: NodeJS.Require
+  readonly cwd: URL | undefined
 }
 
-interface PackageManifest {
-  name?: unknown
+/** Report launcher guidance on stderr and abort with the documented status. */
+function fail(lines: readonly string[]): never {
+  for (const line of lines) {
+    process.stderr.write(`${line}\n`)
+  }
+  process.exit(EXIT_FAILURE)
 }
 
 /** Look up an executable on PATH (first hit), tolerating empty segments. */
@@ -26,60 +39,50 @@ function which(cmd: string, pathEnv: string | undefined): URL | undefined {
   if (pathEnv === undefined || pathEnv === '') {
     return undefined
   }
-  let names: string[]
+  const names = [cmd]
   if (process.platform === 'win32') {
-    names = [`${cmd}.cmd`, `${cmd}.exe`, cmd]
-  } else {
-    names = [cmd]
+    names.unshift(`${cmd}.cmd`, `${cmd}.exe`)
   }
-  for (const dir of pathEnv.split(delimiter)) {
-    if (dir === '') {
-      continue
-    }
-    for (const name of names) {
-      const candidate = pathToFileURL(join(dir, name))
-      if (existsSync(candidate)) {
-        return candidate
-      }
-    }
-  }
-  return undefined
+  const dirs = pathEnv.split(path.delimiter).filter((dir) => dir !== '')
+  const candidates = dirs.flatMap((dir) =>
+    names.map((name) => pathToFileURL(path.join(dir, name))),
+  )
+  return candidates.find((candidate) => existsSync(candidate))
 }
 
-/**
- * Follow a script shim (pnpm's cmd-shim form) to its target bin file: the
- * trailing `# cmd-shim-target=` marker when present, else the script's
- * `$basedir/...` reference resolved against the shim's own directory.
- */
-function shimTarget(shimPath: URL): URL | undefined {
-  let text: string
+/** The bin path a script shim records, as a marker or a `$basedir` reference. */
+function shimReference(shimPath: URL): string | undefined {
   try {
-    text = readFileSync(shimPath, 'utf8')
+    const text = readFileSync(shimPath, 'utf8')
+    const marker = CMD_SHIM_TARGET.exec(text)?.groups?.target
+    if (marker !== undefined) {
+      return marker.trim()
+    }
+    return BASEDIR_TARGET.exec(text)?.groups?.target
   } catch {
     return undefined
   }
-  const marker = text.match(/^# cmd-shim-target=(.+)$/m)
-  if (marker !== null && marker[1] !== undefined) {
-    return pathToFileURL(
-      resolve(dirname(fileURLToPath(shimPath)), marker[1].trim()),
-    )
-  }
-  const rel = text.match(
-    /\$basedir["']?\/(\.\.[^"']*?@deepseek-ai\/dsh\/[^\s"']*?\.js)/,
-  )
-  if (rel !== null && rel[1] !== undefined) {
-    return pathToFileURL(resolve(dirname(fileURLToPath(shimPath)), rel[1]))
-  }
-  return undefined
 }
 
 /**
- * Resolve a shim or entry path toward the package's bin file: symlink shims
- * realpath straight into the package; script shims stay scripts, so their
- * recorded target is followed instead.
+ * Follow a script shim (pnpm's cmd-shim form) to the bin file it records,
+ * resolved against the shim's own directory.
  */
-function chaseShim(path: URL): URL {
-  const resolved = pathToFileURL(realpathSync(path))
+function shimTarget(shimPath: URL): URL | undefined {
+  const reference = shimReference(shimPath)
+  if (reference === undefined) {
+    return undefined
+  }
+  const shimDir = path.dirname(fileURLToPath(shimPath))
+  return pathToFileURL(path.resolve(shimDir, reference))
+}
+
+/**
+ * Resolve a shim toward the package's bin file: symlink shims realpath into the
+ * package; script shims stay scripts, so their target is followed.
+ */
+function chaseShim(entry: URL): URL {
+  const resolved = pathToFileURL(realpathSync(entry))
   if (
     fileURLToPath(resolved).endsWith('.js')
     || (existsSync(resolved) && statSync(resolved).isDirectory())
@@ -93,51 +96,36 @@ function chaseShim(path: URL): URL {
   return resolved
 }
 
-function directoryForPath(path: URL): string {
-  if (!existsSync(path)) {
-    return dirname(fileURLToPath(path))
-  }
-  if (statSync(path).isDirectory()) {
-    return fileURLToPath(path)
-  }
-  return dirname(fileURLToPath(path))
-}
-
-function findDshBin(dir: string): URL | undefined {
-  const pkgJson = join(dir, 'package.json')
-  if (!existsSync(pkgJson)) {
-    return undefined
+/** Whether `dir` holds the installed DSH package and its bin file. */
+function isDshPackage(dir: string): boolean {
+  const manifestPath = path.join(dir, 'package.json')
+  if (!existsSync(manifestPath)) {
+    return false
   }
   try {
-    const manifest = JSON.parse(
-      readFileSync(pkgJson, 'utf8'),
-    ) as PackageManifest
-    if (manifest.name !== '@deepseek-ai/dsh') {
-      return undefined
+    const manifest: unknown = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    if (
+      typeof manifest === 'object'
+      && manifest !== null
+      && 'name' in manifest
+      && manifest.name === '@deepseek-ai/dsh'
+    ) {
+      return existsSync(path.join(dir, 'lib/bin.js'))
     }
-    const candidate = join(dir, 'lib/bin.js')
-    if (!existsSync(candidate)) {
-      return undefined
-    }
-    return pathToFileURL(candidate)
   } catch {
-    // unparsable manifest: keep walking up
-    return undefined
+    /* Unparsable manifest: keep walking up. */
   }
+  return false
 }
 
-/**
- * Normalize a user-supplied or shim-resolved path to the package's lib/bin.js:
- * accepts the bin file, the package root, or anything inside the package.
- */
-function normalizeCli(path: URL): URL | undefined {
-  let dir = directoryForPath(path)
-  for (let i = 0; i < 5; i++) {
-    const candidate = findDshBin(dir)
-    if (candidate !== undefined) {
-      return candidate
+/** Probe a directory and its parents, stopping at the first match. */
+function walkUp(from: string, matches: DirectoryMatcher): string | undefined {
+  let dir = from
+  for (let depth = 0; depth < MAX_PACKAGE_DEPTH; depth += ONE_LEVEL) {
+    if (matches(dir)) {
+      return dir
     }
-    const parent = dirname(dir)
+    const parent = path.dirname(dir)
     if (parent === dir) {
       return undefined
     }
@@ -146,40 +134,99 @@ function normalizeCli(path: URL): URL | undefined {
   return undefined
 }
 
-/**
- * Resolve a registry-installed @deepseek-ai/dsh from the caller's project or
- * PATH.
- */
-function resolveInstalledCli(cwd: URL, pathEnv: string | undefined): URL {
+/** Normalize a bin file, package root, or inner path to lib/bin.js. */
+function normalizeCli(entry: URL): URL | undefined {
+  const entryPath = fileURLToPath(entry)
+  let start = path.dirname(entryPath)
+  if (existsSync(entry) && statSync(entry).isDirectory()) {
+    start = entryPath
+  }
+  const root = walkUp(start, isDshPackage)
+  if (root === undefined) {
+    return undefined
+  }
+  return pathToFileURL(path.join(root, 'lib/bin.js'))
+}
+
+/** Resolve @deepseek-ai/dsh from the caller's own project dependencies. */
+function requireResolvedCli(cwd: URL): URL | undefined {
   try {
-    const pkgJson = createRequire(new URL('package.json', cwd)).resolve(
-      '@deepseek-ai/dsh/package.json',
-    )
-    const candidate = pathToFileURL(join(dirname(pkgJson), 'lib/bin.js'))
+    const fromCwd = createRequire(new URL('package.json', cwd))
+    const manifestPath = fromCwd.resolve('@deepseek-ai/dsh/package.json')
+    const binPath = path.join(path.dirname(manifestPath), 'lib/bin.js')
+    const candidate = pathToFileURL(binPath)
     if (existsSync(candidate)) {
       return pathToFileURL(realpathSync(candidate))
     }
   } catch {
-    // not a project dependency of the caller's cwd
+    /* Not a project dependency of the caller's cwd. */
   }
+  return undefined
+}
+
+/** Resolve @deepseek-ai/dsh from a `dsh` shim found on PATH. */
+function pathResolvedCli(pathEnv: string | undefined): URL | undefined {
   const onPath = which('dsh', pathEnv)
-  if (onPath !== undefined) {
-    try {
-      const cli = normalizeCli(chaseShim(onPath))
-      if (cli !== undefined) {
-        return cli
-      }
-    } catch {
-      // shim did not lead to the package
+  if (onPath === undefined) {
+    return undefined
+  }
+  try {
+    return normalizeCli(chaseShim(onPath))
+  } catch {
+    /* Shim did not lead to the package. */
+    return undefined
+  }
+}
+
+/** Resolve an installed @deepseek-ai/dsh from the caller's project or PATH. */
+function resolveInstalledCli(cwd: URL, pathEnv: string | undefined): URL {
+  const fromProject = requireResolvedCli(cwd)
+  if (fromProject !== undefined) {
+    return fromProject
+  }
+  const fromPath = pathResolvedCli(pathEnv)
+  if (fromPath !== undefined) {
+    return fromPath
+  }
+  return fail([
+    'stent-dsh: no DSH path was supplied and no installed @deepseek-ai/dsh was found',
+    '  pass --dsh-path <source checkout, package, or bin> or put dsh on PATH',
+  ])
+}
+
+/** Resolve a directory to its source bin or its installed package bin. */
+function resolveDirectoryCli(input: URL): URL | undefined {
+  const sourcePath = path.join(fileURLToPath(input), 'apps/cli/src/bin.ts')
+  const sourceBin = pathToFileURL(sourcePath)
+  if (existsSync(sourceBin)) {
+    return pathToFileURL(realpathSync(sourceBin))
+  }
+  const installedBin = normalizeCli(input)
+  if (installedBin !== undefined) {
+    return pathToFileURL(realpathSync(installedBin))
+  }
+  return undefined
+}
+
+/** Resolve an existing path to the DSH entry it stands for. */
+function resolveExistingDshPath(input: URL): URL {
+  if (statSync(input).isDirectory()) {
+    const fromDirectory = resolveDirectoryCli(input)
+    if (fromDirectory !== undefined) {
+      return fromDirectory
     }
   }
-  console.error(
-    'stent-dsh: no DSH path was supplied and no installed @deepseek-ai/dsh was found',
-  )
-  console.error(
-    '  pass --dsh-path <source checkout, package, or bin> or put dsh on PATH',
-  )
-  process.exit(1)
+  if (fileURLToPath(input).endsWith('.ts')) {
+    return pathToFileURL(realpathSync(input))
+  }
+  const installedBin = normalizeCli(chaseShim(input))
+  if (installedBin !== undefined) {
+    return pathToFileURL(realpathSync(installedBin))
+  }
+  return fail([
+    `stent-dsh: cannot resolve a DSH CLI from path: ${fileURLToPath(input)}`,
+    '  expected a source checkout, @deepseek-ai/dsh package, or bin file',
+  ])
 }
 
 /** Resolve a source checkout, package directory, bin file, or PATH command. */
@@ -192,54 +239,33 @@ function resolveDshPath(
     return resolveInstalledCli(cwd, pathEnv)
   }
   if (!existsSync(input)) {
-    console.error(`stent-dsh: DSH path does not exist: ${fileURLToPath(input)}`)
-    process.exit(1)
+    return fail([`stent-dsh: DSH path does not exist: ${fileURLToPath(input)}`])
   }
-  if (statSync(input).isDirectory()) {
-    const sourceBin = pathToFileURL(
-      join(fileURLToPath(input), 'apps/cli/src/bin.ts'),
-    )
-    if (existsSync(sourceBin)) {
-      return pathToFileURL(realpathSync(sourceBin))
-    }
-    const installedBin = normalizeCli(input)
-    if (installedBin !== undefined) {
-      return pathToFileURL(realpathSync(installedBin))
-    }
-  }
-  if (fileURLToPath(input).endsWith('.ts')) {
-    return pathToFileURL(realpathSync(input))
-  }
-  const installedBin = normalizeCli(chaseShim(input))
-  if (installedBin !== undefined) {
-    return pathToFileURL(realpathSync(installedBin))
-  }
-  console.error(
-    `stent-dsh: cannot resolve a DSH CLI from path: ${fileURLToPath(input)}`,
-  )
-  console.error(
-    '  expected a source checkout, @deepseek-ai/dsh package, or bin file',
-  )
-  process.exit(1)
+  return resolveExistingDshPath(input)
 }
 
+/** The source checkout root a TypeScript DSH entry belongs to. */
 function sourceRootFor(bin: URL): URL | undefined {
   const binPath = fileURLToPath(bin)
   if (!binPath.endsWith('.ts')) {
     return undefined
   }
-  let dir = dirname(binPath)
-  for (let i = 0; i < 5; i++) {
-    if (existsSync(join(dir, 'apps/cli/src/bin.ts'))) {
-      return pathToFileURL(dir + sep)
-    }
-    const parent = dirname(dir)
-    if (parent === dir) {
-      break
-    }
-    dir = parent
+  const root = walkUp(path.dirname(binPath), (dir) =>
+    existsSync(path.join(dir, 'apps/cli/src/bin.ts')),
+  )
+  if (root === undefined) {
+    return undefined
   }
-  return undefined
+  return pathToFileURL(root + path.sep)
+}
+
+/** The CLI manifest that anchors the module fallback for this DSH entry. */
+function cliPackageJsonFor(realBin: URL, sourceRoot: URL | undefined): URL {
+  if (sourceRoot !== undefined) {
+    return new URL('apps/cli/package.json', sourceRoot)
+  }
+  const binDir = path.dirname(fileURLToPath(realBin))
+  return pathToFileURL(path.join(path.dirname(binDir), 'package.json'))
 }
 
 /** Resolve the final DSH entry and the Node settings needed to run it. */
@@ -248,23 +274,13 @@ function resolveHost({ dshPath, pathEnv, cwd }: ResolveOptions): ResolvedHost {
   const realBin = pathToFileURL(realpathSync(resolvedDshPath))
   const sourceRoot = sourceRootFor(realBin)
   if (fileURLToPath(realBin).endsWith('.ts') && sourceRoot === undefined) {
-    console.error(
+    fail([
       `stent-dsh: TypeScript DSH entry is not inside a source checkout: ${fileURLToPath(resolvedDshPath)}`,
-    )
-    process.exit(1)
+    ])
   }
-  let cliPkgJson: URL
-  if (sourceRoot === undefined) {
-    cliPkgJson = pathToFileURL(
-      join(dirname(dirname(fileURLToPath(realBin))), 'package.json'),
-    )
-  } else {
-    cliPkgJson = new URL('apps/cli/package.json', sourceRoot)
-  }
-  const fromCli = createRequire(realBin)
   return {
-    cliPkgJson,
-    fromCli,
+    cliPkgJson: cliPackageJsonFor(realBin, sourceRoot),
+    fromCli: createRequire(realBin),
     cwd: sourceRoot,
   }
 }

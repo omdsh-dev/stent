@@ -2,7 +2,7 @@
  * Node-side materializer for the dsh closure-factory browser bundles.
  *
  * The web shell loads `/plugins/<id>/client.js` as a classic script: the bundle
- * only REGISTERS its factory via `window.__ModuleLoader__.load({id, factory})`
+ * only registers its factory via `window.__ModuleLoader__.load({id, factory})`
  * and every value import goes through the synchronous `require` handed to the
  * factory (the loader module table). Plain `import` of such a bundle yields
  * nothing, and node cannot synchronously `require` the ESM platform seeds — so
@@ -20,42 +20,75 @@
  * their registration call.
  */
 
+import type { SlotRegistry as SlotRegistryClass } from '@deepseek-ai/dsh-client-runtime/client'
+import type { CommandUiRuntime as CommandUiRuntimeClass } from '@deepseek-ai/dsh-client-ui-commands/client'
+
+/** Typed view of the commands registry bundle. */
+interface CommandUiModule extends Record<string, unknown> {
+  readonly CommandUiRuntime: typeof CommandUiRuntimeClass
+}
+
+/** Typed view of the runtime registry bundle. */
+interface SlotRegistryModule extends Record<string, unknown> {
+  readonly SlotRegistry: typeof SlotRegistryClass
+}
+
+/** Whether the commands bundle exposes its runtime class. */
+const isCommandUiModule = (
+  value: Record<string, unknown>,
+): value is CommandUiModule => typeof value.CommandUiRuntime === 'function'
+
+/** Whether the runtime bundle exposes its slot registry class. */
+const isSlotRegistryModule = (
+  value: Record<string, unknown>,
+): value is SlotRegistryModule => typeof value.SlotRegistry === 'function'
+
 /** One registered closure-factory bundle: `factory(require) -> exports`. */
-type Factory = (require: (spec: string) => unknown) => unknown
+type Factory = (require: (spec: string) => unknown) => Record<string, unknown>
+
+/** Registration handoff the window sink receives per bundle. */
+interface ModuleLoaderHandoff {
+  readonly id: string
+  readonly factory: Factory
+}
 
 const factories = new Map<string, Factory>()
 const seeds = new Map<string, unknown>()
-const materialized = new Map<string, unknown>()
+const materialized = new Map<string, Record<string, unknown>>()
+
+const MODULE_LOADER_KEY = '__ModuleLoader__'
+const CLIENT_SUFFIX = '/client'
+const FIRST_INDEX = 0
 
 /** Install the `window.__ModuleLoader__` registration sink (once). */
 function installModuleLoader(): void {
-  const win = globalThis as typeof globalThis & {
-    __ModuleLoader__?: { load(handoff: { id: string; factory: Factory }): void }
-  }
-  if (win.__ModuleLoader__ === undefined) {
-    win.__ModuleLoader__ = {
-      load: (handoff) => {
-        if (factories.has(handoff.id)) {
-          throw new Error(`duplicate factory registration for "${handoff.id}"`)
-        }
-        factories.set(handoff.id, handoff.factory)
-      },
-    }
+  const host = globalThis as Record<PropertyKey, unknown>
+  host[MODULE_LOADER_KEY] ??= {
+    load: (handoff: ModuleLoaderHandoff): void => {
+      if (factories.has(handoff.id)) {
+        throw new Error(`duplicate factory registration for "${handoff.id}"`)
+      }
+      factories.set(handoff.id, handoff.factory)
+    },
   }
 }
 
 /** Preload platform seed modules (ESM namespaces) into the module table. */
-async function seed(...specs: string[]): Promise<void> {
-  for (const spec of specs) {
-    if (seeds.has(spec)) {
-      continue
-    }
-    seeds.set(spec, await import(spec))
+async function seed(...specs: readonly string[]): Promise<void> {
+  const pending = specs.filter((spec) => !seeds.has(spec))
+  const modules = await Promise.all(
+    pending.map(async (spec): Promise<readonly [string, unknown]> => [
+      spec,
+      await import(spec),
+    ]),
+  )
+  for (const [spec, module] of modules) {
+    seeds.set(spec, module)
   }
 }
 
 /** Inject explicit seed values (stubs for heavy render-only deps). */
-function seedMap(entries: Record<string, unknown>): void {
+function seedMap(entries: Readonly<Record<string, unknown>>): void {
   for (const [spec, value] of Object.entries(entries)) {
     seeds.set(spec, value)
   }
@@ -63,22 +96,10 @@ function seedMap(entries: Record<string, unknown>): void {
 
 /** Registration ids drop the `/client` suffix (mirrors client-modules). */
 function stripClientSuffix(spec: string): string {
-  if (!spec.endsWith('/client')) {
+  if (!spec.endsWith(CLIENT_SUFFIX)) {
     return spec
   }
-  return spec.slice(0, -'/client'.length)
-}
-
-function resolve(spec: string): unknown {
-  const id = stripClientSuffix(spec)
-  if (factories.has(id)) {
-    return materialize(id)
-  }
-  const seedModule = seeds.get(spec)
-  if (seedModule !== undefined) {
-    return seedModule
-  }
-  throw new Error(`client bundle module table miss: ${spec}`)
+  return spec.slice(FIRST_INDEX, spec.length - CLIENT_SUFFIX.length)
 }
 
 /**
@@ -87,36 +108,70 @@ function resolve(spec: string): unknown {
  * @param id - The bundle registration id (package name, no `/client`).
  * @returns The factory's `module.exports`.
  */
-// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- callers provide the module table's typed view.
-function materialize<T>(id: string): T {
+function materialize(id: string): Record<string, unknown> {
   const cached = materialized.get(id)
   if (cached !== undefined) {
-    return cached as T
+    return cached
   }
   const factory = factories.get(id)
   if (factory === undefined) {
     throw new Error(`no registered factory for "${id}"`)
   }
-  const exports = factory((spec) => resolve(spec))
-  materialized.set(id, exports)
-  return exports as T
+  const exported = factory((spec) => {
+    const bundleId = stripClientSuffix(spec)
+    if (factories.has(bundleId)) {
+      return materialize(bundleId)
+    }
+    const seedModule = seeds.get(spec)
+    if (seedModule !== undefined) {
+      return seedModule
+    }
+    throw new Error(`client bundle module table miss: ${spec}`)
+  })
+  materialized.set(id, exported)
+  return exported
+}
+
+/**
+ * Materialize a bundle and narrow it to the caller's typed view.
+ *
+ * @param id - The bundle registration id.
+ * @param isModule - Guard that recognizes the expected export shape.
+ * @returns The narrowed module exports.
+ */
+function materializeAs<TModule>(
+  id: string,
+  isModule: (
+    value: Record<string, unknown>,
+  ) => value is TModule & Record<string, unknown>,
+): TModule {
+  const exported = materialize(id)
+  if (!isModule(exported)) {
+    throw new Error(`bundle "${id}" does not expose the expected exports`)
+  }
+  return exported
 }
 
 /** Convenience: seed the platform table and register the given bundle URLs. */
 async function prepareClientBundles(
-  seedsList: string[],
-  bundleUrls: string[],
+  seedsList: readonly string[],
+  bundleUrls: readonly string[],
 ): Promise<void> {
   installModuleLoader()
   await seed(...seedsList)
-  for (const url of bundleUrls) {
-    await import(url)
-  }
+  await Promise.all(
+    bundleUrls.map(async (url): Promise<unknown> => {
+      const bundle: unknown = await import(url)
+      return bundle
+    }),
+  )
 }
 
-// Install the sink at module load: the client specs statically import this
-// helper, so the sink exists before any closure-factory bundle executes its
-// registration call (no separate vitest setupFiles needed).
-installModuleLoader()
-
-export { seedMap, materialize, prepareClientBundles }
+export {
+  isCommandUiModule,
+  isSlotRegistryModule,
+  materializeAs,
+  prepareClientBundles,
+  seedMap,
+}
+export type { CommandUiModule }

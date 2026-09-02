@@ -13,32 +13,45 @@ import type { Context } from '@deepseek-ai/cordis'
 import { isStentDshLaunch } from '@oh-my-dsh/stent/activation'
 import type { StentBinding, StentPatchInfo } from '@oh-my-dsh/stent/types'
 
+/** Delay before the deferred post-boot patch check starts. */
+const PATCH_CHECK_DELAY_MS = 0
+/** Delay allowed for binding reports to flush before the required check. */
+const BINDING_FLUSH_DELAY_MS = 1000
+/** Count of patches still awaiting registration. */
+const NO_PATCHES = 0
+/** Count of bindings still awaiting transformation hooks. */
+const NO_BINDINGS = 0
+
 /** One composed profile row's config surface (the loader row shape). */
 interface StentProfileRow {
-  name?: string
+  readonly name?: string
   /** Row config; `config.stent` is an activation marker, never a patch list. */
-  config?: unknown
-  disabled?: boolean
+  readonly config?: unknown
+  readonly disabled?: boolean
 }
 
 /** The composed profile rows this bootstrap reads (id → row). */
 type StentProfileRows = ReadonlyMap<string, StentProfileRow>
 
+/** Return whether a row config carries a removed YAML patch descriptor. */
+function hasStentPatches(config: unknown): boolean {
+  if (config === null || typeof config !== 'object' || Array.isArray(config)) {
+    return false
+  }
+  if (!('stent' in config)) {
+    return false
+  }
+  const stent: unknown = config.stent
+  if (stent === null || typeof stent !== 'object' || Array.isArray(stent)) {
+    return false
+  }
+  return Object.hasOwn(stent, 'patches')
+}
+
 /** Reject removed YAML patch descriptors at every bootstrap boundary. */
 function assertDynamicProfile(rows: StentProfileRows): void {
   for (const [id, row] of rows) {
-    if (
-      row.config === null
-      || typeof row.config !== 'object'
-      || Array.isArray(row.config)
-    ) {
-      continue
-    }
-    const stent = (row.config as { stent?: unknown }).stent
-    if (stent === null || typeof stent !== 'object' || Array.isArray(stent)) {
-      continue
-    }
-    if (Object.prototype.hasOwnProperty.call(stent, 'patches')) {
+    if (hasStentPatches(row.config)) {
       throw new Error(
         `stent-dsh: profile row ${JSON.stringify(id)} uses config.stent.patches; register patch metadata in plugin code instead`,
       )
@@ -73,26 +86,39 @@ async function checkStentRequiredPatches(
   checkRequiredPatches()
 }
 
+/** Format the hook lines for one patch in the post-boot summary order. */
+function formatPatchLines(
+  patch: StentPatchInfo,
+  runtime: {
+    readonly bindingsOf: (id: string) => readonly StentBinding[]
+  },
+): string[] {
+  const bindings = runtime.bindingsOf(patch.id)
+  if (bindings.length === NO_BINDINGS) {
+    return [`  not hooked ${patch.id} (target not loaded at boot)`]
+  }
+  const lines: string[] = []
+  for (const binding of bindings) {
+    lines.push(
+      `  hooked ${patch.id} → ${binding.module} ${binding.file} (${binding.nodes} node(s))`,
+    )
+  }
+  return lines
+}
+
 /** Print the post-boot summary for patches registered by plugin code. */
 function logHookSummary(
   patches: readonly StentPatchInfo[],
-  runtime: { bindingsOf: (id: string) => readonly StentBinding[] },
+  runtime: {
+    readonly bindingsOf: (id: string) => readonly StentBinding[]
+  },
 ): void {
-  if (patches.length === 0) {
+  if (patches.length === NO_PATCHES) {
     return
   }
   const lines: string[] = []
   for (const patch of patches) {
-    const bindings = runtime.bindingsOf(patch.id)
-    if (bindings.length === 0) {
-      lines.push(`  not hooked ${patch.id} (target not loaded at boot)`)
-      continue
-    }
-    for (const binding of bindings) {
-      lines.push(
-        `  hooked ${patch.id} → ${binding.module} ${binding.file} (${binding.nodes} node(s))`,
-      )
-    }
+    lines.push(...formatPatchLines(patch, runtime))
   }
   process.stderr.write(
     `stent: hooks summary — ${patches.length} patch(es):\n${lines.join('\n')}\n`,
@@ -107,23 +133,21 @@ function logHookSummary(
  * generated row overlay; those plugins register their own metadata while the
  * dynamic hooks are already active.
  */
-function scheduleRequiredPatchCheck(ctx: Context): void {
+function scheduleRequiredPatchCheck(ctx: Readonly<Context>): void {
   if (!isStentDshLaunch()) {
     return
   }
-  ctx.effect(() => {
-    const timer = setTimeout(() => {
-      void (async () => {
-        const { checkRequiredPatches, flushBindingReports } =
-          await import('@oh-my-dsh/stent/node')
-        const { runtime } = await import('@oh-my-dsh/stent')
-        await flushBindingReports(1000)
-        checkRequiredPatches()
-        logHookSummary(runtime.list(), runtime)
-      })()
-    }, 0)
-    return () => {
-      clearTimeout(timer)
+  ctx.effect(async (): Promise<() => void> => {
+    const { setTimeout: defer } = await import('node:timers/promises')
+    await defer(PATCH_CHECK_DELAY_MS)
+    const { checkRequiredPatches, flushBindingReports } =
+      await import('@oh-my-dsh/stent/node')
+    const { runtime } = await import('@oh-my-dsh/stent')
+    await flushBindingReports(BINDING_FLUSH_DELAY_MS)
+    checkRequiredPatches()
+    logHookSummary(runtime.list(), runtime)
+    return (): void => {
+      /* Nothing to release: the deferred check ran to completion. */
     }
   }, 'stent: required patch check')
 }

@@ -10,8 +10,8 @@
  * @module @oh-my-dsh/stent-dsh/host/commands
  */
 
-import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
+import { Service } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {
   CommandDefinition,
@@ -34,16 +34,16 @@ declare module '@deepseek-ai/cordis' {
  */
 class StentCommandsService extends Service {
   /** Service key under which this class registers on `ctx`. */
-  static provide = 'stentCommands'
+  public static provide = 'stentCommands'
   /** The authoritative command registry must be mounted. */
-  static inject = ['commands']
+  public static inject = ['commands']
 
   /**
    * Create and install the Command API.
    *
    * @param ctx - Cordis context that owns the service.
    */
-  constructor(ctx: Context) {
+  public constructor(ctx: Context) {
     super(ctx, 'stentCommands')
   }
 
@@ -53,7 +53,7 @@ class StentCommandsService extends Service {
    * @param definition - Discovery metadata and direct UI handler.
    * @returns The exact effect disposer that unregisters this definition.
    */
-  register(definition: CommandDefinition): () => void {
+  public register(definition: CommandDefinition): () => void {
     return this.ctx.commands.register(definition)
   }
 
@@ -63,7 +63,7 @@ class StentCommandsService extends Service {
    * @param agent - Exact receiving agent and scoped-layer key.
    * @returns Name-sorted descriptors after scoped shadowing.
    */
-  list(agent: Agent): readonly CommandDescriptor[] {
+  public list(agent: Agent): readonly CommandDescriptor[] {
     return this.ctx.commands.list(agent)
   }
 }

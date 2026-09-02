@@ -13,7 +13,7 @@
 
 两个硬边界由代码和测试共同维护:
 
-1. **对内自包含**。`packages/stent/tests/transform/isolation.spec.ts` 扫描
+1. **对内自包含**。`packages/stent/tests/transform/isolation.test.ts` 扫描
    `packages/stent/src/transform` 下每个 `.ts` 文件,断言不存在指向父级目录的包内相对
    import。也就是说该目录可以消费包外的模块(`node:*`、`estree`、`typescript`、
    `@apm-js-collab/code-transformer`),但**绝不能反向依赖**

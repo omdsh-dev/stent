@@ -11,10 +11,20 @@
 
 import type { RuleTester } from 'oxlint/plugins-dev'
 
-type Rule = Parameters<RuleTester['run']>[1]
+type Rule = RuleTester['run'] extends (
+  ruleName: string,
+  rule: infer InferredRule,
+  tests: never,
+) => void
+  ? InferredRule
+  : never
 type RuleFactory = Extract<Rule, { create: (...args: never[]) => unknown }>
 type VisitorObject = ReturnType<RuleFactory['create']>
-type RuleContext = Parameters<RuleFactory['create']>[0]
+type RuleContext = RuleFactory['create'] extends (
+  context: infer InferredContext,
+) => unknown
+  ? InferredContext
+  : never
 
 const noInlineExports: Rule = {
   meta: {

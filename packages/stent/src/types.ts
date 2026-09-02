@@ -12,17 +12,6 @@ import type {
   StentTarget,
 } from './transform/types.ts'
 
-export type {
-  PatchId,
-  StentBinding,
-  StentBindingReport,
-  StentFunctionKind,
-  StentFunctionQuery,
-  StentOperation,
-  StentPatchStub,
-  StentTarget,
-} from './transform/types.ts'
-
 /** Runtime call record published to a patch's tracing channel. */
 interface StentCall {
   /**
@@ -129,17 +118,17 @@ interface StentPatch {
 /** Immutable diagnostic snapshot of one registered patch (no handler functions). */
 interface StentPatchInfo {
   /** Patch id. */
-  id: PatchId
+  readonly id: PatchId
   /** Target descriptor. */
-  target: StentTarget
+  readonly target: StentTarget
   /** Behavior kind. */
-  operation: StentOperation
+  readonly operation: StentOperation
   /** Registration priority (defaults to 0); higher priorities are outer layers. */
-  priority: number
+  readonly priority: number
   /** Whether this Node bootstrap patch must bind a target during startup. */
   required?: boolean
   /** Whether the patch is currently installed. */
-  enabled: boolean
+  readonly enabled: boolean
   /**
    * Load-time bindings recorded for this patch, in recording order. Always
    * present on `list()` entries; registration inputs may omit it.
@@ -147,6 +136,31 @@ interface StentPatchInfo {
   bindings?: readonly StentBinding[]
 }
 
+/** A patch-registry change observed by the Node loader. */
+interface StentPatchChange {
+  /** Whether the change registered (or re-registered) or removed a patch. */
+  type: 'register' | 'remove'
+  /** The patch id the change belongs to. */
+  id: PatchId
+  /** Metadata replaced by this change, when an entry already existed. */
+  previous?: StentPatchInfo
+  /** Metadata installed by this change; absent on removal. */
+  current?: StentPatchInfo
+}
+
+/** Listener notified after patch metadata changes. */
+type StentPatchChangeListener = (change: StentPatchChange) => void
+
+export type {
+  PatchId,
+  StentBinding,
+  StentBindingReport,
+  StentFunctionKind,
+  StentFunctionQuery,
+  StentOperation,
+  StentPatchStub,
+  StentTarget,
+} from './transform/types.ts'
 export type {
   StentCall,
   StentInvoke,
@@ -156,5 +170,7 @@ export type {
   StentReplaceHandler,
   StentHandler,
   StentPatch,
+  StentPatchChange,
+  StentPatchChangeListener,
   StentPatchInfo,
 }

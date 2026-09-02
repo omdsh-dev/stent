@@ -1,4 +1,3 @@
-import { sep } from 'node:path'
 /**
  * Stent-dsh preload: prepares the DSH launch before the official CLI entry
  * module evaluates. The bin only resolves the DSH path; this preload owns
@@ -8,7 +7,9 @@ import { sep } from 'node:path'
  * The bin injects this file through NODE_OPTIONS so the official CLI and every
  * module it imports see the prepared process before their first evaluation.
  */
-import { pathToFileURL, fileURLToPath } from 'node:url'
+
+import path from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { markStentDshLaunch } from '@oh-my-dsh/stent/activation'
 import { installStentHooks } from '@oh-my-dsh/stent/node'
@@ -21,34 +22,81 @@ import {
   resolveYaml,
 } from './stent-dsh/profile.ts'
 
-if (
-  process.env.STENT_PRELOAD_DONE !== '1'
-  && process.env.STENT_DSH_LAUNCH === '1'
-) {
-  await prepareDshLaunch()
+/** First forwarded argv index: the Node binary and the CLI entry come first. */
+const FORWARDED_ARGV_START = 2
+
+type HealProfiles = (packageJson: string, dshHome: string) => void
+/** The launcher options the argument parser hands to every launch step. */
+type LauncherArgs = ReturnType<typeof parseOpt>
+type ResolvedHost = ReturnType<typeof resolveHost>
+type ProfilePaths = ReturnType<typeof resolveProfile>
+type StentConfig = ReturnType<typeof composeStentConfig>
+
+interface LaunchContext {
+  readonly config: StentConfig
+  readonly host: ResolvedHost
+  readonly opt: LauncherArgs
+  readonly profile: ProfilePaths
 }
 
-async function prepareDshLaunch(): Promise<void> {
-  const targetPath = process.env.STENT_DSH_PATH
-  if (targetPath === undefined || targetPath === '') {
-    throw new Error(
-      'stent-dsh: STENT_DSH_PATH is required for launcher preload',
+/** The pre-boot heal the CLI's app-boot module is required to expose. */
+function healerOf(moduleExports: unknown): HealProfiles {
+  if (
+    typeof moduleExports !== 'object'
+    || moduleExports === null
+    || Array.isArray(moduleExports)
+  ) {
+    throw new TypeError(
+      'stent-dsh: @deepseek-ai/dsh-app-boot did not load as a module object',
     )
   }
-
-  const launcherUrl = new URL('./stent-dsh.js', import.meta.url)
-  const launcherCwd = pathToFileURL(
-    `${process.env.STENT_LAUNCHER_CWD ?? process.cwd()}${sep}`,
+  const healProfilesModuleFallback: unknown = Reflect.get(
+    moduleExports,
+    'healProfilesModuleFallback',
   )
-  const dshPath = pathToFileURL(targetPath)
-  const opt = parseOpt(
-    process.argv.slice(2),
+  if (typeof healProfilesModuleFallback !== 'function') {
+    throw new TypeError(
+      'stent-dsh: @deepseek-ai/dsh-app-boot exports no healProfilesModuleFallback',
+    )
+  }
+  return (packageJson: string, dshHome: string): void => {
+    Reflect.apply(healProfilesModuleFallback, undefined, [packageJson, dshHome])
+  }
+}
+
+/** Heal the bundle's and the CLI's dependency closures before the CLI boots. */
+async function healProfiles(
+  host: ResolvedHost,
+  bundlePackageJson: URL,
+  dshHome: URL,
+): Promise<void> {
+  const modulePath = host.fromCli.resolve('@deepseek-ai/dsh-app-boot')
+  const moduleExports: unknown = await import(pathToFileURL(modulePath).href)
+  const heal = healerOf(moduleExports)
+  heal(fileURLToPath(bundlePackageJson), fileURLToPath(dshHome))
+  heal(fileURLToPath(host.cliPkgJson), fileURLToPath(dshHome))
+}
+
+/** The launcher options this preload was started with. */
+function launcherOptions(targetPath: string): LauncherArgs {
+  const launcherUrl = new URL('stent-dsh.js', import.meta.url)
+  const launcherCwd = pathToFileURL(
+    `${process.env.STENT_LAUNCHER_CWD ?? process.cwd()}${path.sep}`,
+  )
+  return parseOpt(
+    process.argv.slice(FORWARDED_ARGV_START),
     process.env,
     launcherUrl,
     launcherCwd,
-    dshPath,
+    pathToFileURL(targetPath),
   )
-  const host = resolveHost(opt)
+}
+
+/** Resolve the profile, its js-yaml, and the composed activation overlay. */
+function composeLaunch(
+  opt: LauncherArgs,
+  host: ResolvedHost,
+): { config: StentConfig; profile: ProfilePaths } {
   const profile = resolveProfile(opt)
   const { requireFromProfile, yaml } = resolveYaml(
     profile.profileDir,
@@ -61,57 +109,80 @@ async function prepareDshLaunch(): Promise<void> {
     requireFromProfile,
     yaml,
   })
+  return { config, profile }
+}
 
+/** Replace the launcher argv with the argument list the CLI expects. */
+function applyCliArgv(
+  opt: LauncherArgs,
+  profile: ProfilePaths,
+  config: StentConfig,
+): void {
+  const cliArgs = buildCliArgs(
+    opt,
+    profile.effectiveProfile,
+    config.enablePath,
+    config.enableOverlay,
+  )
+  const forwarded = process.argv.length - FORWARDED_ARGV_START
+  process.argv.splice(FORWARDED_ARGV_START, forwarded, ...cliArgs)
+}
+
+/** Hand the resolved profile to the CLI and retire the launch handshake. */
+function applyLaunchEnv(profile: ProfilePaths): void {
+  process.env.STENT_PROFILE = fileURLToPath(profile.profileDir)
+  process.env.DSH_HOME = fileURLToPath(profile.dshHome)
+  process.env.STENT_PRELOAD_DONE = '1'
+  delete process.env.STENT_DSH_LAUNCH
+  delete process.env.STENT_DSH_PATH
+  delete process.env.STENT_LAUNCHER_CWD
+}
+
+/** Claim the launch and install the hooks plugin patches register through. */
+function installLaunchHooks(): void {
+  markStentDshLaunch()
+  installStentHooks()
+  process.stderr.write(
+    'stent: dynamic hooks installed — plugin patch registrations are live\n',
+  )
+}
+
+/** Apply the composed launch to this process, in the order the CLI expects. */
+async function activateLaunch(context: LaunchContext): Promise<void> {
+  const { config, host, opt, profile } = context
+  const bundlePackageJson = new URL('../package.json', opt.launcherUrl)
+  await healProfiles(host, bundlePackageJson, profile.dshHome)
+  if (host.cwd !== undefined) {
+    process.chdir(fileURLToPath(host.cwd))
+  }
+  applyCliArgv(opt, profile, config)
+  applyLaunchEnv(profile)
+  process.once('exit', config.cleanup)
+  installLaunchHooks()
+}
+
+async function prepareDshLaunch(): Promise<void> {
+  const targetPath = process.env.STENT_DSH_PATH
+  if (targetPath === undefined || targetPath === '') {
+    throw new Error(
+      'stent-dsh: STENT_DSH_PATH is required for launcher preload',
+    )
+  }
+
+  const opt = launcherOptions(targetPath)
+  const host = resolveHost(opt)
+  const { config, profile } = composeLaunch(opt, host)
   try {
-    const bundlePackageJson = new URL('../package.json', launcherUrl)
-    await healProfiles(host, bundlePackageJson, profile.dshHome)
-    if (host.cwd !== undefined) {
-      process.chdir(fileURLToPath(host.cwd))
-    }
-
-    const cliArgs = buildCliArgs(
-      opt,
-      profile.effectiveProfile,
-      config.enablePath,
-      config.enableOverlay,
-    )
-    process.argv.splice(2, process.argv.length - 2, ...cliArgs)
-    process.env.STENT_PROFILE = fileURLToPath(profile.profileDir)
-    process.env.DSH_HOME = fileURLToPath(profile.dshHome)
-    process.env.STENT_PRELOAD_DONE = '1'
-    delete process.env.STENT_DSH_LAUNCH
-    delete process.env.STENT_DSH_PATH
-    delete process.env.STENT_LAUNCHER_CWD
-    process.once('exit', config.cleanup)
-
-    markStentDshLaunch()
-    installStentHooks()
-    process.stderr.write(
-      'stent: dynamic hooks installed — plugin patch registrations are live\n',
-    )
+    await activateLaunch({ config, host, opt, profile })
   } catch (error) {
     config.cleanup()
     throw error
   }
 }
 
-async function healProfiles(
-  host: ReturnType<typeof resolveHost>,
-  bundlePackageJson: URL,
-  dshHome: URL,
-): Promise<void> {
-  const modulePath = host.fromCli.resolve('@deepseek-ai/dsh-app-boot')
-  const moduleUrl = pathToFileURL(modulePath).href
-  const moduleExports = (await import(moduleUrl)) as {
-    healProfilesModuleFallback: (packageJson: string, dshHome: string) => void
-  }
-  const { healProfilesModuleFallback } = moduleExports
-  healProfilesModuleFallback(
-    fileURLToPath(bundlePackageJson),
-    fileURLToPath(dshHome),
-  )
-  healProfilesModuleFallback(
-    fileURLToPath(host.cliPkgJson),
-    fileURLToPath(dshHome),
-  )
+if (
+  process.env.STENT_PRELOAD_DONE !== '1'
+  && process.env.STENT_DSH_LAUNCH === '1'
+) {
+  await prepareDshLaunch()
 }

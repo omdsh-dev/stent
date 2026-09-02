@@ -1,4 +1,4 @@
-import type { StentOperation, StentTarget, PatchId } from '@oh-my-dsh/stent'
+import type { PatchId, StentOperation, StentTarget } from '@oh-my-dsh/stent'
 
 /**
  * Patch metadata for one compat target; the handler is bound by the runtime

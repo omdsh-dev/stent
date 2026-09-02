@@ -32,39 +32,39 @@ type StentFunctionKind = 'Sync' | 'Async' | 'Callback' | 'Auto'
  */
 type StentFunctionQuery =
   | {
-      className: string
-      methodName: string
-      kind: StentFunctionKind
-      index?: number | null
-      isExportAlias?: boolean
+      readonly className: string
+      readonly methodName: string
+      readonly kind: StentFunctionKind
+      readonly index?: number | null
+      readonly isExportAlias?: boolean
     }
   | {
-      className: string
-      privateMethodName: string
-      kind: StentFunctionKind
-      index?: number | null
+      readonly className: string
+      readonly privateMethodName: string
+      readonly kind: StentFunctionKind
+      readonly index?: number | null
     }
   | {
-      className: string
-      index?: number | null
-      isExportAlias?: boolean
+      readonly className: string
+      readonly index?: number | null
+      readonly isExportAlias?: boolean
     }
   | {
-      methodName: string
-      kind: StentFunctionKind
-      index?: number | null
+      readonly methodName: string
+      readonly kind: StentFunctionKind
+      readonly index?: number | null
     }
   | {
-      functionName: string
-      kind: StentFunctionKind
-      index?: number | null
-      isExportAlias?: boolean
+      readonly functionName: string
+      readonly kind: StentFunctionKind
+      readonly index?: number | null
+      readonly isExportAlias?: boolean
     }
   | {
-      expressionName: string
-      kind: StentFunctionKind
-      index?: number | null
-      isExportAlias?: boolean
+      readonly expressionName: string
+      readonly kind: StentFunctionKind
+      readonly index?: number | null
+      readonly isExportAlias?: boolean
     }
 
 /** Stable identity of one Stent patch. */
@@ -84,38 +84,38 @@ type StentOperation = 'before' | 'after' | 'around' | 'replace'
  */
 interface StentTarget {
   /** Npm package name matched against the resolved module's owner. */
-  module: string
+  readonly module: string
   /** Semver range the owning package version must satisfy. */
-  versionRange: string
+  readonly versionRange: string
   /**
    * Literal matcher path or regular expression; callers conventionally provide
    * a package-relative path, but validation performs no path normalization or
    * traversal check. Cannot be combined with `filePaths`; an empty string
    * currently passes static validation.
    */
-  filePath?: string | RegExp
+  readonly filePath?: string | RegExp
   /**
    * Literal matcher paths; callers conventionally provide package-relative
    * paths, but validation does no normalization or traversal check. Expansion
    * creates one instrumentation per path and this field cannot be combined with
    * `filePath`.
    */
-  filePaths?: string[]
+  readonly filePaths?: readonly string[]
   /**
    * Name-based function query. The current builder supports only the four name
    * fields described by {@link StentFunctionQuery}.
    */
-  functionQuery?: StentFunctionQuery
+  readonly functionQuery?: StentFunctionQuery
   /**
    * Raw esquery selector. It chooses the matched node and takes precedence over
    * the name-matching fields of `functionQuery`.
    */
-  astQuery?: string
+  readonly astQuery?: string
   /**
    * Zero-based match index for raw AST queries; public expansion normalizes
    * omission to null (all matches).
    */
-  index?: number | null
+  readonly index?: number | null
 }
 
 /**
@@ -125,33 +125,33 @@ interface StentTarget {
  */
 interface StentPatchStub {
   /** Id stamped into transformed calls and binding reports. */
-  id: PatchId
+  readonly id: PatchId
   /** Module, file, and function selector to expand and match. */
-  target: StentTarget
+  readonly target: StentTarget
   /** Operation encoded into the bridge call and used by runtime dispatch. */
-  operation: StentOperation
+  readonly operation: StentOperation
   /**
    * Whether Node startup requires a binding for this patch. It is validated on
    * the public stub, then omitted from internal instrumentation; browser
    * transforms ignore it.
    */
-  required?: boolean
+  readonly required?: boolean
   /**
    * Ordering key, defaulting to `0`. Configs sort ascending so higher
    * priorities are nested outermost; entry order for equal priorities belongs
    * to the adapter.
    */
-  priority?: number
+  readonly priority?: number
 }
 
 /** One transformed file binding. */
 interface StentBinding {
   /** Package name of the bound module. */
-  module: string
+  readonly module: string
   /** Package-relative file path that was transformed. */
-  file: string
+  readonly file: string
   /** Number of AST function nodes successfully rewritten. */
-  nodes: number
+  readonly nodes: number
 }
 
 /** One transformed file binding carrying its patch id. */

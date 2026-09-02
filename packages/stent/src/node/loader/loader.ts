@@ -5,18 +5,14 @@
  * @module @oh-my-dsh/stent/node/internal-loader
  */
 
-import { installBridge } from '../../bridge.ts'
+import { installBridge } from '#src/bridge'
 import {
   retransformCommonJs as reloadCommonJs,
   retransformEsm as reloadEsm,
-} from '../../hmr/reload.ts'
-import { runtime } from '../../runtime.ts'
-import type { PatchId } from '../../types.ts'
-import {
-  flushBindingReports,
-  installAsyncHooks,
-  writeAsyncConfig,
-} from './loader-async.ts'
+} from '#src/hmr/reload'
+import { runtime } from '#src/runtime'
+
+import { installAsyncHooks, writeAsyncConfig } from './loader-async.ts'
 import {
   clearSeen,
   createMatcher,
@@ -32,19 +28,33 @@ import {
 } from './loader-sync.ts'
 import type { LoaderState } from './loader-types.ts'
 
+/** Size of an empty collection; named for the no-magic-numbers rule. */
+const EMPTY_COUNT = 0
+/** Result of `indexOf` when the searched value is absent. */
+const NOT_FOUND_INDEX = -1
+/** Number of entries removed when one installation is dropped. */
+const REMOVE_COUNT = 1
+
+/** Describe every required patch that bound no target at load time. */
+function missingRequiredPatches(): string[] {
+  const missing: string[] = []
+  for (const patch of runtime.list()) {
+    if (
+      patch.required === true
+      && runtime.bindingsOf(patch.id).length === EMPTY_COUNT
+    ) {
+      missing.push(
+        `${patch.id} (${patch.target.module} ${String(patch.target.filePath)}, ${patch.operation})`,
+      )
+    }
+  }
+  return missing
+}
+
 /** Verify that every required patch recorded at least one load-time binding. */
 function checkRequiredPatches(): void {
-  const missing = runtime
-    .list()
-    .filter(
-      (patch) =>
-        patch.required === true && runtime.bindingsOf(patch.id).length === 0,
-    )
-    .map(
-      (patch) =>
-        `${patch.id} (${patch.target.module} ${String(patch.target.filePath)}, ${patch.operation})`,
-    )
-  if (missing.length > 0) {
+  const missing = missingRequiredPatches()
+  if (missing.length > EMPTY_COUNT) {
     throw new Error(
       'stent: required patch(es) bound nothing at load time; the target file may be the wrong '
         + `launch form (src vs lib) or the function may have moved: ${missing.join('; ')}`,
@@ -52,27 +62,30 @@ function checkRequiredPatches(): void {
   }
 }
 
-/** Install the process-wide dynamic Stent transformation hooks and bridge. */
-function installStentHooks(): () => void {
-  if (arguments.length !== 0) {
-    throw new Error(
-      'stent: installStentHooks does not accept arguments; use installStentHooks()',
-    )
+/** Whether a dynamic installation is already active in this process. */
+function hasActiveInstallation(): boolean {
+  for (const state of states) {
+    if (state.active) {
+      return true
+    }
   }
-  if (states.some((state) => state.active)) {
-    throw new Error(
-      'stent: installStentHooks allows only one active dynamic installation',
-    )
-  }
-  installBridge()
+  return false
+}
+
+/** Choose the hook flavour this process supports, booting the loader thread. */
+function prepareHookThread(): boolean {
   const syncHooks = supportsSyncHooks()
   if (!syncHooks) {
     installAsyncHooks(import.meta.url)
   }
+  return syncHooks
+}
 
+/** Build the mutable state backing one dynamic installation. */
+function createLoaderState(syncHooks: boolean): LoaderState {
   const instrumentations = currentInstrumentations()
-  const pending = new Map<PatchId, number>()
-  const state: LoaderState = {
+  const pending: LoaderState['pending'] = new Map()
+  return {
     active: true,
     matcher: createMatcher(pending, instrumentations),
     instrumentations,
@@ -83,9 +96,12 @@ function installStentHooks(): () => void {
     pendingPreviousMatchers: [],
     pendingLoadedModules: new Set(),
     retransformQueued: false,
+    retransformPass: undefined,
   }
+}
 
-  states.push(state)
+/** Subscribe to patch changes and install the hooks this state uses. */
+function activateHooks(state: LoaderState): () => void {
   const unsubscribePatchChanges = runtime.onPatchChange((change) => {
     if (
       change.type === 'register'
@@ -97,46 +113,111 @@ function installStentHooks(): () => void {
     }
     refreshDynamicState(state, writeAsyncConfig)
   })
-  if (!syncHooks) {
-    writeAsyncConfig()
-  }
-  if (syncHooks) {
+  if (state.syncHooks) {
     installSynchronousHooks(state)
+  } else {
+    writeAsyncConfig()
   }
   installCompileWrapper()
+  return unsubscribePatchChanges
+}
 
-  return () => {
-    state.active = false
-    unsubscribePatchChanges()
-    state.pending.clear()
-    state.seen.clear()
-    state.pendingPreviousMatchers.length = 0
-    state.pendingLoadedModules.clear()
-    const index = states.indexOf(state)
-    if (index >= 0) {
-      states.splice(index, 1)
-    }
-    for (const transformer of state.transformers.values()) {
-      transformer.free()
-    }
-    state.transformers.clear()
-    writeAsyncConfig()
+/** Release the buffers one disposed installation accumulated. */
+function clearStateBuffers(state: LoaderState): void {
+  state.pending.clear()
+  state.seen.clear()
+  state.pendingPreviousMatchers.length = EMPTY_COUNT
+  state.pendingLoadedModules.clear()
+}
+
+/** Drop one installation from the shared installation list. */
+function removeState(state: LoaderState): void {
+  const index = states.indexOf(state)
+  if (index !== NOT_FOUND_INDEX) {
+    states.splice(index, REMOVE_COUNT)
   }
+}
+
+/** Free every transformer one installation cached. */
+function freeTransformers(state: LoaderState): void {
+  for (const transformer of state.transformers.values()) {
+    transformer.free()
+  }
+  state.transformers.clear()
+}
+
+/** Tear down one dynamic installation and republish the loader config. */
+function disposeInstallation(
+  state: LoaderState,
+  unsubscribePatchChanges: () => void,
+): void {
+  state.active = false
+  unsubscribePatchChanges()
+  clearStateBuffers(state)
+  removeState(state)
+  freeTransformers(state)
+  writeAsyncConfig()
+}
+
+/** Install the process-wide dynamic Stent transformation hooks and bridge. */
+function installStentHooks(): () => void {
+  if (arguments.length > EMPTY_COUNT) {
+    throw new Error(
+      'stent: installStentHooks does not accept arguments; use installStentHooks()',
+    )
+  }
+  if (hasActiveInstallation()) {
+    throw new Error(
+      'stent: installStentHooks allows only one active dynamic installation',
+    )
+  }
+  installBridge()
+  const state = createLoaderState(prepareHookThread())
+  states.push(state)
+  const unsubscribePatchChanges = activateHooks(state)
+  return () => {
+    disposeInstallation(state, unsubscribePatchChanges)
+  }
+}
+
+/** One module reload operation supplied by the HMR implementation. */
+type ReloadOperation<Result> = (
+  target: string,
+  clearSeen: (filename: string) => void,
+) => Result
+
+/** One reload target and the operation that knows how to evict it. */
+interface ReloadRequest<Result> {
+  readonly reload: ReloadOperation<Result>
+  readonly target: string
+}
+
+/** Run a module reload with the loader's current seen-state cleanup. */
+function runRetransform<Result>(request: ReloadRequest<Result>): Result {
+  const { reload } = request
+  const { target } = request
+  return reload(target, clearSeen)
 }
 
 /** Re-evaluate an already-loaded CommonJS module under the current matcher. */
-// oxlint-disable-next-line stent/min-function-lines -- HMR adapter delegates to shared reload logic.
 function retransformCommonJs(filename: string): unknown {
-  return reloadCommonJs(filename, clearSeen)
+  const reloaded = runRetransform({
+    reload: reloadCommonJs,
+    target: filename,
+  })
+  return reloaded
 }
 
 /** Re-evaluate an already-loaded ESM module under the current matcher. */
-// oxlint-disable-next-line stent/min-function-lines -- HMR adapter delegates to shared reload logic.
 async function retransformEsm(url: string): Promise<Record<string, unknown>> {
-  return reloadEsm(url, clearSeen)
+  const reloaded = await runRetransform({
+    reload: reloadEsm,
+    target: url,
+  })
+  return reloaded
 }
 
-export { flushBindingReports }
+export { flushBindingReports } from './loader-async.ts'
 
 export {
   checkRequiredPatches,

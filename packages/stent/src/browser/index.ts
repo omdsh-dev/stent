@@ -15,8 +15,8 @@ export {
   createBrowserTransform,
   createWatchedBrowserTransform,
   repoSourceResolver,
-} from '../transform/browser.ts'
-export { resolvePackageIdentity } from '../transform/identity.ts'
+} from '#src/transform/browser'
+export { resolvePackageIdentity } from '#src/transform/identity'
 export type {
   BrowserTransform,
   BrowserTransformOptions,
@@ -26,4 +26,4 @@ export type {
   TransformOutput,
   WatchedBrowserTransform,
   WatchedBrowserTransformOptions,
-} from '../transform/browser.ts'
+} from '#src/transform/browser'

@@ -2,13 +2,138 @@ import { readFileSync } from 'node:fs'
 import { Module, registerHooks } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
-import { resolvePackageIdentity } from '../../transform/identity.ts'
+import { resolvePackageIdentity } from '#src/transform/identity'
 import {
   getStentTransformer,
   transformStentSource,
-} from '../../transform/matcher.ts'
+} from '#src/transform/matcher'
+
 import { flushBindings, states } from './loader-state.ts'
 import type { CompileFn, LoaderState } from './loader-types.ts'
+
+/** Package identity resolved for a file the loader is about to transform. */
+type ResolvedIdentity = NonNullable<ReturnType<typeof resolvePackageIdentity>>
+/** Transformer the active matcher selected for one module. */
+type ModuleTransformer = ReturnType<typeof getStentTransformer>
+
+/** The part of a load-hook result the transform reads. */
+interface LoadedSource {
+  readonly source?: string | ArrayBuffer | NodeJS.TypedArray | null | undefined
+}
+
+/** One module the synchronous load hook is about to transform. */
+interface LoadRequest {
+  readonly state: LoaderState
+  readonly transformer: NonNullable<ModuleTransformer>
+  readonly result: LoadedSource
+  readonly url: string
+  readonly format: string | null | undefined
+}
+
+/** One CommonJS module the compile wrapper is about to transform. */
+interface CompileRequest {
+  readonly identity: ResolvedIdentity
+  readonly filename: string
+  readonly source: string
+}
+
+/** Prototype slot holding the CommonJS compile implementation. */
+const COMPILE_KEY = '_compile'
+
+/** A module prototype that exposes the CommonJS compile implementation. */
+interface CompileHost {
+  [COMPILE_KEY]: CompileFn
+}
+
+const compileWrapper = { installed: false }
+
+/** Module format Orchestrion expects for a load-hook format. */
+function moduleTypeOf(format: string | null | undefined): 'esm' | 'cjs' {
+  if (format === 'module') {
+    return 'esm'
+  }
+  return 'cjs'
+}
+
+/** File path used to deduplicate transforms for one module URL. */
+function modulePath(url: string): string {
+  if (url.startsWith('file:')) {
+    return fileURLToPath(url)
+  }
+  return url
+}
+
+/** Read the loader-provided source, falling back to the file on disk. */
+function readSource(result: LoadedSource, url: string): string {
+  const { source } = result
+  if (typeof source === 'string') {
+    return source
+  }
+  if (source instanceof ArrayBuffer) {
+    return Buffer.from(new Uint8Array(source)).toString('utf8')
+  }
+  if (ArrayBuffer.isView(source)) {
+    return Buffer.from(
+      source.buffer,
+      source.byteOffset,
+      source.byteLength,
+    ).toString('utf8')
+  }
+  return readFileSync(fileURLToPath(url), 'utf8')
+}
+
+/** Drop the cached transformer for a URL and describe the failed transform. */
+function loadFailure(state: LoaderState, url: string, error: unknown): Error {
+  state.pending.clear()
+  state.transformers.delete(url)
+  return new Error(`stent: failed to transform ${url}`, { cause: error })
+}
+
+/** Transform one loaded module and record the bindings it produced. */
+function runLoadTransform(request: LoadRequest, path: string): string {
+  const { state, transformer, result, url, format } = request
+  try {
+    const transformed = transformStentSource(
+      transformer,
+      readSource(result, url),
+      moduleTypeOf(format),
+    )
+    const identity = resolvePackageIdentity(path)
+    if (identity !== undefined) {
+      flushBindings(state, identity)
+    }
+    return transformed.code
+  } catch (error) {
+    throw loadFailure(state, url, error)
+  }
+}
+
+/** Transformed source for one load, or undefined when it was already seen. */
+function transformLoaded(request: LoadRequest): string | undefined {
+  const { state, url } = request
+  const path = modulePath(url)
+  if (state.seen.has(path)) {
+    return undefined
+  }
+  state.seen.add(path)
+  return runLoadTransform(request, path)
+}
+
+/** Transformer this installation selects for a resolved module identity. */
+function selectTransformer(
+  state: LoaderState,
+  identity: ResolvedIdentity,
+): ModuleTransformer {
+  if (!state.active) {
+    return undefined
+  }
+  return getStentTransformer(
+    state.matcher,
+    identity.name,
+    identity.version,
+    identity.path,
+  )
+}
 
 /** Register synchronous ESM and CJS load hooks for one installation. */
 function installSynchronousHooks(state: LoaderState): void {
@@ -22,13 +147,8 @@ function installSynchronousHooks(state: LoaderState): void {
       if (identity === undefined) {
         return resolved
       }
-      const transformer = getStentTransformer(
-        state.matcher,
-        identity.name,
-        identity.version,
-        identity.path,
-      )
-      if (transformer) {
+      const transformer = selectTransformer(state, identity)
+      if (transformer !== undefined) {
         state.transformers.set(resolved.url, transformer)
       }
       return resolved
@@ -39,106 +159,92 @@ function installSynchronousHooks(state: LoaderState): void {
         return result
       }
       const transformer = state.transformers.get(url)
-      if (!transformer) {
+      if (transformer === undefined) {
         return result
       }
-      let path = url
-      if (url.startsWith('file:')) {
-        path = fileURLToPath(url)
-      }
-      if (state.seen.has(path)) {
+      const source = transformLoaded({
+        state,
+        transformer,
+        result,
+        url,
+        format: context.format,
+      })
+      if (source === undefined) {
         return result
       }
-      state.seen.add(path)
-      try {
-        const source = readSource(result, url)
-        let moduleType: 'esm' | 'cjs' = 'cjs'
-        if (context.format === 'module') {
-          moduleType = 'esm'
-        }
-        const transformed = transformStentSource(
-          transformer,
-          source,
-          moduleType,
-        )
-        const identity = resolvePackageIdentity(path)
-        if (identity !== undefined) {
-          flushBindings(state, identity)
-        }
-        return { ...result, source: transformed.code, shortCircuit: true }
-      } catch (error) {
-        state.pending.clear()
-        state.transformers.delete(url)
-        throw new Error(`stent: failed to transform ${url}`, { cause: error })
-      }
+      return { ...result, source, shortCircuit: true }
     },
   })
 }
 
-let compileWrapperInstalled = false
+/** Restore the seen entry and describe the failed CommonJS transform. */
+function compileFailure(
+  state: LoaderState,
+  filename: string,
+  error: unknown,
+): Error {
+  state.pending.clear()
+  state.seen.delete(filename)
+  return new Error(`stent: failed to transform ${filename}`, { cause: error })
+}
+
+/** Apply one installation's transform to CommonJS source. */
+function compileForState(state: LoaderState, request: CompileRequest): string {
+  const { identity, filename, source } = request
+  const transformer = selectTransformer(state, identity)
+  if (transformer === undefined || state.seen.has(filename)) {
+    return source
+  }
+  state.seen.add(filename)
+  try {
+    const transformed = transformStentSource(transformer, source, 'cjs')
+    flushBindings(state, identity)
+    return transformed.code
+  } catch (error) {
+    throw compileFailure(state, filename, error)
+  }
+}
+
+/** Apply every active installation's transform to CommonJS source. */
+function applyStentTransforms(content: string, filename: string): string {
+  const identity = resolvePackageIdentity(filename)
+  if (identity === undefined) {
+    return content
+  }
+  let source = content
+  for (const state of states) {
+    source = compileForState(state, { identity, filename, source })
+  }
+  return source
+}
+
+/** Whether a module prototype exposes the CommonJS compile implementation. */
+function isCompileHost(value: object): value is CompileHost {
+  if (typeof Reflect.get(value, COMPILE_KEY) !== 'function') {
+    return false
+  }
+  return true
+}
 
 /** Install the process-wide CommonJS compile wrapper once. */
 function installCompileWrapper(): void {
-  if (compileWrapperInstalled) {
+  if (compileWrapper.installed) {
     return
   }
-  compileWrapperInstalled = true
-  const modulePrototype = Module.prototype as unknown as Record<string, unknown>
-  const compileKey = '_compile'
-  const originalCompile = modulePrototype[compileKey] as CompileFn
-  modulePrototype[compileKey] = function (
+  const modulePrototype = Module.prototype
+  if (!isCompileHost(modulePrototype)) {
+    return
+  }
+  compileWrapper.installed = true
+  const originalCompile = modulePrototype[COMPILE_KEY]
+  modulePrototype[COMPILE_KEY] = function stentCompile(
     this: Module,
     content: string,
     filename: string,
-  ) {
-    const identity = resolvePackageIdentity(filename)
-    if (identity !== undefined) {
-      for (const state of states) {
-        if (!state.active) {
-          continue
-        }
-        const transformer = getStentTransformer(
-          state.matcher,
-          identity.name,
-          identity.version,
-          identity.path,
-        )
-        if (!transformer || state.seen.has(filename)) {
-          continue
-        }
-        state.seen.add(filename)
-        try {
-          content = transformStentSource(transformer, content, 'cjs').code
-          flushBindings(state, identity)
-        } catch (error) {
-          state.pending.clear()
-          state.seen.delete(filename)
-          throw new Error(`stent: failed to transform ${filename}`, {
-            cause: error,
-          })
-        }
-      }
-    }
-    return originalCompile.call(this, content, filename)
+  ): unknown {
+    const source = applyStentTransforms(content, filename)
+    return originalCompile.call(this, source, filename)
   }
 }
 
-function readSource(
-  result: {
-    source?: string | ArrayBuffer | NodeJS.TypedArray | null | undefined
-  },
-  url: string,
-): string {
-  if (typeof result.source === 'string') {
-    return result.source
-  }
-  if (result.source instanceof ArrayBuffer) {
-    return Buffer.from(new Uint8Array(result.source)).toString('utf8')
-  }
-  if (result.source != null) {
-    return Buffer.from(result.source as Uint8Array).toString('utf8')
-  }
-  return readFileSync(fileURLToPath(url), 'utf8')
-}
-
-export { installSynchronousHooks, installCompileWrapper }
+export { installCompileWrapper, installSynchronousHooks }

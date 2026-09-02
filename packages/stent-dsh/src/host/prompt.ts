@@ -12,8 +12,8 @@
  * @module @oh-my-dsh/stent-dsh/host/prompt
  */
 
-import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
+import { Service } from '@deepseek-ai/cordis'
 import type {
   AssembleContext,
   PromptContext,
@@ -38,16 +38,16 @@ declare module '@deepseek-ai/cordis' {
  */
 class StentPromptService extends Service {
   /** Service key under which this class registers on `ctx`. */
-  static provide = 'stentPrompt'
+  public static provide = 'stentPrompt'
   /** The authoritative system-prompt registry must be mounted. */
-  static inject = ['systemPrompt']
+  public static inject = ['systemPrompt']
 
   /**
    * Create and install the Prompt API.
    *
    * @param ctx - Cordis context that owns the service.
    */
-  constructor(ctx: Context) {
+  public constructor(ctx: Context) {
     super(ctx, 'stentPrompt')
   }
 
@@ -57,7 +57,7 @@ class StentPromptService extends Service {
    * @param section - The section to register.
    * @returns The exact effect disposer that unregisters it.
    */
-  section(section: PromptSection): () => void {
+  public section(section: PromptSection): () => void {
     return this.ctx.systemPrompt.section(section)
   }
 
@@ -67,7 +67,7 @@ class StentPromptService extends Service {
    * @param context - The context contribution to register.
    * @returns The exact effect disposer that unregisters it.
    */
-  context(context: PromptContext): () => void {
+  public context(context: PromptContext): () => void {
     return this.ctx.systemPrompt.context(context)
   }
 
@@ -77,7 +77,7 @@ class StentPromptService extends Service {
    * @param provider - Evaluated for each assembly with its context.
    * @returns The exact effect disposer that unregisters it.
    */
-  tools(
+  public tools(
     provider: (context: AssembleContext) => ToolProviderResult,
   ): () => void {
     return this.ctx.systemPrompt.tools(provider)
@@ -91,7 +91,7 @@ class StentPromptService extends Service {
    *   a referencing section fail.
    * @returns The exact effect disposer that unregisters it.
    */
-  variable(
+  public variable(
     name: string,
     provider: (context: AssembleContext) => string | undefined,
   ): () => void {

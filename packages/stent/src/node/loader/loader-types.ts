@@ -1,8 +1,8 @@
 import type { Module } from 'node:module'
 
-import type { StentInstrumentationConfig } from '../../transform/config.ts'
-import type { StentMatcher, StentTransformer } from '../../transform/matcher.ts'
-import type { PatchId } from '../../types.ts'
+import type { StentInstrumentationConfig } from '#src/transform/config'
+import type { StentMatcher, StentTransformer } from '#src/transform/matcher'
+import type { PatchId } from '#src/types'
 
 /** The `Module.prototype._compile` function wrapped for CommonJS transforms. */
 type CompileFn = (this: Module, content: string, filename: string) => unknown
@@ -19,6 +19,11 @@ interface LoaderState {
   pendingPreviousMatchers: StentMatcher[]
   pendingLoadedModules: Set<string>
   retransformQueued: boolean
+  /**
+   * The in-flight retransform pass; the next pass awaits it so passes never
+   * overlap.
+   */
+  retransformPass: Promise<void> | undefined
 }
 
 export type { CompileFn, LoaderState }

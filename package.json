@@ -8,6 +8,10 @@
     "node": "^22.19.0 || >=24.0.0"
   },
   "license": "BSD-3-Clause",
+  "imports": {
+    "#src/*": "./src/*.ts",
+    "#tools/*": "./tools/*.ts"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/omdsh-dev/stent.git"

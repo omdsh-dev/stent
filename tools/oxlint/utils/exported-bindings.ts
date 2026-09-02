@@ -4,31 +4,66 @@
  * @module stent/oxlint/utils/exported-bindings
  */
 
-import {
-  asNode,
-  functionName,
-  type AstNode,
-  type SourceCode,
-} from './function-lines.ts'
+import { asNode, functionName } from './function-lines.ts'
+
+/* The node and source-code types are derived from the imported helpers:
+   eslint/no-duplicate-imports rejects a second `import type` statement for the
+   same module, and import/consistent-type-specifier-style rejects inline type
+   specifiers. */
+type AstNode = NonNullable<ReturnType<typeof asNode>>
+type VisitorKeys = Readonly<Record<string, readonly string[]>>
+
+/** The part of Oxlint's source-code object an export scan reads. */
+interface SourceCodeLike {
+  readonly ast: unknown
+  readonly visitorKeys: VisitorKeys
+}
+
+/** Mutable state shared by one export-name traversal. */
+interface ExportScan {
+  readonly visitorKeys: VisitorKeys
+  readonly names: Set<string>
+  readonly seen: WeakSet<object>
+}
+
+/** Report whether a declarator binds one of the exported names. */
+function declaratorIsExported(
+  declaration: unknown,
+  exportedNames: ReadonlySet<string>,
+): boolean {
+  const id = asNode(asNode(declaration)?.id)
+  if (id?.name === undefined) {
+    return false
+  }
+  return exportedNames.has(id.name)
+}
+
+/** Report whether a variable declaration binds one of the exported names. */
+function declaresExportedName(
+  node: AstNode,
+  exportedNames: ReadonlySet<string>,
+): boolean {
+  if (!('declarations' in node)) {
+    return false
+  }
+  const { declarations } = node
+  if (!Array.isArray(declarations)) {
+    return false
+  }
+  for (const declaration of declarations) {
+    if (declaratorIsExported(declaration, exportedNames)) {
+      return true
+    }
+  }
+  return false
+}
 
 function isExportedDeclaration(
   node: AstNode,
   exportedNames: ReadonlySet<string>,
 ): boolean {
   if (node.type === 'VariableDeclaration') {
-    const declarations = (node as unknown as { declarations?: unknown })
-      .declarations
-    if (!Array.isArray(declarations)) {
-      return false
-    }
-    for (const declaration of declarations) {
-      const entry = asNode(declaration)
-      const id = asNode(entry?.id)
-      if (id?.name !== undefined && exportedNames.has(id.name)) {
-        return true
-      }
-    }
-    return false
+    return declaresExportedName(node, exportedNames)
   }
   const name = functionName(node)
   return name !== undefined && exportedNames.has(name)
@@ -49,6 +84,20 @@ function isFunctionNode(node: AstNode): boolean {
   )
 }
 
+/** Settle the export question at one ancestor, or defer to the next one. */
+function ancestorVerdict(
+  node: AstNode,
+  exportedNames: ReadonlySet<string>,
+): boolean | undefined {
+  if (isExportDeclaration(node) || isExportedDeclaration(node, exportedNames)) {
+    return true
+  }
+  if (isFunctionNode(node)) {
+    return false
+  }
+  return undefined
+}
+
 function isExportedNode(
   node: AstNode,
   exportedNames: ReadonlySet<string>,
@@ -58,39 +107,33 @@ function isExportedNode(
   }
   let current = asNode(node.parent)
   while (current !== undefined) {
-    if (isExportDeclaration(current)) {
-      return true
-    }
-    if (isExportedDeclaration(current, exportedNames)) {
-      return true
-    }
-    if (isFunctionNode(current)) {
-      return false
+    const verdict = ancestorVerdict(current, exportedNames)
+    if (verdict !== undefined) {
+      return verdict
     }
     current = asNode(current.parent)
   }
   return false
 }
 
+/** Return the local name an export specifier re-exports, when it has one. */
 function localExportName(value: unknown): string | undefined {
   const node = asNode(value)
-  if (node === undefined) {
+  if (node === undefined || !('local' in node)) {
     return undefined
   }
-  const local = asNode((node as { local?: unknown }).local)
-  return local?.name
+  return asNode(node.local)?.name
 }
 
-type VisitorKeys = Readonly<Record<string, readonly string[]>>
-
+/** Record every local name listed by one `export { ... }` statement. */
 function collectExportedSpecifierNames(
   node: AstNode,
   names: Set<string>,
 ): void {
-  if (node.type !== 'ExportNamedDeclaration') {
+  if (node.type !== 'ExportNamedDeclaration' || !('specifiers' in node)) {
     return
   }
-  const specifiers = (node as { specifiers?: unknown }).specifiers
+  const { specifiers } = node
   if (!Array.isArray(specifiers)) {
     return
   }
@@ -102,48 +145,45 @@ function collectExportedSpecifierNames(
   }
 }
 
-function collectExportedNameArray(
-  values: unknown[],
-  visitorKeys: VisitorKeys,
-  names: Set<string>,
-  seen: WeakSet<object>,
-): void {
-  for (const child of values) {
-    collectExportedNames(child, visitorKeys, names, seen)
-  }
+/** Return the child slots Oxlint's visitor keys declare for a node. */
+function keyedChildren(node: AstNode, visitorKeys: VisitorKeys): unknown[] {
+  const slots = new Map<string, unknown>(Object.entries(node))
+  const keys = visitorKeys[node.type ?? ''] ?? []
+  return keys.map((key) => slots.get(key))
 }
 
-function collectExportedNames(
+/** Record the names of a value and return the children still to visit. */
+function exportScanChildren(
   value: unknown,
-  visitorKeys: VisitorKeys,
-  names: Set<string>,
-  seen: WeakSet<object>,
-): void {
+  scan: ExportScan,
+): readonly unknown[] {
   if (Array.isArray(value)) {
-    collectExportedNameArray(value, visitorKeys, names, seen)
-    return
+    return value
   }
   const node = asNode(value)
-  if (node === undefined) {
-    return
+  if (node === undefined || scan.seen.has(node)) {
+    return []
   }
-  if (seen.has(node)) {
-    return
-  }
-  seen.add(node)
-  collectExportedSpecifierNames(node, names)
-  const keys = visitorKeys[node.type ?? ''] ?? []
-  for (const key of keys) {
-    const child = (node as unknown as Record<string, unknown>)[key]
-    collectExportedNames(child, visitorKeys, names, seen)
+  scan.seen.add(node)
+  collectExportedSpecifierNames(node, scan.names)
+  return keyedChildren(node, scan.visitorKeys)
+}
+
+/** Walk one AST value, recording every explicitly exported local name. */
+function collectExportedNames(value: unknown, scan: ExportScan): void {
+  for (const child of exportScanChildren(value, scan)) {
+    collectExportedNames(child, scan)
   }
 }
 
-function exportedNamesOf(sourceCode: SourceCode): ReadonlySet<string> {
-  const names = new Set<string>()
-  const seen = new WeakSet()
-  collectExportedNames(sourceCode.ast, sourceCode.visitorKeys, names, seen)
-  return names
+function exportedNamesOf(sourceCode: SourceCodeLike): ReadonlySet<string> {
+  const scan: ExportScan = {
+    names: new Set<string>(),
+    seen: new WeakSet(),
+    visitorKeys: sourceCode.visitorKeys,
+  }
+  collectExportedNames(sourceCode.ast, scan)
+  return scan.names
 }
 
 export { exportedNamesOf, isExportDeclaration, isExportedNode }

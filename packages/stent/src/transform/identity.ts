@@ -9,9 +9,8 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join, relative, sep } from 'node:path'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 /** One module's package identity: name, version, and package-relative path. */
 interface PackageIdentity {
   /** Npm package name from the owning manifest. */
@@ -22,14 +21,38 @@ interface PackageIdentity {
   path: string
 }
 
+/** Manifest name/version fields read from a package root. */
+interface ManifestFields {
+  /** Npm package name from the owning manifest. */
+  name: string
+  /** Version from the owning manifest. */
+  version: string
+}
+
+/** Whether a value is a plain JSON object. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  return !Array.isArray(value)
+}
+
+/** A JSON value as a string, or empty for any non-string value. */
+function stringField(value: unknown): string {
+  if (typeof value === 'string') {
+    return value
+  }
+  return ''
+}
+
 /** Nearest package root for a file, or undefined when none exists up the tree. */
 function findPackageRoot(filename: string): string | undefined {
-  let dir = dirname(filename)
+  let dir = path.dirname(filename)
   for (;;) {
-    if (existsSync(join(dir, 'package.json'))) {
+    if (existsSync(path.join(dir, 'package.json'))) {
       return dir
     }
-    const parent = dirname(dir)
+    const parent = path.dirname(dir)
     if (parent === dir) {
       return undefined
     }
@@ -38,7 +61,45 @@ function findPackageRoot(filename: string): string | undefined {
 }
 
 /** Manifest name/version cache, keyed by the package root directory. */
-const manifestCache = new Map<string, { name: string; version: string }>()
+const manifestCache = new Map<string, ManifestFields>()
+
+/**
+ * Read the manifest fields of a package root; unreadable or malformed files
+ * yield empty fields.
+ */
+function readManifest(root: string): ManifestFields {
+  try {
+    const parsed: unknown = JSON.parse(
+      readFileSync(path.join(root, 'package.json'), 'utf8'),
+    )
+    if (isRecord(parsed)) {
+      const { name, version } = parsed
+      return { name: stringField(name), version: stringField(version) }
+    }
+    return { name: '', version: '' }
+  } catch {
+    return { name: '', version: '' }
+  }
+}
+
+/** Cached manifest fields for a package root. */
+function manifestFor(root: string): ManifestFields {
+  const cached = manifestCache.get(root)
+  if (cached !== undefined) {
+    return cached
+  }
+  const manifest = readManifest(root)
+  manifestCache.set(root, manifest)
+  return manifest
+}
+
+/** Convert a file URL to a path, passing plain paths through unchanged. */
+function toFilePath(urlOrPath: string): string {
+  if (urlOrPath.startsWith('file:')) {
+    return fileURLToPath(urlOrPath)
+  }
+  return urlOrPath
+}
 
 /**
  * Resolve the package identity of a module from a path or file URL.
@@ -57,44 +118,19 @@ const manifestCache = new Map<string, { name: string; version: string }>()
 function resolvePackageIdentity(
   urlOrPath: string,
 ): PackageIdentity | undefined {
-  let filename = urlOrPath
-  if (urlOrPath.startsWith('file:')) {
-    filename = fileURLToPath(urlOrPath)
-  }
+  const filename = toFilePath(urlOrPath)
   const root = findPackageRoot(filename)
   if (root === undefined) {
     return undefined
   }
-  let manifest = manifestCache.get(root)
-  if (manifest === undefined) {
-    try {
-      const parsed = JSON.parse(
-        readFileSync(join(root, 'package.json'), 'utf8'),
-      ) as {
-        name?: unknown
-        version?: unknown
-      }
-      let name = ''
-      if (typeof parsed.name === 'string') {
-        name = parsed.name
-      }
-      let version = ''
-      if (typeof parsed.version === 'string') {
-        version = parsed.version
-      }
-      manifest = { name, version }
-    } catch {
-      manifest = { name: '', version: '' }
-    }
-    manifestCache.set(root, manifest)
-  }
+  const manifest = manifestFor(root)
   if (manifest.name === '') {
     return undefined
   }
   return {
     name: manifest.name,
     version: manifest.version,
-    path: relative(root, filename).split(sep).join('/'),
+    path: path.relative(root, filename).split(path.sep).join('/'),
   }
 }
 

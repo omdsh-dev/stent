@@ -18,14 +18,9 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 
-import { markStentDshLaunch } from '../../activation.ts'
-import { installBridge } from '../../bridge.ts'
-import { runtime } from '../../runtime.ts'
-import { StentService } from '../../service.ts'
-import type { StentPatch, StentPatchInfo } from '../../types.ts'
-
-export { StentService, installBridge, runtime }
-export type { StentPatch, StentPatchInfo }
+import { markStentDshLaunch } from '#src/activation'
+import { installBridge } from '#src/bridge'
+import { StentService } from '#src/service'
 
 /** Cordis plugin name used by Loader diagnostics. */
 const name = 'stent'
@@ -44,4 +39,8 @@ async function apply(ctx: Context): Promise<void> {
   await ctx.plugin(StentService)
 }
 
-export { name, apply }
+export { apply, name }
+export { installBridge } from '#src/bridge'
+export { runtime } from '#src/runtime'
+export { StentService } from '#src/service'
+export type { StentPatch, StentPatchInfo } from '#src/types'

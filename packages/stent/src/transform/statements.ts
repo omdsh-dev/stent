@@ -9,77 +9,69 @@
  * @module @oh-my-dsh/stent/transform/statements
  */
 
-import type { Expression, Property, Statement } from 'estree'
+import type {
+  CallExpression,
+  Expression,
+  FunctionExpression,
+  Identifier,
+  MemberExpression,
+  Property,
+  Statement,
+} from 'estree'
 
 import type { MatchedFunction, NameAllocator } from './ast-types.ts'
 import { patternToExpression } from './patterns.ts'
 import { GLOBAL_BRIDGE_KEY } from './protocol.ts'
 
-/**
- * Build an optional capture of an arrow's enclosing `arguments` object.
- *
- * @param name - Capture binding; `undefined` produces no statement.
- * @returns A declaration, or `undefined` when no capture is needed.
- */
-function createOuterArgumentsCapture(
-  name: string | undefined,
-): Statement | undefined {
-  if (name === undefined) {
-    return undefined
-  }
+interface CallNames {
+  argsName: string
+  tracedName: string
+  callName: string
+}
+
+/** Injected statement list inputs. */
+interface InjectedInputs {
+  capture: Statement | undefined
+  args: Statement
+  traced: Statement
+  call: Statement
+  publish: Statement
+}
+
+function member(
+  object: Expression,
+  property: Expression,
+  computed: boolean,
+): MemberExpression {
   return {
-    type: 'VariableDeclaration',
-    kind: 'const',
-    declarations: [
-      {
-        type: 'VariableDeclarator',
-        id: { type: 'Identifier', name },
-        init: { type: 'Identifier', name: 'arguments' },
-      },
-    ],
+    type: 'MemberExpression',
+    computed,
+    optional: false,
+    object,
+    property,
   }
 }
 
-/**
- * Build the ordinary-function slice (requiring unshadowed `arguments`) or arrow
- * pattern array.
- */
-function createArgumentsStatement(
-  matched: MatchedFunction,
-  name: string,
-): Statement {
-  let init: Expression
-  if (matched.arrow) {
-    init = {
-      type: 'ArrayExpression',
-      elements: matched.params.map(patternToExpression),
-    }
-  } else {
-    init = {
-      type: 'CallExpression',
-      optional: false,
-      callee: {
-        type: 'MemberExpression',
-        computed: false,
-        optional: false,
-        object: {
-          type: 'MemberExpression',
-          computed: false,
-          optional: false,
-          object: {
-            type: 'MemberExpression',
-            computed: false,
-            optional: false,
-            object: { type: 'Identifier', name: 'Array' },
-            property: { type: 'Identifier', name: 'prototype' },
-          },
-          property: { type: 'Identifier', name: 'slice' },
-        },
-        property: { type: 'Identifier', name: 'call' },
-      },
-      arguments: [{ type: 'Identifier', name: 'arguments' }],
-    }
+function callExpression(
+  callee: Expression,
+  args: Expression[],
+): CallExpression {
+  return { type: 'CallExpression', optional: false, callee, arguments: args }
+}
+
+function propertyNode(key: string, value: Expression): Property {
+  return {
+    type: 'Property',
+    kind: 'init',
+    method: false,
+    shorthand: false,
+    computed: false,
+    key: { type: 'Identifier', name: key },
+    value,
   }
+}
+
+function variableDeclaration(name: string, init: Expression): Statement {
   return {
     type: 'VariableDeclaration',
     kind: 'const',
@@ -93,188 +85,125 @@ function createArgumentsStatement(
   }
 }
 
+/** Optional capture of an arrow's enclosing `arguments` object. */
+function createOuterArgumentsCapture(
+  name: string | undefined,
+): Statement | undefined {
+  if (name === undefined) {
+    return undefined
+  }
+  return variableDeclaration(name, { type: 'Identifier', name: 'arguments' })
+}
+
+function argumentsInit(matched: MatchedFunction): Expression {
+  if (matched.arrow) {
+    return {
+      type: 'ArrayExpression',
+      elements: matched.params.map(patternToExpression),
+    }
+  }
+  const arrayPrototype = member(
+    { type: 'Identifier', name: 'Array' },
+    { type: 'Identifier', name: 'prototype' },
+    false,
+  )
+  const sliceCall = member(
+    arrayPrototype,
+    { type: 'Identifier', name: 'slice' },
+    false,
+  )
+  const sliceOnArrayPrototype = member(
+    sliceCall,
+    { type: 'Identifier', name: 'call' },
+    false,
+  )
+  return callExpression(sliceOnArrayPrototype, [
+    { type: 'Identifier', name: 'arguments' },
+  ])
+}
+function createArgumentsStatement(
+  matched: MatchedFunction,
+  name: string,
+): Statement {
+  return variableDeclaration(name, argumentsInit(matched))
+}
+
 /**
- * Build an anonymous function closure that replays the original body with
- * `.apply(this, args)`. Ordinary-body `arguments` introspection consequently
- * observes the replay function, not the outer function.
+ * Anonymous closure replaying the original body with `.apply(this, args)`;
+ * ordinary-body `arguments` introspection observes the replay function.
  */
 function createTracedStatement(
   matched: MatchedFunction,
   body: Statement[],
-  argsName: string,
-  tracedName: string,
+  names: Pick<CallNames, 'argsName' | 'tracedName'>,
 ): Statement {
-  return {
-    type: 'VariableDeclaration',
-    kind: 'const',
-    declarations: [
-      {
-        type: 'VariableDeclarator',
-        id: { type: 'Identifier', name: tracedName },
-        init: {
-          type: 'ArrowFunctionExpression',
-          expression: false,
-          generator: false,
-          async: false,
-          params: [],
-          body: {
-            type: 'BlockStatement',
-            body: [
-              {
-                type: 'ReturnStatement',
-                argument: {
-                  type: 'CallExpression',
-                  optional: false,
-                  callee: {
-                    type: 'MemberExpression',
-                    computed: false,
-                    optional: false,
-                    object: {
-                      type: 'FunctionExpression',
-                      id: null,
-                      params: matched.params,
-                      body: { type: 'BlockStatement', body },
-                      generator: matched.generator,
-                      async: matched.async,
-                    },
-                    property: { type: 'Identifier', name: 'apply' },
-                  },
-                  arguments: [
-                    { type: 'ThisExpression' },
-                    { type: 'Identifier', name: argsName },
-                  ],
-                },
-              },
-            ],
-          },
-        },
-      },
-    ],
+  const replay: FunctionExpression = {
+    type: 'FunctionExpression',
+    id: null,
+    params: matched.params,
+    body: { type: 'BlockStatement', body },
+    generator: matched.generator,
+    async: matched.async,
   }
+  const replayCall = callExpression(
+    member(replay, { type: 'Identifier', name: 'apply' }, false),
+    [{ type: 'ThisExpression' }, { type: 'Identifier', name: names.argsName }],
+  )
+  return variableDeclaration(names.tracedName, {
+    type: 'ArrowFunctionExpression',
+    expression: false,
+    generator: false,
+    async: false,
+    params: [],
+    body: {
+      type: 'BlockStatement',
+      body: [{ type: 'ReturnStatement', argument: replayCall }],
+    },
+  })
 }
 
-/** Build the bridge call record; `operation` passes through unvalidated. */
+/** Bridge call record; `operation` passes through unvalidated. */
 function createCallStatement(
   patchId: string,
   operation: string,
-  argsName: string,
-  tracedName: string,
-  callName: string,
+  names: CallNames,
 ): Statement {
-  return {
-    type: 'VariableDeclaration',
-    kind: 'const',
-    declarations: [
-      {
-        type: 'VariableDeclarator',
-        id: { type: 'Identifier', name: callName },
-        init: {
-          type: 'ObjectExpression',
-          properties: [
-            property('id', { type: 'Literal', value: patchId }),
-            property('operation', { type: 'Literal', value: operation }),
-            property('arguments', { type: 'Identifier', name: argsName }),
-            property('self', { type: 'ThisExpression' }),
-            property('traced', { type: 'Identifier', name: tracedName }),
-          ],
-        },
-      },
+  return variableDeclaration(names.callName, {
+    type: 'ObjectExpression',
+    properties: [
+      propertyNode('id', { type: 'Literal', value: patchId }),
+      propertyNode('operation', { type: 'Literal', value: operation }),
+      propertyNode('arguments', {
+        type: 'Identifier',
+        name: names.argsName,
+      }),
+      propertyNode('self', { type: 'ThisExpression' }),
+      propertyNode('traced', {
+        type: 'Identifier',
+        name: names.tracedName,
+      }),
     ],
-  }
+  })
 }
 
-/** Build the global bridge member expression used by generated code. */
-function bridgeExpression(): Expression {
-  return {
-    type: 'MemberExpression',
-    computed: true,
-    optional: false,
-    object: { type: 'Identifier', name: 'globalThis' },
-    property: { type: 'Literal', value: GLOBAL_BRIDGE_KEY },
-  }
-}
-
-/** Build the bridge-present/fallback conditional expression. */
 function publishExpression(callName: string, tracedName: string): Expression {
-  const bridge = bridgeExpression()
+  const bridge = member(
+    { type: 'Identifier', name: 'globalThis' },
+    { type: 'Literal', value: GLOBAL_BRIDGE_KEY },
+    true,
+  )
   return {
     type: 'ConditionalExpression',
     test: bridge,
-    consequent: {
-      type: 'CallExpression',
-      optional: false,
-      callee: {
-        type: 'MemberExpression',
-        computed: false,
-        optional: false,
-        object: bridge,
-        property: { type: 'Identifier', name: 'publish' },
-      },
-      arguments: [{ type: 'Identifier', name: callName }],
-    },
-    alternate: {
-      type: 'CallExpression',
-      optional: false,
-      callee: { type: 'Identifier', name: tracedName },
-      arguments: [],
-    },
+    consequent: callExpression(
+      member(bridge, { type: 'Identifier', name: 'publish' }, false),
+      [{ type: 'Identifier', name: callName }],
+    ),
+    alternate: callExpression({ type: 'Identifier', name: tracedName }, []),
   }
 }
 
-/** Build publish/fallback code; generators delegate iterable results. */
-function createPublishStatement(
-  matched: MatchedFunction,
-  names: NameAllocator,
-  callName: string,
-  tracedName: string,
-): Statement {
-  if (!matched.generator) {
-    return {
-      type: 'ReturnStatement',
-      argument: publishExpression(callName, tracedName),
-    }
-  }
-  const resultName = names.unique('stentResult')
-  const result = { type: 'Identifier' as const, name: resultName }
-  const delegate: Statement = {
-    type: 'IfStatement',
-    test: {
-      type: 'LogicalExpression',
-      operator: '&&',
-      left: {
-        type: 'BinaryExpression',
-        operator: '!=',
-        left: result,
-        right: { type: 'Literal', value: null },
-      },
-      right: iterableExpression(resultName, matched.async),
-    },
-    consequent: {
-      type: 'ReturnStatement',
-      argument: { type: 'YieldExpression', delegate: true, argument: result },
-    },
-  }
-  return {
-    type: 'BlockStatement',
-    body: [
-      {
-        type: 'VariableDeclaration',
-        kind: 'const',
-        declarations: [
-          {
-            type: 'VariableDeclarator',
-            id: result,
-            init: publishExpression(callName, tracedName),
-          },
-        ],
-      },
-      delegate,
-      { type: 'ReturnStatement', argument: result },
-    ],
-  } as unknown as Statement
-}
-
-/** Detect sync or async iteration for generator delegation. */
+/** Sync or async iteration check for generator delegation. */
 function iterableExpression(name: string, async: boolean): Expression {
   const check = (symbol: 'iterator' | 'asyncIterator'): Expression => ({
     type: 'BinaryExpression',
@@ -283,19 +212,15 @@ function iterableExpression(name: string, async: boolean): Expression {
       type: 'UnaryExpression',
       operator: 'typeof',
       prefix: true,
-      argument: {
-        type: 'MemberExpression',
-        computed: true,
-        optional: false,
-        object: { type: 'Identifier', name },
-        property: {
-          type: 'MemberExpression',
-          computed: false,
-          optional: false,
-          object: { type: 'Identifier', name: 'Symbol' },
-          property: { type: 'Identifier', name: symbol },
-        },
-      },
+      argument: member(
+        { type: 'Identifier', name },
+        member(
+          { type: 'Identifier', name: 'Symbol' },
+          { type: 'Identifier', name: symbol },
+          false,
+        ),
+        true,
+      ),
     },
     right: { type: 'Literal', value: 'function' },
   })
@@ -310,35 +235,64 @@ function iterableExpression(name: string, async: boolean): Expression {
   return check('iterator')
 }
 
-/**
- * Assemble capture, arguments, replay, call, and publish statements in order.
- *
- * @param capture - Optional outer-arguments declaration.
- * @returns The injected list with `undefined` captures removed.
- */
-function createInjectedStatements(
-  capture: Statement | undefined,
-  args: Statement,
-  traced: Statement,
-  call: Statement,
-  publish: Statement,
-): Statement[] {
+/** Generator delegation: `yield*` iterable results, otherwise return them. */
+function delegationStatement(resultName: string, async: boolean): Statement {
+  const result: Identifier = { type: 'Identifier', name: resultName }
+  const yieldResult: Expression = {
+    type: 'YieldExpression',
+    delegate: true,
+    argument: result,
+  }
+  return {
+    type: 'IfStatement',
+    test: {
+      type: 'LogicalExpression',
+      operator: '&&',
+      left: {
+        type: 'BinaryExpression',
+        operator: '!=',
+        left: result,
+        right: { type: 'Literal', value: null },
+      },
+      right: iterableExpression(resultName, async),
+    },
+    consequent: { type: 'ReturnStatement', argument: yieldResult },
+  }
+}
+
+/** Publish/fallback code; generators delegate iterable results. */
+function createPublishStatement(
+  matched: MatchedFunction,
+  allocator: NameAllocator,
+  names: Pick<CallNames, 'callName' | 'tracedName'>,
+): Statement {
+  const { callName, tracedName } = names
+  if (!matched.generator) {
+    return {
+      type: 'ReturnStatement',
+      argument: publishExpression(callName, tracedName),
+    }
+  }
+  const resultName = allocator.unique('stentResult')
+  const result: Identifier = { type: 'Identifier', name: resultName }
+  const delegate = delegationStatement(resultName, matched.async)
+  const publish: Statement = {
+    type: 'BlockStatement',
+    body: [
+      variableDeclaration(resultName, publishExpression(callName, tracedName)),
+      delegate,
+      { type: 'ReturnStatement', argument: result },
+    ],
+  }
+  return publish
+}
+function createInjectedStatements(injected: InjectedInputs): Statement[] {
+  const { capture, args, traced, call, publish } = injected
   return [capture, args, traced, call, publish].filter(
     (statement): statement is Statement => statement !== undefined,
   )
 }
 
-function property(key: string, value: Expression): Property {
-  return {
-    type: 'Property',
-    kind: 'init',
-    method: false,
-    shorthand: false,
-    computed: false,
-    key: { type: 'Identifier', name: key },
-    value,
-  }
-}
 export {
   createOuterArgumentsCapture,
   createArgumentsStatement,

@@ -4,7 +4,7 @@
  * @module @oh-my-dsh/stent-dsh/invariant
  */
 
-/* jscpd:ignore-start */
+/* Duplication scanner directive: jscpd:ignore-start */
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 
@@ -17,16 +17,13 @@ const inject = ['invariants']
 
 /**
  * This package delegates invariant ownership to the authoritative DSH services;
- * its companion only reserves the package registration.
+ * its companion only reserves the package registration. The registration
+ * disposer is returned directly so Cordis collects it as the fiber effect.
  */
-const apply = (ctx: Context): Promise<() => void> => {
-  return Promise.resolve(
-    ctx.invariants.register(
-      PACKAGE_NAME,
-      (() => undefined) satisfies InvariantInstaller,
-    ),
-  )
-}
+const apply = (ctx: Readonly<Context>): (() => void) =>
+  ctx.invariants.register(PACKAGE_NAME, ((): void => {
+    /* No invariant contribution: ownership is delegated to the authoritative DSH services. */
+  }) satisfies InvariantInstaller)
 
 export { name, inject, apply }
-/* jscpd:ignore-end */
+/* Duplication scanner directive: jscpd:ignore-end */

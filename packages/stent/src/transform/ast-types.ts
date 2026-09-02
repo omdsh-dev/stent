@@ -37,7 +37,7 @@ interface MatchedFunction {
  *   reserved for later allocations in the same program.
  */
 interface NameAllocator {
-  unique(base: string): string
+  unique: (base: string) => string
 }
 
 export type { MatchedFunction, NameAllocator }

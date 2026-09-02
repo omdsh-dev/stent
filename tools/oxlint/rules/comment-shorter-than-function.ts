@@ -1,71 +1,65 @@
-/**
- * Require comments to occupy fewer lines than the functions they describe.
- *
- * A comment block that is at least as large as its implementation is usually a
- * signal that the function is unnecessary or too difficult to understand. The
- * rule considers only a contiguous comment block immediately before a function
- * declaration anchor.
- *
- * @module stent/oxlint/rules/comment-shorter-than-function
- */
-
-import type { RuleTester } from 'oxlint/plugins-dev'
+/** Require comments to be shorter than the functions they describe. */
 
 import {
   isDirective,
   isTransparentExpression,
-} from '../utils/comment-predicates.ts'
+} from '#tools/oxlint/utils/comment-predicates'
 import {
   exportedNamesOf,
   isExportDeclaration,
   isExportedNode,
-} from '../utils/exported-bindings.ts'
+} from '#tools/oxlint/utils/exported-bindings'
+import type {
+  AstNode,
+  Rule,
+  RuleContext,
+  SourceCode,
+  VisitorObject,
+} from '#tools/oxlint/utils/function-lines'
 import {
   asNode,
   countLines,
   functionName,
-  type AstNode,
-  type RuleContext,
-  type SourceCode,
-} from '../utils/function-lines.ts'
+} from '#tools/oxlint/utils/function-lines'
 
-type Rule = Parameters<RuleTester['run']>[1]
-type RuleFactory = Extract<Rule, { create: (...args: never[]) => unknown }>
-type VisitorObject = ReturnType<RuleFactory['create']>
-type CommentTarget = Parameters<SourceCode['getCommentsBefore']>[0]
-type CommentToken = ReturnType<SourceCode['getCommentsBefore']>[number]
+const FIRST_INDEX = 0
+const SECOND_INDEX = 1
+const LAST_INDEX_OFFSET = -1
+const MIN_GAP_LINES = 3
+const NO_LINES = 0
+const ONE_LINE = 1
+
+type CommentToken = ReturnType<SourceCode['getAllComments']>[number]
 
 interface RuleOptions {
   includeAnonymous?: boolean
   includeExported?: boolean
   countCommentDelimiters?: boolean
 }
-
 interface FunctionTarget {
   commentAnchor: AstNode
   exported: boolean
 }
 
-/** Return an export wrapper around transparent expression syntax, if present. */
 function exportAnchor(node: AstNode): AstNode | undefined {
   let current = asNode(node.parent)
-  while (current !== undefined) {
-    if (isExportDeclaration(current)) {
-      return current
-    }
-    if (!isTransparentExpression(current)) {
-      return undefined
-    }
+  while (
+    current !== undefined
+    && !isExportDeclaration(current)
+    && isTransparentExpression(current)
+  ) {
     current = asNode(current.parent)
+  }
+  if (isExportDeclaration(current)) {
+    return current
   }
   return undefined
 }
 
-/** Find the source anchor whose leading comments document a function. */
-function functionTarget(
+function parentTargetFor(
   node: AstNode,
   exportedNames: ReadonlySet<string>,
-): FunctionTarget {
+): FunctionTarget | undefined {
   const parent = asNode(node.parent)
   if (parent?.type === 'MethodDefinition' && asNode(parent.value) === node) {
     return {
@@ -73,167 +67,181 @@ function functionTarget(
       exported: isExportedNode(parent, exportedNames),
     }
   }
-
   if (parent?.type === 'VariableDeclarator' && asNode(parent.init) === node) {
     const declaration = asNode(parent.parent)
     if (declaration?.type === 'VariableDeclaration') {
       const exportedAnchor = exportAnchor(declaration)
-      if (exportedAnchor !== undefined) {
-        return { commentAnchor: exportedAnchor, exported: true }
-      }
       return {
-        commentAnchor: declaration,
-        exported: isExportedNode(declaration, exportedNames),
+        commentAnchor: exportedAnchor ?? declaration,
+        exported:
+          exportedAnchor !== undefined
+          || isExportedNode(declaration, exportedNames),
       }
     }
   }
+  return undefined
+}
 
+function functionTarget(
+  node: AstNode,
+  exportedNames: ReadonlySet<string>,
+): FunctionTarget {
+  const parentTarget = parentTargetFor(node, exportedNames)
+  if (parentTarget !== undefined) {
+    return parentTarget
+  }
   const exportedAnchor = exportAnchor(node)
-  if (exportedAnchor !== undefined) {
-    return { commentAnchor: exportedAnchor, exported: true }
-  }
-
   return {
-    commentAnchor: node,
-    exported: isExportedNode(node, exportedNames),
+    commentAnchor: exportedAnchor ?? node,
+    exported:
+      exportedAnchor !== undefined || isExportedNode(node, exportedNames),
   }
 }
 
-/** Return whether a source gap contains a blank line. */
 function hasBlankLine(gap: string): boolean {
-  const lines = gap.split(/\r\n|\r|\n/)
+  const lines = gap.split(/\r\n|\r|\n/u)
   return (
-    lines.length > 2 && lines.slice(1, -1).some((line) => line.trim() === '')
+    lines.length >= MIN_GAP_LINES
+    && lines
+      .slice(SECOND_INDEX, LAST_INDEX_OFFSET)
+      .some((line) => line.trim() === '')
   )
 }
 
-/** Return the start offset of the source line containing an offset. */
-function lineStart(source: string, offset: number): number {
-  const newline = source.lastIndexOf('\n', offset - 1)
-  const carriageReturn = source.lastIndexOf('\r', offset - 1)
-  return Math.max(newline, carriageReturn) + 1
-}
-
-/** Return whether a comment starts on a comment-only source line. */
-function startsOnCommentLine(comment: CommentToken, source: string): boolean {
-  return (
-    source.slice(lineStart(source, comment.range[0]), comment.range[0]).trim()
-    === ''
-  )
-}
-
-/** Return whether a comment is directly adjacent to the following source item. */
 function isAdjacent(
   comment: CommentToken,
   nextStart: number,
   source: string,
 ): boolean {
-  const gap = source.slice(comment.range[1], nextStart)
-  return (
-    /^\s*$/.test(gap)
-    && !hasBlankLine(gap)
-    && startsOnCommentLine(comment, source)
-  )
+  const [commentStart, commentEnd] = comment.range
+  const gap = source.slice(commentEnd, nextStart)
+  if (!/^\s*$/u.test(gap) || hasBlankLine(gap)) {
+    return false
+  }
+  const previousOffset = commentStart + LAST_INDEX_OFFSET
+  const newline = source.lastIndexOf('\n', previousOffset)
+  const carriageReturn = source.lastIndexOf('\r', previousOffset)
+  const lineStartOffset = Math.max(newline, carriageReturn) + ONE_LINE
+  return source.slice(lineStartOffset, commentStart).trim() === ''
 }
 
-/** Collect the contiguous comment block directly before a function anchor. */
-function leadingComments(
-  node: AstNode,
-  sourceCode: SourceCode,
+function adjacentCommentsBefore(
+  comments: CommentToken[],
+  anchorStart: number,
+  source: string,
 ): CommentToken[] {
-  const source = sourceCode.getText()
-  const comments = sourceCode.getCommentsBefore(
-    node as unknown as CommentTarget,
-  )
   const selected: CommentToken[] = []
-  let nextStart = node.range[0]
-
-  for (let index = comments.length - 1; index >= 0; index--) {
+  let cursor = anchorStart
+  for (
+    let index = comments.length + LAST_INDEX_OFFSET;
+    index >= FIRST_INDEX;
+    index -= SECOND_INDEX
+  ) {
     const comment = comments[index]
-    if (!isAdjacent(comment, nextStart, source)) {
+    if (!isAdjacent(comment, cursor, source)) {
       break
     }
     selected.unshift(comment)
-    nextStart = comment.range[0]
+    const [commentStart] = comment.range
+    cursor = commentStart
   }
   return selected
 }
 
-/** Remove a block comment's delimiters and JSDoc decoration from one line. */
-function documentationLine(
-  line: string,
-  first: boolean,
-  last: boolean,
-): string {
-  let content = line.trim()
-  if (first) {
-    content = content.replace(/^\/\*+/, '').trim()
-  }
-  if (last) {
-    content = content.replace(/\*\/$/, '').trim()
-  }
-  if (/^\*(?:\s|$)/.test(content)) {
-    content = content.slice(1).trim()
-  }
-  return content
+function leadingComments(
+  anchor: AstNode,
+  sourceCode: SourceCode,
+): CommentToken[] {
+  const [anchorStart] = anchor.range
+  const comments = sourceCode
+    .getAllComments()
+    .filter((comment) => comment.range[SECOND_INDEX] <= anchorStart)
+  return adjacentCommentsBefore(comments, anchorStart, sourceCode.getText())
 }
 
-/** Return whether a documentation line is meaningful rather than a divider. */
-function isMeaningfulDocumentation(content: string): boolean {
-  if (content === '') {
-    return false
-  }
-  return !/^[-_=~*]{3,}$/.test(content)
+function blockCommentLineCount(lines: readonly string[]): number {
+  return lines.filter((line, index) => {
+    let content = line.trim()
+    if (index === FIRST_INDEX) {
+      content = content.replace(/^\/\*+/u, '').trim()
+    }
+    if (index === lines.length + LAST_INDEX_OFFSET) {
+      content = content.replace(/\*\/$/u, '').trim()
+    }
+    if (/^\*(?:\s|$)/u.test(content)) {
+      content = content.slice(SECOND_INDEX).trim()
+    }
+    return content !== '' && !/^[-_=~*]{3,}$/u.test(content)
+  }).length
 }
 
-/** Count meaningful documentation lines in one comment token. */
 function commentTokenLines(
   comment: CommentToken,
   sourceCode: SourceCode,
   countDelimiters: boolean,
 ): number {
   if (comment.type === 'Shebang' || isDirective(comment)) {
-    return 0
+    return NO_LINES
   }
-  const text = sourceCode.getText(comment)
-  const lines = text.split(/\r\n|\r|\n/)
+  const lines = sourceCode.getText(comment).split(/\r\n|\r|\n/u)
   if (countDelimiters) {
     return lines.filter((line) => line.trim() !== '').length
   }
   if (comment.type === 'Line') {
-    if (isMeaningfulDocumentation(comment.value.trim())) {
-      return 1
-    }
-    return 0
-  }
-  return lines.filter((line, index) => {
-    const content = documentationLine(
-      line,
-      index === 0,
-      index === lines.length - 1,
+    return Number(
+      comment.value.trim() !== ''
+        && !/^[-_=~*]{3,}$/u.test(comment.value.trim()),
     )
-    return isMeaningfulDocumentation(content)
-  }).length
+  }
+  return blockCommentLineCount(lines)
 }
 
-/** Count meaningful lines in a contiguous leading comment block. */
 function commentLineCount(
   comments: readonly CommentToken[],
   sourceCode: SourceCode,
   countDelimiters: boolean,
 ): number {
-  let count = 0
+  let count = NO_LINES
   for (const comment of comments) {
     count += commentTokenLines(comment, sourceCode, countDelimiters)
   }
   return count
 }
 
-function isRuleOptions(value: unknown): value is RuleOptions {
-  if (typeof value !== 'object' || value === null) {
-    return false
+function checkNode(
+  node: AstNode,
+  context: RuleContext,
+  options: RuleOptions,
+): void {
+  const { includeAnonymous = false, includeExported = false } = options
+  const target = functionTarget(node, exportedNamesOf(context.sourceCode))
+  const name = functionName(node)
+  const excluded =
+    (name === undefined && !includeAnonymous)
+    || (target.exported && !includeExported)
+  if (excluded) {
+    return
   }
-  return !Array.isArray(value)
+  const commentCount = commentLineCount(
+    leadingComments(target.commentAnchor, context.sourceCode),
+    context.sourceCode,
+    options.countCommentDelimiters ?? false,
+  )
+  const codeCount = countLines(node, context.sourceCode, {
+    skipBlankLines: true,
+    skipComments: true,
+  })
+  if (commentCount >= codeCount && commentCount > NO_LINES) {
+    context.report({
+      data: {
+        code: codeCount,
+        comments: commentCount,
+        name: name ?? '<anonymous>',
+      },
+      messageId: 'commentNotShorter',
+      node,
+    })
+  }
 }
 
 const commentShorterThanFunction: Rule = {
@@ -261,63 +269,20 @@ const commentShorterThanFunction: Rule = {
   },
 
   create(context: RuleContext): VisitorObject {
-    const raw = context.options[0]
-    let options: RuleOptions
-    if (isRuleOptions(raw)) {
+    const [raw] = context.options
+    let options: RuleOptions = {}
+    if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
       options = raw
-    } else {
-      options = {}
     }
-    const includeAnonymous = options.includeAnonymous ?? false
-    const includeExported = options.includeExported ?? false
-    const countDelimiters = options.countCommentDelimiters ?? false
-    const exportedNames = exportedNamesOf(context.sourceCode)
-
-    function check(node: AstNode): void {
-      const target = functionTarget(node, exportedNames)
-      if (target.exported && !includeExported) {
-        return
-      }
-      const name = functionName(node)
-      if (name === undefined && !includeAnonymous) {
-        return
-      }
-      const comments = leadingComments(target.commentAnchor, context.sourceCode)
-      const commentCount = commentLineCount(
-        comments,
-        context.sourceCode,
-        countDelimiters,
-      )
-      if (commentCount === 0) {
-        return
-      }
-      const codeCount = countLines(node, context.sourceCode, {
-        skipBlankLines: true,
-        skipComments: true,
-      })
-      if (commentCount < codeCount) {
-        return
-      }
-      context.report({
-        node,
-        messageId: 'commentNotShorter',
-        data: {
-          name: name ?? '<anonymous>',
-          comments: commentCount,
-          code: codeCount,
-        },
-      })
-    }
-
     return {
-      FunctionDeclaration(node) {
-        check(node)
+      FunctionDeclaration: (node) => {
+        checkNode(node, context, options)
       },
-      FunctionExpression(node) {
-        check(node)
+      FunctionExpression: (node) => {
+        checkNode(node, context, options)
       },
-      ArrowFunctionExpression(node) {
-        check(node)
+      ArrowFunctionExpression: (node) => {
+        checkNode(node, context, options)
       },
     }
   },

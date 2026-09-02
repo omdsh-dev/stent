@@ -6,11 +6,11 @@ import type { Context } from '@deepseek-ai/cordis'
  * same ownership semantics in unit tests and child processes.
  */
 function registrationOwner(ctx: Context): unknown {
-  const entry = (ctx.fiber as { entry?: unknown }).entry
-  if (entry !== undefined) {
-    return entry
+  const { fiber } = ctx
+  if ('entry' in fiber && fiber.entry !== undefined) {
+    return fiber.entry
   }
-  return ctx.fiber.runtime?.callback ?? ctx.fiber
+  return fiber.runtime?.callback ?? fiber
 }
 
 export { registrationOwner }

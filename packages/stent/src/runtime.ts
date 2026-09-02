@@ -18,16 +18,21 @@
  */
 
 import { subscribeBridge } from './bridge.ts'
-import { dispatch } from './runtime-dispatch.ts'
+import {
+  comparePatchOrder,
+  compareStrings,
+  dispatch,
+  registerChange,
+  targetKey,
+} from './runtime-dispatch.ts'
 import type {
+  PatchId,
   StentBinding,
   StentHandler,
+  StentPatchChange,
+  StentPatchChangeListener,
   StentPatchInfo,
-  StentTarget,
-  PatchId,
 } from './types.ts'
-
-export { validatePatchId, validatePatchStatic } from './transform/validation.ts'
 
 /** Runtime state of one registered patch. */
 interface PatchEntry {
@@ -51,17 +56,6 @@ interface PatchEntry {
   fiber: unknown
 }
 
-/** A patch-registry change observed by the Node loader. */
-interface StentPatchChange {
-  type: 'register' | 'remove'
-  id: PatchId
-  previous?: StentPatchInfo
-  current?: StentPatchInfo
-}
-
-/** Listener notified after patch metadata changes. */
-type StentPatchChangeListener = (change: StentPatchChange) => void
-
 /** Registry of enabled Stent patches with the shared bridge subscription. */
 class StentRuntime {
   private readonly entries = new Map<PatchId, PatchEntry>()
@@ -78,17 +72,10 @@ class StentRuntime {
    * plugin registers or removes a patch. Handler enable/disable changes do not
    * emit events because transformed code dispatches through the runtime.
    */
-  onPatchChange(listener: StentPatchChangeListener): () => void {
+  public onPatchChange(listener: StentPatchChangeListener): () => void {
     this.patchListeners.add(listener)
     return () => {
       this.patchListeners.delete(listener)
-    }
-  }
-
-  /** Notify all loader subscribers after the registry has changed. */
-  private notifyPatchChange(change: StentPatchChange): void {
-    for (const listener of this.patchListeners) {
-      listener(change)
     }
   }
 
@@ -109,7 +96,7 @@ class StentRuntime {
    * @throws When another `replace` patch already claims the same target, or
    *   when the id is already registered by a different owner.
    */
-  register(
+  public register(
     info: StentPatchInfo,
     owner: unknown = info.id,
     fiber?: unknown,
@@ -122,18 +109,7 @@ class StentRuntime {
       )
     }
     if (info.operation === 'replace') {
-      const key = targetKey(info.target)
-      // A re-registration of this id that already holds replace on the same
-      // target is the entry itself; every other replace registration must
-      // pass the exclusive-target scan (a first registration as `before`
-      // must not be able to re-register into an already-claimed replace
-      // target by bypassing the check).
-      const selfClaim =
-        previous?.info.operation === 'replace'
-        && targetKey(previous.info.target) === key
-      if (!selfClaim) {
-        assertNoReplaceConflict(this.entries, info.id, key)
-      }
+      this.claimReplaceTarget(info, previous)
     }
     this.entries.set(info.id, {
       info,
@@ -141,15 +117,7 @@ class StentRuntime {
       owner,
       fiber,
     })
-    const change: StentPatchChange = {
-      type: 'register',
-      id: info.id,
-      current: info,
-    }
-    if (previous !== undefined) {
-      change.previous = previous.info
-    }
-    this.notifyPatchChange(change)
+    this.notifyPatchChange(registerChange(info, previous?.info))
     return previous === undefined
   }
 
@@ -159,7 +127,7 @@ class StentRuntime {
    * @param id - The patch id.
    * @param handler - The trusted runtime handler.
    */
-  enable(id: PatchId, handler: StentHandler): void {
+  public enable(id: PatchId, handler: StentHandler): void {
     const entry = this.entries.get(id)
     if (!entry) {
       throw new Error(
@@ -167,9 +135,9 @@ class StentRuntime {
       )
     }
     if (typeof handler !== 'function') {
-      // Fail loud at enable (the earliest resolvable point) instead of
-      // crashing inside a transformed call when dispatch tries to run it.
-      throw new Error(
+      /* Fail loud at enable (the earliest resolvable point) instead of
+         crashing inside a transformed call when dispatch tries to run it. */
+      throw new TypeError(
         `stent: handler for patch ${JSON.stringify(id)} must be a function`,
       )
     }
@@ -182,7 +150,7 @@ class StentRuntime {
    *
    * @param id - The patch id.
    */
-  disable(id: PatchId): void {
+  public disable(id: PatchId): void {
     const entry = this.entries.get(id)
     if (!entry) {
       return
@@ -197,7 +165,7 @@ class StentRuntime {
    *
    * @param id - The patch id.
    */
-  remove(id: PatchId): void {
+  public remove(id: PatchId): void {
     const previous = this.entries.get(id)
     if (previous === undefined) {
       return
@@ -207,18 +175,18 @@ class StentRuntime {
   }
 
   /** Whether the given fiber still owns the entry. */
-  isOwnedBy(id: PatchId, fiber: unknown): boolean {
+  public isOwnedBy(id: PatchId, fiber: unknown): boolean {
     const entry = this.entries.get(id)
     return entry !== undefined && entry.fiber === fiber
   }
 
   /** Whether a patch is currently registered and enabled. */
-  isEnabled(id: PatchId): boolean {
+  public isEnabled(id: PatchId): boolean {
     return this.entries.get(id)?.handler !== undefined
   }
 
   /** Record the load-time bindings for a patch. */
-  recordBindings(id: PatchId, records: readonly StentBinding[]): void {
+  public recordBindings(id: PatchId, records: readonly StentBinding[]): void {
     const existing = this.bindings.get(id)
     if (existing) {
       existing.push(...records)
@@ -228,7 +196,7 @@ class StentRuntime {
   }
 
   /** Return the recorded load-time bindings for a patch. */
-  bindingsOf(id: PatchId): readonly StentBinding[] {
+  public bindingsOf(id: PatchId): readonly StentBinding[] {
     return this.bindings.get(id) ?? []
   }
 
@@ -237,10 +205,10 @@ class StentRuntime {
    *
    * @returns All recorded bindings across patches.
    */
-  allBindings(): readonly StentBinding[] {
-    return [...this.bindings.entries()]
-      .sort(([left], [right]) => compareStrings(left, right))
-      .flatMap(([, records]) => records)
+  public allBindings(): readonly StentBinding[] {
+    return [...this.bindings.keys()]
+      .toSorted(compareStrings)
+      .flatMap((id) => this.bindingsOf(id))
   }
 
   /**
@@ -249,19 +217,56 @@ class StentRuntime {
    * @returns The patch infos sorted by priority then id, each carrying its
    *   recorded load-time bindings.
    */
-  list(): StentPatchInfo[] {
-    return [...this.entries.values()]
-      .map((entry) => ({
+  public list(): StentPatchInfo[] {
+    const infos: StentPatchInfo[] = []
+    for (const entry of this.entries.values()) {
+      infos.push({
         ...entry.info,
         enabled: entry.handler !== undefined,
         bindings: this.bindingsOf(entry.info.id),
-      }))
-      .sort((a, b) => {
-        if (a.priority !== b.priority) {
-          return a.priority - b.priority
-        }
-        return compareStrings(a.id, b.id)
       })
+    }
+    return infos.toSorted(comparePatchOrder)
+  }
+
+  /** Notify all loader subscribers after the registry has changed. */
+  private notifyPatchChange(change: StentPatchChange): void {
+    for (const listener of this.patchListeners) {
+      listener(change)
+    }
+  }
+
+  /**
+   * Reject another `replace` patch claiming the same target.
+   *
+   * A re-registration of this id that already holds replace on the same target
+   * is the entry itself; every other replace registration must pass the
+   * exclusive-target scan (a first registration as `before` must not be able to
+   * re-register into an already-claimed replace target by bypassing the
+   * check).
+   */
+  private claimReplaceTarget(
+    info: StentPatchInfo,
+    previous: PatchEntry | undefined,
+  ): void {
+    const key = targetKey(info.target)
+    const selfClaim =
+      previous?.info.operation === 'replace'
+      && targetKey(previous.info.target) === key
+    if (selfClaim) {
+      return
+    }
+    for (const existing of this.entries.values()) {
+      if (
+        existing.info.operation === 'replace'
+        && targetKey(existing.info.target) === key
+      ) {
+        throw new Error(
+          `stent: replace patch ${JSON.stringify(info.id)} conflicts with existing `
+            + `replace patch ${JSON.stringify(existing.info.id)} on the same target`,
+        )
+      }
+    }
   }
 
   private subscribe(): void {
@@ -279,49 +284,9 @@ class StentRuntime {
   }
 }
 
-/** Reject another replace patch claiming the same target. */
-function assertNoReplaceConflict(
-  entries: ReadonlyMap<PatchId, PatchEntry>,
-  patchId: PatchId,
-  target: string,
-): void {
-  for (const existing of entries.values()) {
-    if (
-      existing.info.operation === 'replace'
-      && targetKey(existing.info.target) === target
-    ) {
-      throw new Error(
-        `stent: replace patch ${JSON.stringify(patchId)} conflicts with existing `
-          + `replace patch ${JSON.stringify(existing.info.id)} on the same target`,
-      )
-    }
-  }
-}
-
-/** Compare strings using the runtime's stable lexical order. */
-function compareStrings(left: string, right: string): number {
-  if (left < right) {
-    return -1
-  }
-  if (left > right) {
-    return 1
-  }
-  return 0
-}
-
-/** Stable identity of a patch target for conflict detection. */
-function targetKey(target: StentTarget): string {
-  const selector =
-    target.astQuery ?? JSON.stringify(target.functionQuery ?? null)
-  let files: string | RegExp | null = target.filePath ?? null
-  if (target.filePath == null && target.filePaths !== undefined) {
-    files = target.filePaths.join('|')
-  }
-  return [target.module, target.versionRange, String(files), selector].join('|')
-}
-
 /** Singleton runtime shared by the Cordis service and the transform hooks. */
 const runtime = new StentRuntime()
 
 export { runtime }
-export type { StentPatchChange, StentPatchChangeListener }
+export { validatePatchId, validatePatchStatic } from './transform/validation.ts'
+export type { StentPatchChange, StentPatchChangeListener } from './types.ts'

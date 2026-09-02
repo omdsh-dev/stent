@@ -16,8 +16,7 @@
       ],
       "ignoreDependencies": [
         "@oh-my-dsh/stent-api",
-        "@oh-my-dsh/stent-dsh",
-        "stent-target-fixture"
+        "@oh-my-dsh/stent-dsh"
       ]
     }
   }

@@ -1,26 +1,73 @@
-import { resolve, sep } from 'node:path'
+import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { Command } from 'commander'
 
+const EXIT_FAILURE = 1
+const NO_ENTRIES = 0
+
 interface LauncherArgs {
-  dshPath: URL | undefined
-  profile: string | undefined
-  dshHome: URL | undefined
-  pathEnv: string | undefined
-  patchFiles: URL[]
-  passthrough: string[]
-  launcherUrl: URL
-  cwd: URL
+  readonly dshPath: URL | undefined
+  readonly profile: string | undefined
+  readonly dshHome: URL | undefined
+  readonly pathEnv: string | undefined
+  readonly patchFiles: readonly URL[]
+  readonly passthrough: readonly string[]
+  readonly launcherUrl: URL
+  readonly cwd: URL
 }
 
-function parseOpt(
+/* The launcher entry passes these positionally; a tuple rest parameter keeps
+   that call shape while staying inside the parameter-count budget. */
+type ParseOptInput = [
   argv: readonly string[],
   env: NodeJS.ProcessEnv,
   launcherUrl: URL,
   cwd: URL,
   dshPath: URL,
-): LauncherArgs {
+]
+
+type BuildCliArgsInput = [
+  args: LauncherArgs,
+  effectiveProfile: string | undefined,
+  enablePath: URL,
+  enableOverlay: readonly unknown[],
+]
+
+/** Report launcher guidance on stderr and abort with the documented status. */
+function fail(lines: readonly string[]): never {
+  for (const line of lines) {
+    process.stderr.write(`${line}\n`)
+  }
+  process.exit(EXIT_FAILURE)
+}
+
+/** The profile a run boots: an explicit flag, else the `web` alias. */
+function selectedProfile(
+  explicit: string | undefined,
+  passthrough: readonly string[],
+): string | undefined {
+  if (explicit !== undefined) {
+    return explicit
+  }
+  const [mode] = passthrough
+  if (mode === 'web') {
+    return 'web'
+  }
+  return undefined
+}
+
+/** DSH_HOME as a directory URL, when the environment supplies one. */
+function dshHomeUrl(dshHome: string | undefined): URL | undefined {
+  if (dshHome === undefined) {
+    return undefined
+  }
+  return pathToFileURL(path.resolve(dshHome))
+}
+
+/** Parse the launcher-owned flags and keep every other argument untouched. */
+function parseOpt(...input: ParseOptInput): LauncherArgs {
+  const [argv, env, launcherUrl, cwd, dshPath] = input
   const command = new Command()
     .allowUnknownOption()
     .allowExcessArguments()
@@ -35,70 +82,88 @@ function parseOpt(
   const passthrough = [...operands, ...unknown]
   const cwdPath = fileURLToPath(cwd)
   const options = command.opts<{ profile?: string; patch?: string[] }>()
-  let profile: string | undefined
-  if (options.profile !== undefined) {
-    profile = options.profile
-  } else if (passthrough[0] === 'web') {
-    profile = 'web'
-  }
-  let dshHome: URL | undefined
-  if (env.DSH_HOME !== undefined) {
-    dshHome = pathToFileURL(resolve(env.DSH_HOME))
-  }
   return {
     dshPath,
-    profile,
-    dshHome,
+    profile: selectedProfile(options.profile, passthrough),
+    dshHome: dshHomeUrl(env.DSH_HOME),
     pathEnv: env.PATH,
     patchFiles: (options.patch ?? []).map((value) =>
-      pathToFileURL(resolve(cwdPath, value)),
+      pathToFileURL(path.resolve(cwdPath, value)),
     ),
     passthrough,
     launcherUrl,
-    cwd: pathToFileURL(cwdPath + sep),
+    cwd: pathToFileURL(cwdPath + path.sep),
   }
 }
-function buildCliArgs(
-  args: LauncherArgs,
-  effectiveProfile: string | undefined,
+
+/** The `--patch` flags for the overlays this run boots with. */
+function patchArguments(
+  patchFiles: readonly URL[],
   enablePath: URL,
   enableOverlay: readonly unknown[],
 ): string[] {
-  const [mode] = args.passthrough
-  const patchArgs = args.patchFiles.flatMap((file) => [
+  const patchArgs = patchFiles.flatMap((file) => [
     '--patch',
     fileURLToPath(file),
   ])
-  if (enableOverlay.length > 0) {
+  if (enableOverlay.length > NO_ENTRIES) {
     patchArgs.push('--patch', fileURLToPath(enablePath))
   }
-  const profileArgs: string[] = []
-  if (effectiveProfile) {
-    profileArgs.push('--profile', effectiveProfile)
+  return patchArgs
+}
+
+/** The `--profile` flag for the profile this run boots, when there is one. */
+function profileArguments(effectiveProfile: string | undefined): string[] {
+  if (effectiveProfile === undefined || effectiveProfile === '') {
+    return []
   }
+  return ['--profile', effectiveProfile]
+}
+
+/** `plugin` runs manage patches themselves, so overlays are rejected. */
+function pluginArguments(
+  passthrough: readonly string[],
+  profileArgs: readonly string[],
+  patchArgs: readonly string[],
+): string[] {
+  if (patchArgs.length > NO_ENTRIES) {
+    fail([
+      'stent-dsh: --patch overlays only apply when booting a profile, not for plugin',
+    ])
+  }
+  return [...passthrough, ...profileArgs]
+}
+
+/** `web` boots its own profile, so only overlays may precede the app args. */
+function webArguments(
+  args: LauncherArgs,
+  patchArgs: readonly string[],
+): string[] {
+  if (args.profile !== undefined && args.profile !== 'web') {
+    fail([
+      `stent-dsh: \`web\` boots the web profile; drop --profile ${args.profile} or omit the web alias`,
+    ])
+  }
+  /* Web's own --patch must precede the app args (passThroughOptions sends
+     everything after the first unknown token to the app). */
+  const [, ...appArgs] = args.passthrough
+  return ['web', ...patchArgs, ...appArgs]
+}
+
+/** Assemble the argv the DSH CLI runs with. */
+function buildCliArgs(...input: BuildCliArgsInput): string[] {
+  const [args, effectiveProfile, enablePath, enableOverlay] = input
+  const [mode] = args.passthrough
+  const patchArgs = patchArguments(args.patchFiles, enablePath, enableOverlay)
+  const profileArgs = profileArguments(effectiveProfile)
   if (mode === 'plugin') {
-    if (patchArgs.length > 0) {
-      console.error(
-        'stent-dsh: --patch overlays only apply when booting a profile, not for plugin',
-      )
-      process.exit(1)
-    }
-    return [...args.passthrough, ...profileArgs]
+    return pluginArguments(args.passthrough, profileArgs, patchArgs)
   }
   if (mode === 'web') {
-    if (args.profile !== undefined && args.profile !== 'web') {
-      console.error(
-        `stent-dsh: \`web\` boots the web profile; drop --profile ${args.profile} or omit the web alias`,
-      )
-      process.exit(1)
-    }
-    // web's own --patch must precede the app args (passThroughOptions sends
-    // everything after the first unknown token to the app).
-    const [, ...appArgs] = args.passthrough
-    return [mode, ...patchArgs, ...appArgs]
+    return webArguments(args, patchArgs)
   }
-  // Generic boot takes the launcher flags first; the app args only start at
-  // the first token the launcher does not know.
+  /* Generic boot takes the launcher flags first; the app args only start at
+     the first token the launcher does not know. */
   return [...profileArgs, ...patchArgs, ...args.passthrough]
 }
 

@@ -9,7 +9,7 @@
  */
 
 import { createRequire } from 'node:module'
-import { pathToFileURL, fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const require = createRequire(import.meta.url)
 
@@ -19,29 +19,86 @@ interface InternalLoader {
   readonly loadCache?: Map<string, unknown>
 }
 
-let cachedInternalLoader: InternalLoader | undefined
+/** The `internal/modules/esm/loader` face reaching the cascaded loader. */
+interface EsmLoaderModule {
+  /** Node-internal accessor returning the process-wide cascaded loader. */
+  readonly getOrInitializeCascadedLoader: () => unknown
+}
 
-/** Locate Node's internal cascaded module loader when available. */
-function internalLoader(): InternalLoader | undefined {
-  if (cachedInternalLoader) {
-    return cachedInternalLoader
+/** Native addon face exposing Node's internal `requireBuiltin`. */
+interface BuiltinRequirer {
+  /** Load a Node-internal builtin module by its internal id. */
+  readonly requireBuiltin: (id: string) => unknown
+}
+
+const loaderCache: { current?: InternalLoader } = {}
+
+/** Narrow an addon export to the builtin-require face. */
+function isBuiltinRequirer(value: unknown): value is BuiltinRequirer {
+  return (
+    typeof value === 'object'
+    && value !== null
+    && 'requireBuiltin' in value
+    && typeof value.requireBuiltin === 'function'
+  )
+}
+
+/** Narrow a builtin module export to Node's ESM loader module. */
+function isEsmLoaderModule(value: unknown): value is EsmLoaderModule {
+  return (
+    typeof value === 'object'
+    && value !== null
+    && 'getOrInitializeCascadedLoader' in value
+    && typeof value.getOrInitializeCascadedLoader === 'function'
+  )
+}
+
+/** Narrow the cascaded loader to the surface this module reads. */
+function isInternalLoader(value: unknown): value is InternalLoader {
+  if (typeof value !== 'object') {
+    return false
   }
-  let raw: { getOrInitializeCascadedLoader?: () => unknown } | undefined
+  if (value === null) {
+    return false
+  }
+  return true
+}
+
+/** Load Node's internal ESM loader module, or nothing when unavailable. */
+function loadEsmLoaderModule(): unknown {
   try {
-    const addon = require('node-addon-require-builtin') as {
-      requireBuiltin(id: string): unknown
+    const addon: unknown = require('node-addon-require-builtin')
+    if (!isBuiltinRequirer(addon)) {
+      return undefined
     }
-    raw = addon.requireBuiltin('internal/modules/esm/loader') as
-      | { getOrInitializeCascadedLoader?: () => unknown }
-      | undefined
+    return addon.requireBuiltin('internal/modules/esm/loader')
   } catch {
     return undefined
   }
-  const loader = raw?.getOrInitializeCascadedLoader?.() as
-    | InternalLoader
-    | undefined
-  if (loader) {
-    cachedInternalLoader = loader
+}
+
+/** Ask Node's ESM loader module for the process-wide cascaded loader. */
+function resolveInternalLoader(): InternalLoader | undefined {
+  const loaderModule = loadEsmLoaderModule()
+  if (!isEsmLoaderModule(loaderModule)) {
+    return undefined
+  }
+  const loader = loaderModule.getOrInitializeCascadedLoader()
+  if (!isInternalLoader(loader)) {
+    return undefined
+  }
+  return loader
+}
+
+/** Locate Node's internal cascaded module loader when available. */
+function internalLoader(): InternalLoader | undefined {
+  const { current } = loaderCache
+  if (current !== undefined) {
+    return current
+  }
+  const loader = resolveInternalLoader()
+  if (loader !== undefined) {
+    loaderCache.current = loader
   }
   return loader
 }
@@ -63,7 +120,6 @@ function retransformCommonJs(
   filename: string,
   clearSeen: (filename: string) => void,
 ): unknown {
-  // oxlint-disable-next-line typescript/no-dynamic-delete -- require.cache eviction is the sanctioned invalidation API.
   delete require.cache[filename]
   const cache = internalLoader()?.loadCache
   if (cache) {
@@ -71,6 +127,45 @@ function retransformCommonJs(
   }
   clearSeen(filename)
   return require(filename)
+}
+
+/** Node's internal ESM load cache, or a loud error when it is unavailable. */
+function requireLoadCache(): Map<string, unknown> {
+  const cache = internalLoader()?.loadCache
+  if (cache === undefined) {
+    throw new Error(
+      'stent: ESM re-transformation requires the Node internal module loader (Node >= 22)',
+    )
+  }
+  return cache
+}
+
+/** Path the loader marks as seen for a module URL. */
+function seenPath(url: string): string {
+  if (url.startsWith('file:')) {
+    return fileURLToPath(url)
+  }
+  return url
+}
+
+/** Narrow an imported module namespace to a readable record. */
+function isModuleNamespace(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object') {
+    return false
+  }
+  if (value === null) {
+    return false
+  }
+  return true
+}
+
+/** Import a module URL as a namespace object, without leaking `any`. */
+async function importNamespace(url: string): Promise<Record<string, unknown>> {
+  const namespace: unknown = await import(url)
+  if (!isModuleNamespace(namespace)) {
+    throw new Error(`stent: ${url} produced no ESM module namespace`)
+  }
+  return namespace
 }
 
 /**
@@ -82,21 +177,12 @@ async function retransformEsm(
   url: string,
   clearSeen: (filename: string) => void,
 ): Promise<Record<string, unknown>> {
-  const cache = internalLoader()?.loadCache
-  if (!cache) {
-    throw new Error(
-      'stent: ESM re-transformation requires the Node internal module loader (Node >= 22)',
-    )
-  }
+  const cache = requireLoadCache()
   const job: unknown = Map.prototype.get.call(cache, url)
   Map.prototype.delete.call(cache, url)
-  let clearPath = url
-  if (url.startsWith('file:')) {
-    clearPath = fileURLToPath(url)
-  }
-  clearSeen(clearPath)
+  clearSeen(seenPath(url))
   try {
-    return (await import(url)) as Record<string, unknown>
+    return await importNamespace(url)
   } catch (error) {
     if (job !== undefined) {
       Map.prototype.set.call(cache, url, job)

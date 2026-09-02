@@ -23,7 +23,7 @@
  * @module @oh-my-dsh/stent/transform/transform
  */
 
-import type { BlockStatement, Node } from 'estree'
+import type { BlockStatement, Node, Statement } from 'estree'
 
 import { mapOuterArguments, namesOf } from './arguments.ts'
 import type { MatchedFunction, NameAllocator } from './ast-types.ts'
@@ -43,6 +43,97 @@ const ARGS = 'stentArguments'
 const TRACED = 'stentTraced'
 const CALL = 'stentCall'
 const OUTER_ARGUMENTS = 'stentOuterArguments'
+
+/** Ancestry position of the program node. */
+const LAST_ANCESTRY_INDEX = -1
+
+/** Matcher hit handed to the rewrite. */
+interface MatcherHit {
+  /** Patch id read from the merged state. */
+  patchId: string
+  /** Operation kind read from the merged state. */
+  operation: string
+  /** The selected AST node. */
+  node: Node
+  /** The selected node's parent in the matcher walk. */
+  parent: Node
+  /** Ancestry of the selected node, ending at the Program node. */
+  ancestry: Node[]
+}
+
+/** Wrap an expression-bodied arrow in a return-bearing block. */
+function ensureBlockBody(matched: MatchedFunction): BlockStatement {
+  if (matched.body.type !== 'BlockStatement') {
+    const synthesized: BlockStatement = {
+      type: 'BlockStatement',
+      body: [{ type: 'ReturnStatement', argument: matched.body }],
+    }
+    matched.node.body = synthesized
+    matched.body = synthesized
+  }
+  return matched.body
+}
+
+/** Capture and rewrite enclosing `arguments` references for an arrow. */
+function prepareOuterArguments(
+  matched: MatchedFunction,
+  block: BlockStatement,
+  names: NameAllocator,
+): string | undefined {
+  if (!matched.arrow || !mapOuterArguments(block)) {
+    return undefined
+  }
+  const name = names.unique(OUTER_ARGUMENTS)
+  mapOuterArguments(block, name)
+  return name
+}
+
+/** Build the injected statement list for one matched function. */
+function buildInjected(
+  matched: MatchedFunction,
+  hit: MatcherHit,
+  names: NameAllocator,
+  block: BlockStatement,
+): Statement[] {
+  const outerArgsName = prepareOuterArguments(matched, block, names)
+  const argsName = names.unique(ARGS)
+  const tracedName = names.unique(TRACED)
+  const callName = names.unique(CALL)
+  const capture = createOuterArgumentsCapture(outerArgsName)
+  const args = createArgumentsStatement(matched, argsName)
+  const traced = createTracedStatement(matched, block.body, {
+    argsName,
+    tracedName,
+  })
+  const call = createCallStatement(hit.patchId, hit.operation, {
+    argsName,
+    tracedName,
+    callName,
+  })
+  const publish = createPublishStatement(matched, names, {
+    callName,
+    tracedName,
+  })
+  return createInjectedStatements({ capture, args, traced, call, publish })
+}
+
+/** Rewrite one matcher hit and report its patch binding. */
+function transformMatchedFunction(hit: MatcherHit): boolean {
+  if (isConstructorTarget(hit.node, hit.parent)) {
+    throw new Error(
+      'stent: constructor targets are not supported (super() and new.target cannot survive '
+        + 'the traced-closure replay); patch a method or factory instead',
+    )
+  }
+  const matched = matchFunction(hit.node)
+  const program = hit.ancestry.at(LAST_ANCESTRY_INDEX)
+  if (!matched || !program || program.type !== 'Program') {
+    return false
+  }
+  const block = ensureBlockBody(matched)
+  block.body = buildInjected(matched, hit, namesOf(program), block)
+  return true
+}
 
 /**
  * Register the Stent custom transform on an Orchestrion matcher. Both the Node
@@ -65,86 +156,22 @@ function registerStentTransform(
     const patchId = state.stentPatchId
     const operation = state.stentOperation
     if (typeof patchId !== 'string' || typeof operation !== 'string') {
-      throw new Error(
+      throw new TypeError(
         'stent: transform config must carry stentPatchId and stentOperation strings',
       )
     }
-    if (transformMatchedFunction(patchId, operation, node, parent, ancestry)) {
+    if (
+      transformMatchedFunction({
+        patchId,
+        operation,
+        node,
+        parent,
+        ancestry,
+      })
+    ) {
       onMatch?.(patchId)
     }
   })
-}
-
-/** Rewrite one matcher hit and report its patch binding. */
-function transformMatchedFunction(
-  patchId: string,
-  operation: string,
-  node: Node,
-  parent: Node,
-  ancestry: Node[],
-): boolean {
-  if (isConstructorTarget(node, parent)) {
-    throw new Error(
-      'stent: constructor targets are not supported (super() and new.target cannot survive '
-        + 'the traced-closure replay); patch a method or factory instead',
-    )
-  }
-  const matched = matchFunction(node)
-  const program = ancestry[ancestry.length - 1]
-  if (!matched || !program || program.type !== 'Program') {
-    return false
-  }
-  const block = ensureBlockBody(matched)
-  const names = namesOf(program)
-  const outerArgsName = prepareOuterArguments(matched, block, names)
-  const argsName = names.unique(ARGS)
-  const tracedName = names.unique(TRACED)
-  const callName = names.unique(CALL)
-  const capture = createOuterArgumentsCapture(outerArgsName)
-  const args = createArgumentsStatement(matched, argsName)
-  const traced = createTracedStatement(
-    matched,
-    block.body,
-    argsName,
-    tracedName,
-  )
-  const call = createCallStatement(
-    patchId,
-    operation,
-    argsName,
-    tracedName,
-    callName,
-  )
-  const publish = createPublishStatement(matched, names, callName, tracedName)
-  block.body = createInjectedStatements(capture, args, traced, call, publish)
-  return true
-}
-
-/** Wrap an expression-bodied arrow in a return-bearing block. */
-function ensureBlockBody(matched: MatchedFunction): BlockStatement {
-  if (matched.body.type !== 'BlockStatement') {
-    const synthesized: BlockStatement = {
-      type: 'BlockStatement',
-      body: [{ type: 'ReturnStatement', argument: matched.body }],
-    }
-    matched.node.body = synthesized
-    matched.body = synthesized
-  }
-  return matched.body
-}
-
-/** Capture and rewrite enclosing `arguments` references for an arrow. */
-function prepareOuterArguments(
-  matched: MatchedFunction,
-  block: BlockStatement,
-  names: NameAllocator,
-): string | undefined {
-  if (!matched.arrow || !mapOuterArguments(block, undefined)) {
-    return undefined
-  }
-  const name = names.unique(OUTER_ARGUMENTS)
-  mapOuterArguments(block, name)
-  return name
 }
 
 export { registerStentTransform }

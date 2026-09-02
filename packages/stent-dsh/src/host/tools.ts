@@ -12,8 +12,8 @@
  * @module @oh-my-dsh/stent-dsh/host/tools
  */
 
-import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
+import { Service } from '@deepseek-ai/cordis'
 import type {
   PostToolDecision,
   PreToolDecision,
@@ -39,16 +39,16 @@ declare module '@deepseek-ai/cordis' {
  */
 class StentToolsService extends Service {
   /** Service key under which this class registers on `ctx`. */
-  static provide = 'stentTools'
+  public static provide = 'stentTools'
   /** The authoritative tool registry must be mounted. */
-  static inject = ['tools']
+  public static inject = ['tools']
 
   /**
    * Create and install the Tool API.
    *
    * @param ctx - Cordis context that owns the service.
    */
-  constructor(ctx: Context) {
+  public constructor(ctx: Context) {
     super(ctx, 'stentTools')
   }
 
@@ -59,7 +59,7 @@ class StentToolsService extends Service {
    *   finalization/presentation callbacks.
    * @returns The exact disposer that unregisters the tool.
    */
-  register(definition: ToolDefinition): () => void {
+  public register(definition: ToolDefinition): () => void {
     return this.ctx.tools.register(definition)
   }
 
@@ -70,7 +70,7 @@ class StentToolsService extends Service {
    *   without it to veto.
    * @returns The exact `ctx.on()` disposer removing this listener.
    */
-  onPreExecute(
+  public onPreExecute(
     listener: (
       exec: ToolExecution,
       next: () => Promise<PreToolDecision>,
@@ -87,7 +87,7 @@ class StentToolsService extends Service {
    *   result unchanged.
    * @returns The exact `ctx.on()` disposer removing this listener.
    */
-  onPostExecute(
+  public onPostExecute(
     listener: (
       exec: ToolExecution,
       result: Readonly<ToolExecutionResult>,

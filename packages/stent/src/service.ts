@@ -14,18 +14,18 @@
  * @module @oh-my-dsh/stent/service
  */
 
-import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
+import { Service } from '@deepseek-ai/cordis'
 
 import { isStentDshLaunch } from './activation.ts'
 import { registrationOwner } from './hmr/ownership.ts'
 import { runtime, validatePatchId, validatePatchStatic } from './runtime.ts'
 import type {
+  PatchId,
   StentBinding,
+  StentHandler,
   StentPatch,
   StentPatchInfo,
-  StentHandler,
-  PatchId,
 } from './types.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -35,6 +35,39 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+/** Priority of a patch that does not declare one. */
+const DEFAULT_PRIORITY = 0
+
+/** Validate the static fields of a patch descriptor. */
+function validatePatch(patch: StentPatch): void {
+  validatePatchStatic(patch)
+  if (typeof patch.handler !== 'function') {
+    throw new TypeError('stent: patch.handler must be a function')
+  }
+  const { target } = patch
+  if (target.functionQuery === undefined && target.astQuery === undefined) {
+    throw new Error('stent: patch target must carry functionQuery or astQuery')
+  }
+  if (typeof target.astQuery === 'string' && target.astQuery.trim() === '') {
+    throw new Error('stent: patch target astQuery must not be blank')
+  }
+}
+
+/** Build the immutable runtime info snapshot for a patch. */
+function patchInfo(patch: StentPatch): StentPatchInfo {
+  const info: StentPatchInfo = {
+    id: patch.id,
+    target: patch.target,
+    operation: patch.operation,
+    priority: patch.priority ?? DEFAULT_PRIORITY,
+    enabled: true,
+  }
+  if (patch.required === undefined) {
+    return info
+  }
+  return { ...info, required: patch.required }
+}
+
 /**
  * The Stent registry service. Keeps patch metadata and handler state in the
  * process-local runtime and ties every registration to the owning fiber's
@@ -42,14 +75,17 @@ declare module '@deepseek-ai/cordis' {
  */
 class StentService extends Service {
   /** Service key under which this class registers on `ctx`. */
-  static provide = 'stent';
+  public static provide = 'stent'
+
+  /** The process-local registry every method of this facade delegates to. */
+  private readonly registry = runtime
 
   /**
    * Stent-dependent plugins only activate in the DSH Stent launch path.
    * Low-level callers can still construct this service explicitly for
    * standalone Stent usage; Cordis injection observes this availability check.
    */
-  [Service.check]() {
+  public [Service.check](): boolean {
     return isStentDshLaunch()
   }
 
@@ -58,7 +94,7 @@ class StentService extends Service {
    *
    * @param ctx - Cordis context that owns the service.
    */
-  constructor(ctx: Context) {
+  public constructor(ctx: Context) {
     super(ctx, 'stent')
   }
 
@@ -78,24 +114,25 @@ class StentService extends Service {
    * @returns The registered patch id.
    * @throws When the id is already registered by a different plugin owner.
    */
-  register(patch: StentPatch): PatchId {
+  public register(patch: StentPatch): PatchId {
     validatePatchId(patch.id)
     validatePatch(patch)
-    const fiber = this.ctx.fiber
-    // The effect goes first: a disposed (or unloading) fiber rejects the
-    // registration before it can leave a half-installed entry behind, and a
-    // later cross-owner throw from the runtime still leaves a disposer that
-    // no-ops (it never owned the entry).
-    this.ctx.effect(() => {
-      return () => {
-        if (runtime.isOwnedBy(patch.id, fiber)) {
-          runtime.disable(patch.id)
-          runtime.remove(patch.id)
+    const { fiber } = this.ctx
+    /* The effect goes first: a disposed (or unloading) fiber rejects the
+       registration before it can leave a half-installed entry behind, and a
+       later cross-owner throw from the runtime still leaves a disposer that
+       no-ops (it never owned the entry). */
+    this.ctx.effect(
+      () => (): void => {
+        if (this.registry.isOwnedBy(patch.id, fiber)) {
+          this.registry.disable(patch.id)
+          this.registry.remove(patch.id)
         }
-      }
-    }, `stent:register(${patch.id})`)
-    runtime.register(patchInfo(patch), registrationOwner(this.ctx), fiber)
-    runtime.enable(patch.id, patch.handler)
+      },
+      `stent:register(${patch.id})`,
+    )
+    this.registry.register(patchInfo(patch), registrationOwner(this.ctx), fiber)
+    this.registry.enable(patch.id, patch.handler)
     return patch.id
   }
 
@@ -104,8 +141,8 @@ class StentService extends Service {
    *
    * @returns The patch infos sorted by priority then id.
    */
-  list(): StentPatchInfo[] {
-    return runtime.list()
+  public list(): StentPatchInfo[] {
+    return this.registry.list()
   }
 
   /**
@@ -114,8 +151,8 @@ class StentService extends Service {
    *
    * @param id - The patch id.
    */
-  disable(id: string): void {
-    runtime.disable(id)
+  public disable(id: string): void {
+    this.registry.disable(id)
   }
 
   /**
@@ -124,8 +161,8 @@ class StentService extends Service {
    * @param id - The patch id.
    * @param handler - The trusted runtime handler.
    */
-  enable(id: string, handler: StentHandler): void {
-    runtime.enable(id, handler)
+  public enable(id: string, handler: StentHandler): void {
+    this.registry.enable(id, handler)
   }
 
   /**
@@ -136,8 +173,8 @@ class StentService extends Service {
    *
    * @param id - The patch id.
    */
-  remove(id: string): void {
-    runtime.remove(id)
+  public remove(id: string): void {
+    this.registry.remove(id)
   }
 
   /**
@@ -150,8 +187,8 @@ class StentService extends Service {
    * @param fiber - The fiber token the registration was made on.
    * @returns True while the entry exists and is owned by that fiber.
    */
-  owns(id: string, fiber: unknown): boolean {
-    return runtime.isOwnedBy(id, fiber)
+  public owns(id: string, fiber: unknown): boolean {
+    return this.registry.isOwnedBy(id, fiber)
   }
 
   /**
@@ -163,11 +200,11 @@ class StentService extends Service {
    *   patches, flattened in patch-id order.
    * @returns The recorded binding records.
    */
-  bindings(id?: PatchId): readonly StentBinding[] {
+  public bindings(id?: PatchId): readonly StentBinding[] {
     if (id === undefined) {
-      return runtime.allBindings()
+      return this.registry.allBindings()
     }
-    return runtime.bindingsOf(id)
+    return this.registry.bindingsOf(id)
   }
 }
 
@@ -204,39 +241,6 @@ function getStent(ctx: Context): StentService {
     return existing
   }
   return new StentService(ctx)
-}
-
-/** Validate the static fields of a patch descriptor. */
-function validatePatch(patch: StentPatch): void {
-  validatePatchStatic(patch)
-  if (typeof patch.handler !== 'function') {
-    throw new Error('stent: patch.handler must be a function')
-  }
-  const target = patch.target
-  if (target.functionQuery === undefined && target.astQuery === undefined) {
-    throw new Error('stent: patch target must carry functionQuery or astQuery')
-  }
-  if (
-    typeof target.astQuery === 'string'
-    && target.astQuery.trim().length === 0
-  ) {
-    throw new Error('stent: patch target astQuery must not be blank')
-  }
-}
-
-/** Build the immutable runtime info snapshot for a patch. */
-function patchInfo(patch: StentPatch): StentPatchInfo {
-  const info: StentPatchInfo = {
-    id: patch.id,
-    target: patch.target,
-    operation: patch.operation,
-    priority: patch.priority ?? 0,
-    enabled: true,
-  }
-  if (patch.required !== undefined) {
-    info.required = patch.required
-  }
-  return info
 }
 
 export { StentService, getStent }

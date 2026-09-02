@@ -32,9 +32,15 @@ interface StentWireInstrumentation extends Omit<
 function serializeInstrumentation(
   config: StentInstrumentationConfig,
 ): StentWireInstrumentation {
-  const filePath = config.module.filePath
+  const { filePath } = config.module
   if (!(filePath instanceof RegExp)) {
-    return config as StentWireInstrumentation
+    return {
+      ...config,
+      module: {
+        ...config.module,
+        filePath,
+      },
+    }
   }
   return {
     ...config,
@@ -56,17 +62,24 @@ function serializeInstrumentation(
 function reviveInstrumentation(
   config: StentWireInstrumentation,
 ): StentInstrumentationConfig {
-  const filePath = config.module.filePath
+  const { filePath } = config.module
   if (typeof filePath === 'object') {
+    const [source, flags] = filePath.stentRegexp
     return {
       ...config,
       module: {
         ...config.module,
-        filePath: new RegExp(filePath.stentRegexp[0], filePath.stentRegexp[1]),
+        filePath: new RegExp(source, flags),
       },
     }
   }
-  return config as StentInstrumentationConfig
+  return {
+    ...config,
+    module: {
+      ...config.module,
+      filePath,
+    },
+  }
 }
 
 export { serializeInstrumentation, reviveInstrumentation }

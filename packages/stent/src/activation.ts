@@ -10,6 +10,24 @@
 const STENT_DSH_LAUNCH_KEY = Symbol.for('oh-my-dsh.stent-dsh.launch')
 
 /**
+ * Check whether the current process or browser runtime was activated through
+ * the Stent DSH entrypoint.
+ *
+ * This is a lifecycle policy marker, not a security boundary. It deliberately
+ * differs from `isStentInstalled()`: a caller may install low-level hooks for
+ * standalone use without granting DSH plugins the Stent launch capability.
+ *
+ * @param globalObject - Global-like object used by the runtime or a test.
+ * @returns Whether the Stent DSH launch marker is present.
+ */
+function isStentDshLaunch(globalObject: object = globalThis): boolean {
+  if (!(STENT_DSH_LAUNCH_KEY in globalObject)) {
+    return false
+  }
+  return globalObject[STENT_DSH_LAUNCH_KEY] === true
+}
+
+/**
  * Mark the current global object as being in the Stent-enabled DSH launch path.
  *
  * @param globalObject - Global-like object used by the runtime or a test.
@@ -24,24 +42,6 @@ function markStentDshLaunch(globalObject: object = globalThis): void {
     value: true,
     writable: false,
   })
-}
-
-/**
- * Check whether the current process or browser runtime was activated through
- * the Stent DSH entrypoint.
- *
- * This is a lifecycle policy marker, not a security boundary. It deliberately
- * differs from `isStentInstalled()`: a caller may install low-level hooks for
- * standalone use without granting DSH plugins the Stent launch capability.
- *
- * @param globalObject - Global-like object used by the runtime or a test.
- * @returns Whether the Stent DSH launch marker is present.
- */
-function isStentDshLaunch(globalObject: object = globalThis): boolean {
-  return (
-    (globalObject as Record<PropertyKey, unknown>)[STENT_DSH_LAUNCH_KEY]
-    === true
-  )
 }
 
 export { STENT_DSH_LAUNCH_KEY, markStentDshLaunch, isStentDshLaunch }
