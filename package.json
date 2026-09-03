@@ -8,16 +8,16 @@
     "node": "^22.19.0 || >=24.0.0"
   },
   "license": "BSD-3-Clause",
-  "imports": {
-    "#src/*": "./src/*.ts",
-    "#tools/*": "./tools/*.ts"
-  },
   "repository": {
     "type": "git",
     "url": "https://github.com/omdsh-dev/stent.git"
   },
   "publishConfig": {
     "access": "public"
+  },
+  "imports": {
+    "#src/*": "./src/*.ts",
+    "#tools/*": "./tools/*.ts"
   },
   "files": [
     "lib/stent-dsh.js",
@@ -62,14 +62,13 @@
     "@deepseek-ai/dsh-home-paths": "0.1.1-rc.2",
     "@deepseek-ai/dsh-launch-environment": "0.1.1-rc.2",
     "@tsconfig/node24": "^24.0.5",
-    "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.20.0",
+    "@types/js-yaml": "^4.0.9",
     "knip": "^6.16.1",
     "oxfmt": "0.64.0",
     "oxlint": "1.76.0",
     "oxlint-tsgolint": "7.0.2001",
     "tsdown": "^0.22.2",
-    "tsx": "^4.23.11",
     "typescript": "^6.0.3",
     "unrun": "^0.3.1",
     "vitest": "^4.1.8"
