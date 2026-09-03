@@ -31,7 +31,6 @@ if (!existsSync(launcher) || !existsSync(compiledPreload)) {
     'compiled launcher artifacts are missing; run pnpm run build before the launcher test',
   )
 }
-const sourceBundlePackageJson = path.join(repoRoot, 'package.json')
 const commanderPackage = path.join(repoRoot, 'node_modules', 'commander')
 const jsYamlPackage = path.join(repoRoot, 'node_modules', 'js-yaml')
 
@@ -79,7 +78,7 @@ const PROFILE_STENT_NODE =
 const PROFILE_STENT_ACTIVATION =
   "export { markStentDshLaunch } from './index.js'\n"
 const BUNDLE_MANIFEST =
-  '{"name":"@oh-my-dsh/stent-pack","dependencies":{"@oh-my-dsh/stent":"file:packages/stent","js-yaml":"^4.3.1"}}\n'
+  '{"name":"@oh-my-dsh/stent-pack","dependencies":{"@oh-my-dsh/stent":"file:packages/stent","js-yaml":"^4.3.1"},"peerDependencies":{"@deepseek-ai/dsh-app-boot":"^0.1.1-rc.2"}}\n'
 const CMD_SHIM = `#!/bin/sh
 basedir=$(dirname "$0")
 exec node "$basedir/../nowhere" "$@"
@@ -162,9 +161,11 @@ function installFixtures(): void {
   for (const [file, content] of FIXTURE_FILES) {
     fixtureTree.writeFixture(file, content)
   }
+  mkdirSync(path.join(webModules, '@deepseek-ai'), { recursive: true })
   mkdirSync(path.join(webModules, '@oh-my-dsh'), { recursive: true })
   symlinkSync(commanderPackage, path.join(webModules, 'commander'), 'dir')
   symlinkSync(jsYamlPackage, path.join(webModules, 'js-yaml'), 'dir')
+  symlinkSync(bootDir, path.join(webModules, '@deepseek-ai', 'dsh-app-boot'))
   symlinkSync(stubStent, path.join(webModules, '@oh-my-dsh', 'stent'))
   fixtureTree.copyFixture(launcher, path.join(installedLib, 'stent-dsh.js'))
   fixtureTree.copyFixture(
@@ -209,11 +210,9 @@ function run(argv: readonly string[], options: RunOptions = {}): RunResult {
   }
 }
 
-/** The pre-boot heal ran against the CLI package and the bundle manifest. */
-function expectHealedBoot(out: RunResult, bundleManifest: string): void {
+/** The static app-boot peer loaded and the launcher reached the CLI. */
+function expectLaunch(out: RunResult): void {
   expect(out.status, `${out.stdout}\n${out.stderr}`).toBe(EXIT_SUCCESS)
-  expect(out.stdout).toContain(`HEAL-MARK ${path.join(dshPkg, 'package.json')}`)
-  expect(out.stdout).toContain(`HEAL-MARK ${bundleManifest}`)
   expect(out.stdout).toContain('FAKE-DSH config=false')
   expect(out.stdout).toContain('FAKE-DSH node-options=')
 }
@@ -233,14 +232,16 @@ function expectPreloadHandoff(
 }
 /** A source-checkout boot: the launcher stays on its own dependency graph. */
 function expectBoot(out: RunResult): void {
-  expectHealedBoot(out, sourceBundlePackageJson)
+  expectLaunch(out)
   expectPreloadHandoff(out, PROFILE_FORWARDED_ARGV, profileDir)
   // 源码 launcher 使用自身依赖图中的静态 import，不会读取 profile 替代包。
   expect(out.stdout).not.toContain('PROFILE-BOOT count=0')
 }
 /** An installed-bundle boot: the profile's own Stent replacement boots. */
 function expectInstalledWeb(out: RunResult): void {
-  expectHealedBoot(out, installedBundlePackageJson)
+  expectLaunch(out)
+  expect(out.stdout).toContain(`HEAL-MARK ${path.join(dshPkg, 'package.json')}`)
+  expect(out.stdout).toContain(`HEAL-MARK ${installedBundlePackageJson}`)
   expectPreloadHandoff(out, WEB_FORWARDED_ARGV, webProfileDir)
   expect(out.stdout).toContain('PROFILE-BOOT dynamic=true')
 }

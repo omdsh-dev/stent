@@ -11,6 +11,7 @@
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+import { healProfilesModuleFallback } from '@deepseek-ai/dsh-app-boot'
 import { markStentDshLaunch } from '@oh-my-dsh/stent/activation'
 import { installStentHooks } from '@oh-my-dsh/stent/node'
 
@@ -21,7 +22,6 @@ import { composeStentConfig, resolveProfile } from './stent-dsh/profile.ts'
 /** First forwarded argv index: the Node binary and the CLI entry come first. */
 const FORWARDED_ARGV_START = 2
 
-type HealProfiles = (packageJson: string, dshHome: string) => void
 /** The launcher options the argument parser hands to every launch step. */
 type LauncherArgs = ReturnType<typeof parseOpt>
 type ResolvedHost = ReturnType<typeof resolveHost>
@@ -35,42 +35,20 @@ interface LaunchContext {
   readonly profile: ProfilePaths
 }
 
-/** The pre-boot heal the CLI's app-boot module is required to expose. */
-function healerOf(moduleExports: unknown): HealProfiles {
-  if (
-    typeof moduleExports !== 'object'
-    || moduleExports === null
-    || Array.isArray(moduleExports)
-  ) {
-    throw new TypeError(
-      'stent-dsh: @deepseek-ai/dsh-app-boot did not load as a module object',
-    )
-  }
-  const healProfilesModuleFallback: unknown = Reflect.get(
-    moduleExports,
-    'healProfilesModuleFallback',
-  )
-  if (typeof healProfilesModuleFallback !== 'function') {
-    throw new TypeError(
-      'stent-dsh: @deepseek-ai/dsh-app-boot exports no healProfilesModuleFallback',
-    )
-  }
-  return (packageJson: string, dshHome: string): void => {
-    Reflect.apply(healProfilesModuleFallback, undefined, [packageJson, dshHome])
-  }
-}
-
 /** Heal the bundle's and the CLI's dependency closures before the CLI boots. */
-async function healProfiles(
+function healProfiles(
   host: ResolvedHost,
   bundlePackageJson: URL,
   dshHome: URL,
-): Promise<void> {
-  const modulePath = host.fromCli.resolve('@deepseek-ai/dsh-app-boot')
-  const moduleExports: unknown = await import(pathToFileURL(modulePath).href)
-  const heal = healerOf(moduleExports)
-  heal(fileURLToPath(bundlePackageJson), fileURLToPath(dshHome))
-  heal(fileURLToPath(host.cliPkgJson), fileURLToPath(dshHome))
+): void {
+  healProfilesModuleFallback(
+    fileURLToPath(bundlePackageJson),
+    fileURLToPath(dshHome),
+  )
+  healProfilesModuleFallback(
+    fileURLToPath(host.cliPkgJson),
+    fileURLToPath(dshHome),
+  )
 }
 
 /** The launcher options this preload was started with. */
@@ -138,10 +116,10 @@ function installLaunchHooks(): void {
 }
 
 /** Apply the composed launch to this process, in the order the CLI expects. */
-async function activateLaunch(context: LaunchContext): Promise<void> {
+function activateLaunch(context: LaunchContext): void {
   const { config, host, opt, profile } = context
   const bundlePackageJson = new URL('../package.json', opt.launcherUrl)
-  await healProfiles(host, bundlePackageJson, profile.dshHome)
+  healProfiles(host, bundlePackageJson, profile.dshHome)
   if (host.cwd !== undefined) {
     process.chdir(fileURLToPath(host.cwd))
   }
@@ -151,7 +129,7 @@ async function activateLaunch(context: LaunchContext): Promise<void> {
   installLaunchHooks()
 }
 
-async function prepareDshLaunch(): Promise<void> {
+function prepareDshLaunch(): void {
   const targetPath = process.env.STENT_DSH_PATH
   if (targetPath === undefined || targetPath === '') {
     throw new Error(
@@ -163,7 +141,7 @@ async function prepareDshLaunch(): Promise<void> {
   const host = resolveHost(opt)
   const { config, profile } = composeLaunch(opt)
   try {
-    await activateLaunch({ config, host, opt, profile })
+    activateLaunch({ config, host, opt, profile })
   } catch (error) {
     config.cleanup()
     throw error
@@ -174,5 +152,5 @@ if (
   process.env.STENT_PRELOAD_DONE !== '1'
   && process.env.STENT_DSH_LAUNCH === '1'
 ) {
-  await prepareDshLaunch()
+  prepareDshLaunch()
 }
