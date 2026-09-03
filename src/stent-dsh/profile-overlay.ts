@@ -3,6 +3,7 @@
  * bundle's patch layer lives, and which rows the launch must enable.
  */
 import { existsSync, readFileSync } from 'node:fs'
+import { findPackageJSON } from 'node:module'
 import path from 'node:path'
 
 type RecordValue = Readonly<Record<string, unknown>>
@@ -53,15 +54,15 @@ function bundlePatchOf(
 }
 
 /** The patch file of one declared bundle, if it resolves and declares one. */
-function bundlePatchFile(
-  resolveBundle: (specifier: string) => string,
-  bundle: unknown,
-): string | undefined {
+function bundlePatchFile(bundle: unknown, parent: URL): string | undefined {
   if (typeof bundle !== 'string') {
     return undefined
   }
   try {
-    const manifestPath = resolveBundle(`${bundle}/package.json`)
+    const manifestPath = findPackageJSON(bundle, parent)
+    if (manifestPath === undefined) {
+      return undefined
+    }
     const manifest = readJsonRecord(manifestPath)
     if (manifest === undefined) {
       return undefined

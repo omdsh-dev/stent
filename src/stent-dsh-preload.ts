@@ -16,11 +16,7 @@ import { installStentHooks } from '@oh-my-dsh/stent/node'
 
 import { buildCliArgs, parseOpt } from './stent-dsh/args.ts'
 import { resolveHost } from './stent-dsh/cli.ts'
-import {
-  composeStentConfig,
-  resolveProfile,
-  resolveYaml,
-} from './stent-dsh/profile.ts'
+import { composeStentConfig, resolveProfile } from './stent-dsh/profile.ts'
 
 /** First forwarded argv index: the Node binary and the CLI entry come first. */
 const FORWARDED_ARGV_START = 2
@@ -92,22 +88,16 @@ function launcherOptions(targetPath: string): LauncherArgs {
   )
 }
 
-/** Resolve the profile, its js-yaml, and the composed activation overlay. */
-function composeLaunch(
-  opt: LauncherArgs,
-  host: ResolvedHost,
-): { config: StentConfig; profile: ProfilePaths } {
+/** Resolve the profile and compose its activation overlay. */
+function composeLaunch(opt: LauncherArgs): {
+  config: StentConfig
+  profile: ProfilePaths
+} {
   const profile = resolveProfile(opt)
-  const { requireFromProfile, yaml } = resolveYaml(
-    profile.profileDir,
-    host.fromCli,
-  )
   const config = composeStentConfig({
     args: opt,
     dshHome: profile.dshHome,
     profileDir: profile.profileDir,
-    requireFromProfile,
-    yaml,
   })
   return { config, profile }
 }
@@ -171,7 +161,7 @@ async function prepareDshLaunch(): Promise<void> {
 
   const opt = launcherOptions(targetPath)
   const host = resolveHost(opt)
-  const { config, profile } = composeLaunch(opt, host)
+  const { config, profile } = composeLaunch(opt)
   try {
     await activateLaunch({ config, host, opt, profile })
   } catch (error) {

@@ -33,6 +33,7 @@ if (!existsSync(launcher) || !existsSync(compiledPreload)) {
 }
 const sourceBundlePackageJson = path.join(repoRoot, 'package.json')
 const commanderPackage = path.join(repoRoot, 'node_modules', 'commander')
+const jsYamlPackage = path.join(repoRoot, 'node_modules', 'js-yaml')
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'stent-installed-'))
 const home = path.join(tempDir, 'home')
@@ -43,7 +44,6 @@ const proj = path.join(tempDir, 'proj')
 const dshPkg = path.join(proj, 'node_modules', '@deepseek-ai', 'dsh')
 const binFile = path.join(dshPkg, 'lib', 'bin.js')
 const bootDir = path.join(proj, 'node_modules', '@deepseek-ai/dsh-app-boot')
-const yamlDir = path.join(proj, 'node_modules', 'js-yaml')
 const shimDir = path.join(tempDir, 'shims')
 const scriptShimDir = path.join(tempDir, 'script-shims')
 const stubStent = path.join(profileDir, 'node_modules', '@oh-my-dsh', 'stent')
@@ -70,13 +70,6 @@ const BOOT_MANIFEST =
   '{"name":"@deepseek-ai/dsh-app-boot","version":"1.0.0","type":"module","main":"index.js"}\n'
 const HEAL_STUB =
   "export function healProfilesModuleFallback(anchor) { console.log('HEAL-MARK ' + anchor) }\n"
-const YAML_MANIFEST = '{"name":"js-yaml","version":"4.0.0","main":"index.js"}\n'
-const FAKE_JS_YAML = `class Type { constructor() {} }
-const DEFAULT_SCHEMA = { extend: () => ({}) }
-const load = () => []
-const dump = () => '[]\\n'
-module.exports = { Type, DEFAULT_SCHEMA, load, dump }
-`
 const STENT_MANIFEST =
   '{"name":"@oh-my-dsh/stent","version":"1.0.0","type":"module","exports":{".":"./index.js","./activation":"./activation.js","./node":"./node.js"}}\n'
 const PROFILE_STENT_INDEX =
@@ -86,7 +79,7 @@ const PROFILE_STENT_NODE =
 const PROFILE_STENT_ACTIVATION =
   "export { markStentDshLaunch } from './index.js'\n"
 const BUNDLE_MANIFEST =
-  '{"name":"@oh-my-dsh/stent-pack","dependencies":{"@oh-my-dsh/stent":"file:packages/stent"}}\n'
+  '{"name":"@oh-my-dsh/stent-pack","dependencies":{"@oh-my-dsh/stent":"file:packages/stent","js-yaml":"^4.3.1"}}\n'
 const CMD_SHIM = `#!/bin/sh
 basedir=$(dirname "$0")
 exec node "$basedir/../nowhere" "$@"
@@ -94,15 +87,12 @@ exec node "$basedir/../nowhere" "$@"
 `
 
 const FIXTURE_FILES: readonly (readonly [string, string])[] = [
-  /* The registry-installed CLI, then the CLI's own dependencies: the launcher
-     falls back to them for js-yaml (not in the profile) and resolves
-     dsh-app-boot from the CLI's real location for the pre-boot heal. */
+  /* The registry-installed CLI and its app-boot dependency provide the
+     installed-mode launch target and pre-boot healer. */
   [path.join(dshPkg, 'package.json'), DSH_MANIFEST],
   [binFile, FAKE_DSH_BIN],
   [path.join(bootDir, 'package.json'), BOOT_MANIFEST],
   [path.join(bootDir, 'index.js'), HEAL_STUB],
-  [path.join(yamlDir, 'package.json'), YAML_MANIFEST],
-  [path.join(yamlDir, 'index.js'), FAKE_JS_YAML],
   /* The profile's installed trio copy is used by the installed bundle below.
      The source checkout launcher uses the Cordis-free Node API from its own
      dependency graph. */
@@ -174,6 +164,7 @@ function installFixtures(): void {
   }
   mkdirSync(path.join(webModules, '@oh-my-dsh'), { recursive: true })
   symlinkSync(commanderPackage, path.join(webModules, 'commander'), 'dir')
+  symlinkSync(jsYamlPackage, path.join(webModules, 'js-yaml'), 'dir')
   symlinkSync(stubStent, path.join(webModules, '@oh-my-dsh', 'stent'))
   fixtureTree.copyFixture(launcher, path.join(installedLib, 'stent-dsh.js'))
   fixtureTree.copyFixture(

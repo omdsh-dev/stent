@@ -5,10 +5,12 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
-import { createRequire } from 'node:module'
 import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+
+import { DEFAULT_SCHEMA, Type, dump, load } from 'js-yaml'
+import type { Schema } from 'js-yaml'
 
 import type { LauncherArgs } from './args.ts'
 import {
@@ -19,24 +21,8 @@ import {
 
 type RecordValue = Readonly<Record<string, unknown>>
 type PatchLayer = readonly unknown[]
-type YamlLoadOptions = Readonly<{ schema?: unknown }>
 /** The overlay module owns the row shape every patch layer merges into. */
 type PatchRow = ReturnType<typeof createEnableOverlay>[number]
-
-interface YamlTypeOptions {
-  readonly kind: 'scalar'
-  readonly resolve: (data: unknown) => boolean
-  readonly construct: (data: unknown) => unknown
-}
-
-interface YamlApi {
-  readonly Type: new (tag: string, options: YamlTypeOptions) => unknown
-  readonly DEFAULT_SCHEMA: {
-    readonly extend: (types: readonly unknown[]) => unknown
-  }
-  readonly load: (text: string, options?: YamlLoadOptions) => unknown
-  readonly dump: (value: unknown) => string
-}
 
 interface ResolvedProfile {
   readonly dshHome: URL
@@ -59,8 +45,6 @@ interface ComposeOptions {
   readonly args: LauncherArgs
   readonly dshHome: URL
   readonly profileDir: URL
-  readonly requireFromProfile: NodeJS.Require
-  readonly yaml: YamlApi
 }
 
 /** Exit status used when the launch cannot be prepared. */
@@ -144,76 +128,35 @@ function resolveProfile({
   return { dshHome, effectiveProfile, profileDir }
 }
 
-function isYamlApi(value: unknown): value is YamlApi {
-  return (
-    isRecord(value)
-    && typeof value.Type === 'function'
-    && typeof value.load === 'function'
-    && typeof value.dump === 'function'
-    && isRecord(value.DEFAULT_SCHEMA)
-  )
-}
-
-/** Load js-yaml through one require entry, ignoring resolution failures. */
-function loadYamlApi(from: NodeJS.Require): YamlApi | undefined {
-  try {
-    const loaded: unknown = from('js-yaml')
-    if (isYamlApi(loaded)) {
-      return loaded
-    }
-  } catch {
-    /* Not resolvable from this entry. */
-  }
-  return undefined
-}
-
-/** Resolve js-yaml from the profile first, then from the CLI package. */
-function resolveYaml(
-  profileDir: URL,
-  fromCli: NodeJS.Require,
-): { requireFromProfile: NodeJS.Require; yaml: YamlApi } {
-  const requireFromProfile = createRequire(
-    childPath(profileDir, 'package.json'),
-  )
-  /* The CLI's own declared dependencies carry js-yaml (either host mode). */
-  const yaml = loadYamlApi(requireFromProfile) ?? loadYamlApi(fromCli)
-  if (yaml === undefined) {
-    fail([
-      'stent-dsh: js-yaml is required (install it in the profile or beside the CLI)',
-    ])
-  }
-  return { requireFromProfile, yaml }
-}
-
 /** Js-yaml schema tolerating the Loader's `!!js` expression tag. */
-function expressionSchema(yaml: YamlApi): unknown {
+function expressionSchema(): Schema | undefined {
   try {
-    const jsTag = new yaml.Type('tag:yaml.org,2002:js', {
+    const jsTag = new Type('tag:yaml.org,2002:js', {
       kind: 'scalar',
       resolve: (data: unknown): boolean => data !== null,
       construct: (data: unknown): unknown => data,
     })
-    return yaml.DEFAULT_SCHEMA.extend([jsTag])
+    return DEFAULT_SCHEMA.extend([jsTag])
   } catch {
     return undefined
   }
 }
 
-function loadDocument(yaml: YamlApi, text: string, schema: unknown): unknown {
+function loadDocument(text: string, schema: Schema | undefined): unknown {
   if (schema === undefined) {
-    return yaml.load(text)
+    return load(text)
   }
-  return yaml.load(text, { schema })
+  return load(text, { schema })
 }
 
 /** Load one YAML patch layer (empty array when the file is absent). */
-function createPatchLoader(yaml: YamlApi): (file: URL) => PatchLayer {
-  const schema = expressionSchema(yaml)
+function createPatchLoader(): (file: URL) => PatchLayer {
+  const schema = expressionSchema()
   return (file: URL): PatchLayer => {
     if (!existsSync(file)) {
       return []
     }
-    const data = loadDocument(yaml, readFileSync(file, 'utf8'), schema)
+    const data = loadDocument(readFileSync(file, 'utf8'), schema)
     if (Array.isArray(data)) {
       return data
     }
@@ -248,16 +191,11 @@ function applyLayer(rows: Map<string, PatchRow>, layer: PatchLayer): void {
 }
 
 /** Patch files in layer order: bundles, profile, home, then CLI overrides. */
-function patchSources({
-  args,
-  dshHome,
-  profileDir,
-  requireFromProfile,
-}: ComposeOptions): URL[] {
-  const manifest = fileURLToPath(childPath(profileDir, 'package.json'))
-  const resolveBundle = requireFromProfile.resolve.bind(requireFromProfile)
+function patchSources({ args, dshHome, profileDir }: ComposeOptions): URL[] {
+  const manifestUrl = childPath(profileDir, 'package.json')
+  const manifest = fileURLToPath(manifestUrl)
   const bundlePatches = profileBundles(manifest)
-    .map((bundle) => bundlePatchFile(resolveBundle, bundle))
+    .map((bundle) => bundlePatchFile(bundle, manifestUrl))
     .filter((file) => file !== undefined)
     .map((file) => pathToFileURL(file))
   return [
@@ -269,7 +207,7 @@ function patchSources({
 }
 
 function composeRows(options: ComposeOptions): Map<string, PatchRow> {
-  const loadPatchLayer = createPatchLoader(options.yaml)
+  const loadPatchLayer = createPatchLoader()
   const rows = new Map<string, PatchRow>()
   for (const file of patchSources(options)) {
     applyLayer(rows, loadPatchLayer(file))
@@ -277,22 +215,22 @@ function composeRows(options: ComposeOptions): Map<string, PatchRow> {
   return rows
 }
 
-function dumpOverlay(yaml: YamlApi, overlay: readonly PatchRow[]): string {
+function dumpOverlay(overlay: readonly PatchRow[]): string {
   if (overlay.length > EMPTY_OVERLAY) {
-    return yaml.dump(overlay)
+    return dump(overlay)
   }
   return '[]\n'
 }
 
 /** Compose profile rows and create the temporary activation overlay. */
 function composeStentConfig(options: ComposeOptions): StentConfig {
-  const { args, yaml } = options
+  const { args } = options
   const rows = composeRows(options)
   const enableOverlay = createEnableOverlay([...rows], args.passthrough)
   const overlayPrefix = path.join(tmpdir(), 'stent-overlay-')
   const temp = pathToFileURL(mkdtempSync(overlayPrefix))
   const enablePath = childPath(temp, 'enable.yaml')
-  writeFileSync(enablePath, dumpOverlay(yaml, enableOverlay))
+  writeFileSync(enablePath, dumpOverlay(enableOverlay))
   return {
     enablePath,
     enableOverlay,
@@ -302,4 +240,4 @@ function composeStentConfig(options: ComposeOptions): StentConfig {
   }
 }
 
-export { resolveProfile, resolveYaml, composeStentConfig }
+export { resolveProfile, composeStentConfig }

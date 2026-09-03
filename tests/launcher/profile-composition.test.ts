@@ -5,11 +5,11 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import { load as loadYaml } from 'js-yaml'
 import { describe, expect, it } from 'vitest'
 
 import { composeStentConfig } from '#src/stent-dsh/profile'
@@ -18,34 +18,6 @@ const DSH_ENABLED = [
   { id: 'dynamic-plugin', disabled: false },
   { id: 'stent-dsh', disabled: false },
 ]
-
-class FakeYamlType {
-  public readonly tag: string
-  public readonly options: unknown
-
-  public constructor(tag: string, options: unknown) {
-    this.tag = tag
-    this.options = options
-  }
-}
-
-interface FakeYaml {
-  readonly Type: new (tag: string, options: unknown) => unknown
-  readonly DEFAULT_SCHEMA: {
-    readonly extend: (types: readonly unknown[]) => unknown
-  }
-  readonly load: (text: string) => unknown
-  readonly dump: (value: unknown) => string
-}
-
-function createYaml(): FakeYaml {
-  return {
-    Type: FakeYamlType,
-    DEFAULT_SCHEMA: { extend: (_types: readonly unknown[]) => ({}) },
-    load: (text) => JSON.parse(text) as unknown,
-    dump: (value) => JSON.stringify(value),
-  }
-}
 
 /** The Stent plugin config a profile carries, in its current or legacy shape. */
 function stentPluginConfig(
@@ -102,7 +74,6 @@ function composeOrCleanup(
   profileDir: string,
   mode: string | undefined,
 ): ReturnType<typeof composeStentConfig> {
-  const profileManifest = pathToFileURL(path.join(profileDir, 'package.json'))
   try {
     return composeStentConfig({
       args: {
@@ -117,8 +88,6 @@ function composeOrCleanup(
       },
       dshHome: pathToFileURL(path.join(root, 'home')),
       profileDir: pathToFileURL(profileDir),
-      requireFromProfile: createRequire(profileManifest),
-      yaml: createYaml(),
     })
   } catch (error) {
     rmSync(root, { recursive: true, force: true })
@@ -161,7 +130,7 @@ describe('stent profile composition', () => {
       expect.hasAssertions()
       withComposedProfile('web', (overlay, enableText) => {
         expect(overlay).toStrictEqual(DSH_ENABLED)
-        expect(JSON.parse(enableText)).toStrictEqual(DSH_ENABLED)
+        expect(loadYaml(enableText)).toStrictEqual(DSH_ENABLED)
       })
     },
   )

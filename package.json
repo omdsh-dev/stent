@@ -50,10 +50,12 @@
     "@oh-my-dsh/stent": "^0.1.1",
     "@oh-my-dsh/stent-api": "^0.1.1",
     "@oh-my-dsh/stent-dsh": "^0.1.1",
-    "commander": "^14.0.3"
+    "commander": "^14.0.3",
+    "js-yaml": "^4.3.1"
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.5",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.20.0",
     "knip": "^6.16.1",
     "oxfmt": "0.64.0",
