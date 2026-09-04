@@ -1,0 +1,4 @@
+interface:
+  display_name: "Class-First TypeScript State"
+  short_description: "Keep mutable state in cohesive classes"
+  default_prompt: "Use $ts-class-first-state-management when designing or refactoring TypeScript stateful code: put state, invariants, behavior, lifecycle, and async ownership in classes; keep interfaces and types for structural boundaries and data-only shapes."
