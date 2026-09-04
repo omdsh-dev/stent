@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evolve Stent API"
+  short_description: "Make intentional breaking API changes"
+  default_prompt: "Use $dsh-plugin-stent-breaking-api to replace this Stent API directly when the release is pre-1.0 and non-stable or crosses a major version, without compatibility shims."
