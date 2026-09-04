@@ -1,28 +1,22 @@
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { DEFAULT_SCHEMA, Type, dump, load } from 'js-yaml'
-import type { Schema } from 'js-yaml'
+import {
+  PROFILE_PATCH_FILENAME,
+  composeEntries,
+  loadOptionalPatches,
+  loadOverlayPatches,
+  loadProfile,
+  resolveProfileDir,
+} from '@deepseek-ai/dsh-app-boot'
 
 import type { LauncherArgs } from './args.ts'
-import {
-  bundlePatchFile,
-  createEnableOverlay,
-  profileBundles,
-} from './profile-overlay.ts'
+import { createEnableOverlay } from './profile-overlay.ts'
 
-type RecordValue = Readonly<Record<string, unknown>>
-type PatchLayer = readonly unknown[]
-/** The overlay module owns the row shape every patch layer merges into. */
 type PatchRow = ReturnType<typeof createEnableOverlay>[number]
+type ComposedRow = ReturnType<typeof composeEntries>[number]
 
 interface ResolvedProfile {
   readonly dshHome: URL
@@ -36,43 +30,22 @@ interface StentConfig {
   readonly cleanup: () => void
 }
 
-interface InstalledProfile {
-  readonly home: URL
-  readonly profile: string
-}
-
 interface ComposeOptions {
   readonly args: LauncherArgs
   readonly dshHome: URL
   readonly profileDir: URL
+  readonly installAnchor: URL
 }
 
-/** Exit status used when the launch cannot be prepared. */
-const EXIT_FAILURE = 1
-/** Length of an overlay that contributes no rows. */
-const EMPTY_OVERLAY = 0
 /** Relative path from an installed bundle launcher to its profile directory. */
 const LAUNCHER_TO_PROFILE = '../../../../..'
+const NO_ENTRIES = 0
+const JSON_INDENT = 2
 
 const installedLauncherGlobs = [
   '**/profiles/*/node_modules/@oh-my-dsh/stent-pack/lib/stent-dsh.js',
   '**/profiles/*/node_modules/@oh-my-dsh/stent-pack/lib/stent-dsh.mjs',
 ]
-
-function isRecord(value: unknown): value is RecordValue {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  return !Array.isArray(value)
-}
-
-/** Report why the launch cannot continue, then stop the process. */
-function fail(lines: readonly string[]): never {
-  for (const line of lines) {
-    process.stderr.write(`${line}\n`)
-  }
-  process.exit(EXIT_FAILURE)
-}
 
 function childPath(base: URL, ...parts: string[]): URL {
   const basePath = fileURLToPath(base)
@@ -86,7 +59,9 @@ function homeUrl(): URL {
   return pathToFileURL(dshPath)
 }
 
-function matchInstalledProfile(launcherUrl: URL): InstalledProfile | undefined {
+function matchInstalledProfile(
+  launcherUrl: URL,
+): { home: URL; profile: string } | undefined {
   const launcher = fileURLToPath(launcherUrl)
   const isInstalled = installedLauncherGlobs.some((pattern) =>
     path.matchesGlob(launcher, pattern),
@@ -103,10 +78,7 @@ function matchInstalledProfile(launcherUrl: URL): InstalledProfile | undefined {
   return { home: pathToFileURL(path.dirname(profilesDir)), profile }
 }
 
-/**
- * Resolve the profile like dsh does; an installed bundle bin also derives
- * DSH_HOME and the profile name from its own path.
- */
+/** Resolve the profile path with the official DSH profile-name rules. */
 function resolveProfile({
   profile,
   dshHome: configuredHome,
@@ -115,127 +87,62 @@ function resolveProfile({
   const installed = matchInstalledProfile(launcherUrl)
   const dshHome = installed?.home ?? configuredHome ?? homeUrl()
   const profileName = profile ?? installed?.profile ?? 'default'
-  /* An installed profile bin already identifies the profile. Reuse that name
-     when forwarding to the official CLI, even when the caller omits `web`. */
   const effectiveProfile = profile ?? installed?.profile
-  const profileDir = childPath(dshHome, 'profiles', profileName)
-  if (!existsSync(profileDir)) {
-    fail([
-      `stent-dsh: profile ${profileName} not found at ${fileURLToPath(profileDir)} (DSH_HOME=${fileURLToPath(dshHome)})`,
-      `  install the Stent npm bundle first: dsh plugin --profile ${profileName} add @oh-my-dsh/stent-pack`,
-    ])
-  }
+  const profileDir = pathToFileURL(
+    resolveProfileDir(profileName, fileURLToPath(dshHome)),
+  )
   return { dshHome, effectiveProfile, profileDir }
 }
 
-/** Js-yaml schema tolerating the Loader's `!!js` expression tag. */
-function expressionSchema(): Schema | undefined {
-  try {
-    const jsTag = new Type('tag:yaml.org,2002:js', {
-      kind: 'scalar',
-      resolve: (data: unknown): boolean => data !== null,
-      construct: (data: unknown): unknown => data,
-    })
-    return DEFAULT_SCHEMA.extend([jsTag])
-  } catch {
-    return undefined
-  }
-}
-
-function loadDocument(text: string, schema: Schema | undefined): unknown {
-  if (schema === undefined) {
-    return load(text)
-  }
-  return load(text, { schema })
-}
-
-/** Load one YAML patch layer (empty array when the file is absent). */
-function createPatchLoader(): (file: URL) => PatchLayer {
-  const schema = expressionSchema()
-  return (file: URL): PatchLayer => {
-    if (!existsSync(file)) {
-      return []
-    }
-    const data = loadDocument(readFileSync(file, 'utf8'), schema)
-    if (Array.isArray(data)) {
-      return data
-    }
-    return []
-  }
-}
-
-function applyInsert(rows: Map<string, PatchRow>, insert: PatchLayer): void {
-  for (const row of insert) {
-    if (isRecord(row) && typeof row.id === 'string') {
-      rows.set(row.id, { ...rows.get(row.id), ...row })
-    }
-  }
-}
-
-function applyRow(rows: Map<string, PatchRow>, value: RecordValue): void {
-  if (Array.isArray(value.insert)) {
-    applyInsert(rows, value.insert)
-  } else if (typeof value.id === 'string') {
-    /* An id-targeted override replaces the whole row, disabled flag included. */
-    rows.set(value.id, { ...value })
-  }
-}
-
-/** Merge one patch layer into the row index with id-targeted semantics. */
-function applyLayer(rows: Map<string, PatchRow>, layer: PatchLayer): void {
-  for (const value of layer) {
-    if (isRecord(value)) {
-      applyRow(rows, value)
-    }
-  }
-}
-
-/** Patch files in layer order: bundles, profile, home, then CLI overrides. */
-function patchSources({ args, dshHome, profileDir }: ComposeOptions): URL[] {
-  const manifestUrl = childPath(profileDir, 'package.json')
-  const manifest = fileURLToPath(manifestUrl)
-  const bundlePatches = profileBundles(manifest)
-    .map((bundle) => bundlePatchFile(bundle, manifestUrl))
-    .filter((file) => file !== undefined)
-    .map((file) => pathToFileURL(file))
-  return [
-    ...bundlePatches,
-    childPath(profileDir, 'cordis.patch.yml'),
-    childPath(dshHome, 'cordis.patch.yml'),
-    ...args.patchFiles,
-  ]
-}
-
-function composeRows(options: ComposeOptions): Map<string, PatchRow> {
-  const loadPatchLayer = createPatchLoader()
-  const rows = new Map<string, PatchRow>()
-  for (const file of patchSources(options)) {
-    applyLayer(rows, loadPatchLayer(file))
-  }
-  return rows
+/** Load every profile layer through DSH app-boot, then apply launcher overlays. */
+function composeRows(
+  options: ComposeOptions,
+): readonly (readonly [string, ComposedRow])[] {
+  const profileName = path.basename(fileURLToPath(options.profileDir))
+  const profile = loadProfile(
+    'stent-dsh',
+    profileName,
+    fileURLToPath(options.installAnchor),
+    fileURLToPath(options.dshHome),
+  )
+  const homePatchPath = path.join(
+    fileURLToPath(options.dshHome),
+    PROFILE_PATCH_FILENAME,
+  )
+  const homePatches = loadOptionalPatches('stent-dsh', homePatchPath) ?? []
+  const overlayPatches = options.args.patchFiles.flatMap((file) =>
+    loadOverlayPatches('stent-dsh', fileURLToPath(file)),
+  )
+  const bundlePatches = profile.layers.flatMap((layer) => layer.patches)
+  return composeEntries([
+    bundlePatches,
+    profile.patches,
+    homePatches,
+    overlayPatches,
+  ]).map((row) => [row.id, row] as const)
 }
 
 function dumpOverlay(overlay: readonly PatchRow[]): string {
-  if (overlay.length > EMPTY_OVERLAY) {
-    return dump(overlay)
+  if (overlay.length === NO_ENTRIES) {
+    return '[]\n'
   }
-  return '[]\n'
+  return `${JSON.stringify(overlay, undefined, JSON_INDENT)}\n`
 }
 
-/** Compose profile rows and create the temporary activation overlay. */
+/** Compose the Stent activation overlay and return its temporary file. */
 function composeStentConfig(options: ComposeOptions): StentConfig {
-  const { args } = options
-  const rows = composeRows(options)
-  const enableOverlay = createEnableOverlay([...rows], args.passthrough)
-  const overlayPrefix = path.join(tmpdir(), 'stent-overlay-')
-  const temp = pathToFileURL(mkdtempSync(overlayPrefix))
-  const enablePath = childPath(temp, 'enable.yaml')
+  const enableOverlay = createEnableOverlay(
+    composeRows(options),
+    options.args.passthrough,
+  )
+  const tempPath = mkdtempSync(path.join(tmpdir(), 'stent-overlay-'))
+  const enablePath = childPath(pathToFileURL(tempPath), 'enable.yaml')
   writeFileSync(enablePath, dumpOverlay(enableOverlay))
   return {
     enablePath,
     enableOverlay,
     cleanup: () => {
-      rmSync(temp, { recursive: true, force: true })
+      rmSync(tempPath, { recursive: true, force: true })
     },
   }
 }

@@ -42,9 +42,9 @@ The three packages install hooks and mount facades through the compiled launcher
 resolves the DSH path and forwards its arguments; it injects the compiled
 preload through `NODE_OPTIONS=--import ...` before the official CLI loads. The
 preload owns profile composition, dependency healing, argv normalization,
-environment setup, and hook registration. It statically imports the healing API
-from the DSH-provided `@deepseek-ai/dsh-app-boot` peer; the carrier does not
-bundle a second app-boot copy. No host patch checkout is required.
+environment setup, and hook registration. It statically imports the official profile
+composition and healing APIs from the DSH-provided `@deepseek-ai/dsh-app-boot` peer;
+the carrier does not bundle a second app-boot copy. No host patch checkout is required.
 The preload also records a process-local `stent-dsh`
 launch capability, so Stent-dependent plugins stay unavailable under plain
 `dsh` even if low-level hooks were installed by another path. The same

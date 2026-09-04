@@ -10,6 +10,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -32,7 +33,6 @@ if (!existsSync(launcher) || !existsSync(compiledPreload)) {
   )
 }
 const commanderPackage = path.join(repoRoot, 'node_modules', 'commander')
-const jsYamlPackage = path.join(repoRoot, 'node_modules', 'js-yaml')
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'stent-installed-'))
 const home = path.join(tempDir, 'home')
@@ -67,8 +67,27 @@ console.log(\`FAKE-DSH node-options=\${process.env.NODE_OPTIONS}\`)
 `
 const BOOT_MANIFEST =
   '{"name":"@deepseek-ai/dsh-app-boot","version":"1.0.0","type":"module","main":"index.js"}\n'
-const HEAL_STUB =
-  "export function healProfilesModuleFallback(anchor) { console.log('HEAL-MARK ' + anchor) }\n"
+const APP_BOOT_INDEX = JSON.stringify(
+  pathToFileURL(
+    path.join(
+      repoRoot,
+      'node_modules',
+      '@deepseek-ai',
+      'dsh-app-boot',
+      'lib',
+      'index.js',
+    ),
+  ).href,
+)
+const HEAL_STUB = `export {
+  PROFILE_PATCH_FILENAME,
+  composeEntries,
+  loadOptionalPatches,
+  loadOverlayPatches,
+  loadProfile,
+  resolveProfileDir,
+} from ${APP_BOOT_INDEX}
+export function healProfilesModuleFallback(anchor) { console.log('HEAL-MARK ' + anchor) }\n`
 const STENT_MANIFEST =
   '{"name":"@oh-my-dsh/stent","version":"1.0.0","type":"module","exports":{".":"./index.js","./activation":"./activation.js","./loader":"./loader.js"}}\n'
 const PROFILE_STENT_INDEX =
@@ -78,7 +97,7 @@ const PROFILE_STENT_LOADER =
 const PROFILE_STENT_ACTIVATION =
   "export { markStentDshLaunch } from './index.js'\n"
 const BUNDLE_MANIFEST =
-  '{"name":"@oh-my-dsh/stent-pack","dependencies":{"@oh-my-dsh/stent":"file:packages/stent","js-yaml":"^4.3.1"},"peerDependencies":{"@deepseek-ai/dsh-app-boot":"^0.1.1-rc.2"}}\n'
+  '{"name":"@oh-my-dsh/stent-pack","dependencies":{"@oh-my-dsh/stent":"file:packages/stent"},"peerDependencies":{"@deepseek-ai/dsh-app-boot":"^0.1.1-rc.2"}}\n'
 const CMD_SHIM = `#!/bin/sh
 basedir=$(dirname "$0")
 exec node "$basedir/../nowhere" "$@"
@@ -164,7 +183,6 @@ function installFixtures(): void {
   mkdirSync(path.join(webModules, '@deepseek-ai'), { recursive: true })
   mkdirSync(path.join(webModules, '@oh-my-dsh'), { recursive: true })
   symlinkSync(commanderPackage, path.join(webModules, 'commander'), 'dir')
-  symlinkSync(jsYamlPackage, path.join(webModules, 'js-yaml'), 'dir')
   symlinkSync(bootDir, path.join(webModules, '@deepseek-ai', 'dsh-app-boot'))
   symlinkSync(stubStent, path.join(webModules, '@oh-my-dsh', 'stent'))
   fixtureTree.copyFixture(launcher, path.join(installedLib, 'stent-dsh.js'))

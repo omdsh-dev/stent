@@ -25,9 +25,6 @@ importers:
       commander:
         specifier: ^14.0.3
         version: 14.0.3
-      js-yaml:
-        specifier: ^4.3.1
-        version: 4.3.1
     devDependencies:
       '@deepseek-ai/cordis-plugin-group':
         specifier: 1.0.1
@@ -44,9 +41,6 @@ importers:
       '@tsconfig/node24':
         specifier: ^24.0.5
         version: 24.0.5
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
       '@types/node':
         specifier: ^22.20.0
         version: 22.20.1
@@ -1575,9 +1569,6 @@ packages:
 
   '@types/hast@3.0.5':
     resolution: {integrity: sha512-rp/ezSWaD1m44dPKICGhiskI13nVr7qTloFwDa/IYkhhf5nzwP+zIQcIJh3WIFSBOy/H1PzB40jPjMDksN4F+g==}
-
-  '@types/js-yaml@4.0.9':
-    resolution: {integrity: sha512-k4MGaQl5TGo/iipqb2UDG2UwjXziSWkh0uysQelTlJpX1qGlpUZYm8PnO4DxG1qBomtJUdYJ6qR6xdIah10JLg==}
 
   '@types/katex@0.16.8':
     resolution: {integrity: sha512-trgaNyfU+Xh2Tc+ABIb44a5AYUpicB3uwirOioeOkNPPbmgRNtcWyDeeFRzjPZENO9Vq8gvVqfhaaXWLlevVwg==}
@@ -3791,8 +3782,6 @@ snapshots:
   '@types/hast@3.0.5':
     dependencies:
       '@types/unist': 3.0.3
-
-  '@types/js-yaml@4.0.9': {}
 
   '@types/katex@0.16.8': {}
 

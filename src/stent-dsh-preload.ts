@@ -67,7 +67,10 @@ function launcherOptions(targetPath: string): LauncherArgs {
 }
 
 /** Resolve the profile and compose its activation overlay. */
-function composeLaunch(opt: LauncherArgs): {
+function composeLaunch(
+  opt: LauncherArgs,
+  host: ResolvedHost,
+): {
   config: StentConfig
   profile: ProfilePaths
 } {
@@ -76,6 +79,7 @@ function composeLaunch(opt: LauncherArgs): {
     args: opt,
     dshHome: profile.dshHome,
     profileDir: profile.profileDir,
+    installAnchor: host.cliPkgJson,
   })
   return { config, profile }
 }
@@ -139,7 +143,7 @@ function prepareDshLaunch(): void {
 
   const opt = launcherOptions(targetPath)
   const host = resolveHost(opt)
-  const { config, profile } = composeLaunch(opt)
+  const { config, profile } = composeLaunch(opt, host)
   try {
     activateLaunch({ config, host, opt, profile })
   } catch (error) {
