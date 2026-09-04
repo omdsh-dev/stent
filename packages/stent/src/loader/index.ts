@@ -4,7 +4,7 @@
  * by the platform-free `StentService`; this entry owns only Node lifecycle
  * operations.
  *
- * @module @oh-my-dsh/stent/node
+ * @module @oh-my-dsh/stent/loader
  */
 
 export {
@@ -13,4 +13,4 @@ export {
   installStentHooks,
   retransformCommonJs,
   retransformEsm,
-} from './loader/loader.ts'
+} from './loader.ts'

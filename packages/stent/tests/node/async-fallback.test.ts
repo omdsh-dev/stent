@@ -15,7 +15,7 @@ const EXIT_SUCCESS = 0
 
 const runner = fileURLToPath(new URL('async-fallback.mjs', import.meta.url))
 const hookEntry = fileURLToPath(
-  new URL('../../lib/node/hook-entry.js', import.meta.url),
+  new URL('../../lib/loader/hook-entry.js', import.meta.url),
 )
 
 /**

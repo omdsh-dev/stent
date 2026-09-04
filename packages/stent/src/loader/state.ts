@@ -1,12 +1,6 @@
-import { createRequire, registerHooks } from 'node:module'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
-import {
-  loadedEsmUrls,
-  retransformCommonJs as reloadCommonJs,
-  retransformEsm as reloadEsm,
-} from '#src/hmr/reload'
-import { runtime } from '#src/runtime'
 import { expandPatchStub } from '#src/transform/config'
 import { resolvePackageIdentity } from '#src/transform/identity'
 import {
@@ -16,43 +10,60 @@ import {
 } from '#src/transform/matcher'
 import type { PatchId, StentPatchInfo, StentPatchStub } from '#src/types'
 
-import type { LoaderState } from './loader-types.ts'
+import {
+  loadedEsmUrls,
+  retransformCommonJs as reloadCommonJs,
+  retransformEsm as reloadEsm,
+} from './reload.ts'
+import type { LoaderPatchReader, LoaderState } from './types.ts'
 
 /* Types published by the modules imported above for their functions. */
 type StentInstrumentationConfig = ReturnType<typeof expandPatchStub>[number]
 type StentMatcher = ReturnType<typeof createStentMatcher>
-type PackageIdentity = NonNullable<ReturnType<typeof resolvePackageIdentity>>
 
-/* Named literals for empty collections, priorities, tallies, and version parts. */
+/* Named literals for empty collections, priorities, and match tallies. */
 const EMPTY_SIZE = 0
 const DEFAULT_PRIORITY = 0
 const NO_MATCHES = 0
 const ONE_MATCH = 1
 const DRAIN_FROM = 0
-const ZERO_PART = 0
-const NODE_22_LINE = 22
-const NODE_24_LINE = 24
-
-/** First release per Node major line whose synchronous module hooks are stable. */
-const SYNC_HOOK_MINIMUMS = new Map([
-  [NODE_22_LINE, { minor: 22, patch: 3 }],
-  [NODE_24_LINE, { minor: 11, patch: 1 }],
-])
+const NOT_FOUND_INDEX = -1
+const REMOVE_COUNT = 1
 
 const states: LoaderState[] = []
 const nodeRequire = createRequire(import.meta.url)
 
-/** Publish the bindings tallied while transforming one file. */
-function flushBindings(state: LoaderState, identity: PackageIdentity): void {
-  if (state.pending.size === EMPTY_SIZE) {
-    return
+/** Return the states currently visible to the process-wide hook adapters. */
+const getStates = (): readonly LoaderState[] => {
+  const current = states
+  return current
+}
+
+/** Add one active installation to the loader state registry. */
+const addState = (state: LoaderState): void => {
+  states.push(state)
+}
+
+/** Whether any registered loader installation is still active. */
+const hasActiveState = (): boolean => {
+  const current = states
+  return current.some((state) => state.active)
+}
+
+/** Remove one installation from the loader state registry. */
+function removeState(state: LoaderState): void {
+  const index = states.indexOf(state)
+  if (index !== NOT_FOUND_INDEX) {
+    states.splice(index, REMOVE_COUNT)
   }
-  for (const [patchId, nodes] of state.pending) {
-    runtime.recordBindings(patchId, [
-      { module: identity.name, file: identity.path, nodes },
-    ])
-  }
+}
+
+/** Release the mutable buffers held by one disposed installation. */
+function clearStateBuffers(state: LoaderState): void {
   state.pending.clear()
+  state.seen.clear()
+  state.pendingPreviousMatchers.length = EMPTY_SIZE
+  state.pendingLoadedModules.clear()
 }
 
 /** Reduce one registered patch to the static stub the matcher consumes. */
@@ -100,9 +111,11 @@ function patchShapeKey(info: StentPatchInfo): string {
 }
 
 /** Expand every registered patch into an ordered instrumentation snapshot. */
-function currentInstrumentations(): StentInstrumentationConfig[] {
+function currentInstrumentations(
+  patches: readonly StentPatchInfo[],
+): StentInstrumentationConfig[] {
   return orderStentInstrumentations(
-    runtime.list().flatMap((info) => expandPatchStub(patchStubFromInfo(info))),
+    patches.flatMap((info) => expandPatchStub(patchStubFromInfo(info))),
   )
 }
 
@@ -114,6 +127,28 @@ function createMatcher(
   return createStentMatcher(instrumentations, (patchId) => {
     pending.set(patchId, (pending.get(patchId) ?? NO_MATCHES) + ONE_MATCH)
   })
+}
+
+/** Build the mutable state backing one dynamic installation. */
+function createLoaderState(
+  syncHooks: boolean,
+  listPatches: LoaderPatchReader,
+): LoaderState {
+  const instrumentations = currentInstrumentations(listPatches())
+  const pending: LoaderState['pending'] = new Map()
+  return {
+    active: true,
+    matcher: createMatcher(pending, instrumentations),
+    instrumentations,
+    syncHooks,
+    transformers: new Map(),
+    seen: new Set(),
+    pending,
+    pendingPreviousMatchers: [],
+    pendingLoadedModules: new Set(),
+    retransformQueued: false,
+    retransformPass: undefined,
+  }
 }
 
 /** Forget one file's transform mark in every installation. */
@@ -248,51 +283,27 @@ function freeTransformers(state: LoaderState): void {
 function refreshDynamicState(
   state: LoaderState,
   writeConfig: () => void,
+  listPatches: LoaderPatchReader,
 ): void {
   const previousMatcher = state.matcher
   collectLoadedModules(state)
   freeTransformers(state)
-  state.instrumentations = currentInstrumentations()
+  state.instrumentations = currentInstrumentations(listPatches())
   state.matcher = createMatcher(state.pending, state.instrumentations)
   state.pendingPreviousMatchers.push(previousMatcher)
   writeConfig()
   queueLoadedRetransform(state)
 }
 
-/** Whether a Node version string ships stable synchronous module hooks. */
-function syncHooksSupportedByVersion(version: string): boolean {
-  const parts = version.split('.').map(Number)
-  const [major = ZERO_PART, minor = ZERO_PART, patch = ZERO_PART] = parts
-  const minimum = SYNC_HOOK_MINIMUMS.get(major)
-  if (minimum === undefined) {
-    return major > NODE_24_LINE
-  }
-  return (
-    minor > minimum.minor || (minor === minimum.minor && patch >= minimum.patch)
-  )
-}
-
-/** Select the hook strategy, honoring the two environment overrides first. */
-function supportsSyncHooks(): boolean {
-  if (process.env.STENT_FORCE_ASYNC_HOOKS === '1') {
-    return false
-  }
-  if (process.env.STENT_FORCE_SYNC_HOOKS === '1') {
-    return true
-  }
-  if (typeof registerHooks !== 'function') {
-    return false
-  }
-  return syncHooksSupportedByVersion(process.versions.node)
-}
-
 export {
-  states,
-  flushBindings,
-  patchShapeKey,
-  currentInstrumentations,
-  createMatcher,
+  addState,
   clearSeen,
+  clearStateBuffers,
+  createLoaderState,
+  freeTransformers,
+  getStates,
+  hasActiveState,
+  patchShapeKey,
   refreshDynamicState,
-  supportsSyncHooks,
+  removeState,
 }

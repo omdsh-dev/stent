@@ -15,11 +15,11 @@
 | `around` | 决定原函数体是否执行，并可替换其结果（调用 `invoke()` 委托）。 |
 | `replace` | 完全接管调用；只有 handler 调用 `invoke()` 时才执行原函数体。 |
 
-源码仍然分层在三个既有包内部，不新增第四个包。根入口只包含与平台无关的 runtime 和 service；Node hook 生命周期 API 从 `@oh-my-dsh/stent/node` 导入，build-time transform 和运行时 bundle serving 从 `@oh-my-dsh/stent/browser` 导入，浏览器 Cordis entry 从 `@oh-my-dsh/stent/client` 导入。Orchestrion adapter 及其中间 instrumentation 类型属于 `packages/stent/src/transform` 内部实现，不是公开 API。`packages/stent/src/node` 负责 Node hooks，`packages/stent/src/browser` 负责浏览器构建/运行时接缝，`packages/stent/src/hmr` 负责 HMR generation ownership 与 Node cache 重新变换，`packages/stent/src/testing` 负责子进程测试夹具。`packages/stent-api/src/compat` 分开合作式 contract 与 service；宿主集成包负责 host facade、浏览器服务和 profile 组装。transform 边界、数据流和边缘语义见 `packages/stent/docs/transform-api.md` 与 `packages/stent/docs/transform-architecture.md`，因此纯 Stent service 不依赖 catalog。
+源码仍然分层在三个既有包内部，不新增第四个包。根入口只包含与平台无关的 runtime 和 service；Node hook 生命周期 API 从 `@oh-my-dsh/stent/loader` 导入，build-time transform 和运行时 bundle serving 从 `@oh-my-dsh/stent/browser` 导入，浏览器 Cordis entry 从 `@oh-my-dsh/stent/client` 导入。Orchestrion adapter 及其中间 instrumentation 类型属于 `packages/stent/src/transform` 内部实现，不是公开 API。`packages/stent/src/loader` 负责 Node hooks，`packages/stent/src/browser` 负责浏览器构建/运行时接缝，`packages/stent/src/hmr` 负责 HMR generation ownership，Node cache 重新变换由 `packages/stent/src/loader` 负责，`packages/stent/src/testing` 负责子进程测试夹具。`packages/stent-api/src/compat` 分开合作式 contract 与 service；宿主集成包负责 host facade、浏览器服务和 profile 组装。transform 边界、数据流和边缘语义见 `packages/stent/docs/transform-api.md` 与 `packages/stent/docs/transform-architecture.md`，因此纯 Stent service 不依赖 catalog。
 ## 安装和 bootstrap
 
 ```ts
-import { installStentHooks } from '@oh-my-dsh/stent/node'
+import { installStentHooks } from '@oh-my-dsh/stent/loader'
 import { StentService } from '@oh-my-dsh/stent'
 import type { Context } from 'cordis'
 
@@ -36,7 +36,7 @@ dynamic mode 订阅进程内 runtime registry；插件代码注册或移除 patc
 会重建 matcher，handler 留在内存中，绝不序列化。目标模块若已加载，Node loader
 会在支持时调度 CJS/ESM cache 重新变换。Profile YAML 只负责标记 Stent 依赖的
 row（例如 `config: { stent: true }`），不再在 `config.stent.patches` 下携带 patch stub。
-根入口只包含 runtime 和 service；Node hooks 从 `@oh-my-dsh/stent/node` 导入，browser build/serve API 从 `@oh-my-dsh/stent/browser` 导入。它们不会安装 Node hooks，也不能传给 `installStentHooks`。
+根入口只包含 runtime 和 service；Node hooks 从 `@oh-my-dsh/stent/loader` 导入，browser build/serve API 从 `@oh-my-dsh/stent/browser` 导入。它们不会安装 Node hooks，也不能传给 `installStentHooks`。
 
 启动路径和 hooks 安装是两个不同的概念。`stent-dsh` preload 会在 bootstrap hooks 前写入启动标记；普通 `dsh` 启动不会获得该标记。`StentService` 将它作为 Cordis 的可用性检查，因此声明 `inject: ['stent']` 的插件即使通过其他路径安装了底层 bridge，在普通 `dsh` 下也会保持 pending。browser client entry 会写入等价的 Stent 客户端激活标记。`getStent(ctx)` 在复用或挂载 registry 前也会检查同一启动能力；漏写 `inject: ['stent']` 的 DSH 插件不能通过该 accessor 静默绕过门控，而会 loud failure。明确管理独立生命周期的底层调用方仍可直接构造 `new StentService(ctx)`。
 
@@ -106,7 +106,7 @@ export { inject, apply }
 
 ## 平台支持
 
-- **Node Host（ESM + CommonJS）：** 从 `@oh-my-dsh/stent/node` 使用同步 `module.registerHooks` hooks（Node 22.22.3+、24.11.1+ 或更高主版本）和 CJS `_compile` 路径；同步路径直接读取主线程 matcher state。低版本或强制 async 时，`module.register` 只把 ESM 变换放在 loader thread，并通过共享 JSON 配置传递可序列化的 instrumentation；主线程仍保留 CJS `_compile` 路径。loader-thread entry 仍属于内部实现，不是公开 API。`installStentHooks()` 只允许一个 active dynamic installation，第二个 active 调用会被拒绝；disposer 停用 state，但 process-lifetime hook 函数仍保留。
+- **Node Host（ESM + CommonJS）：** 从 `@oh-my-dsh/stent/loader` 使用同步 `module.registerHooks` hooks（Node 22.22.3+、24.11.1+ 或更高主版本）和 CJS `_compile` 路径；同步路径直接读取主线程 matcher state。低版本或强制 async 时，`module.register` 只把 ESM 变换放在 loader thread，并通过共享 JSON 配置传递可序列化的 instrumentation；主线程仍保留 CJS `_compile` 路径。loader-thread entry 仍属于内部实现，不是公开 API。`installStentHooks()` 只允许一个 active dynamic installation，第二个 active 调用会被拒绝；disposer 停用 state，但 process-lifetime hook 函数仍保留。
 - **Browser/Web：** bundle 期重写（`createWatchedBrowserTransform`（静态集合用 `createBrowserTransform`）+ `repoSourceResolver`，经 `clientBundle(id, libEntry, { transform })` 接入）重写 client 插件函数；本 package 的 client half（`./client`，实现位于 `packages/stent/src/browser/client`）在浏览器 Cordis 树中安装 bridge 并挂载 `ctx.stent`。client bundle 在该 entry 物化前回退到原函数，因此 patch 对浏览器 Stent runtime 就绪后的调用生效。web roster 的 `stent` 行默认禁用（opt-in）。
 
 ## Browser 构建用法

@@ -1,8 +1,8 @@
 /**
  * Cordis Stent service and platform-free runtime API.
  *
- * Node hook installation lives under `@oh-my-dsh/stent/node`; browser build and
- * bundle-serving APIs live under `@oh-my-dsh/stent/browser`. Keeping those
+ * Node hook installation lives under `@oh-my-dsh/stent/loader`; browser build
+ * and bundle-serving APIs live under `@oh-my-dsh/stent/browser`. Keeping those
  * platform boundaries out of this entry also keeps Orchestrion implementation
  * details private to the transform layer.
  *

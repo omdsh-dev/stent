@@ -597,7 +597,7 @@ const watched = createWatchedBrowserTransform({
 ### Node loader 的等价链路(源码阅读)
 
 ```ts
-// packages/stent/src/node/loader/loader.ts 内部:
+// packages/stent/src/loader/loader.ts 内部:
 const instrumentations = orderStentInstrumentations(
   runtime.list().flatMap((info) => expandPatchStub(patchStubFromInfo(info))),
 )
@@ -615,8 +615,8 @@ const { code } = transformStentSource(transformer, source, moduleType)
 | `GLOBAL_BRIDGE_KEY` | `@oh-my-dsh/stent`(经 `packages/stent/src/index.ts` ← `packages/stent/src/bridge.ts` 再导出) |
 | `validatePatchId`、`validatePatchStatic` | `@oh-my-dsh/stent`(经 `packages/stent/src/index.ts` ← `packages/stent/src/runtime.ts` 再导出) |
 | `PatchId`、`StentBinding`、`StentBindingReport`、`StentFunctionKind`、`StentFunctionQuery`、`StentOperation`、`StentPatchStub`、`StentTarget` | `@oh-my-dsh/stent`(经 `packages/stent/src/index.ts` ← `packages/stent/src/types.ts` 类型再导出) |
-| `createInstrumentedTransform` | 仅包内(`packages/stent/src/node/hook-entry.ts` 使用,不走公开面) |
-| `createStentMatcher`、`getStentTransformer`、`orderStentInstrumentations`、`transformStentSource`、wire 序列化 | 仅包内(`packages/stent/src/node/*` 直接导入,不走公开面) |
+| `createInstrumentedTransform` | 仅包内(`packages/stent/src/loader/hook-entry.ts` 使用,不走公开面) |
+| `createStentMatcher`、`getStentTransformer`、`orderStentInstrumentations`、`transformStentSource`、wire 序列化 | 仅包内(`packages/stent/src/loader/*` 直接导入,不走公开面) |
 
 `index.ts` 本身不是公开入口:它只汇总包内消费面,`@oh-my-dsh/stent` /
 `@oh-my-dsh/stent/browser` 的导出以本表为准。`orchestrion.ts` 的第三方适配

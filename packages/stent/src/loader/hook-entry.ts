@@ -1,9 +1,10 @@
 /**
- * Async module-hook entry for Stent, used by `installStentHooks` on Node
- * versions without a reliable synchronous `registerHooks` API. Registered
- * exactly once through `module.register` (which runs this module on the loader
- * thread), it transforms matching ESM modules at load time and defers CommonJS
- * to the `_compile` patch installed by the Node loader.
+ * Async module-hook entry owned by the Stent loader and used by
+ * `installStentHooks` on Node versions without a reliable synchronous
+ * `registerHooks` API. Registered exactly once through `module.register` (which
+ * runs this module on the loader thread), it transforms matching ESM modules at
+ * load time and defers CommonJS to the `_compile` patch installed by the Node
+ * loader.
  *
  * The entry reads the shared configuration file (written by the main thread
  * when the single active installation changes or is disposed) on each load, so
@@ -15,7 +16,7 @@
  * normally consumes one active state. The chain is rebuilt only when the
  * configuration content changes.
  *
- * @module @oh-my-dsh/stent/node/hook-entry
+ * @module @oh-my-dsh/stent/loader/hook-entry
  */
 
 import { readFile } from 'node:fs/promises'

@@ -1,15 +1,17 @@
 /**
- * Node module-cache invalidation used by Stent's HMR integration.
+ * Node module reload operations owned by Stent's loader.
  *
  * This module knows how to evict CommonJS and ESM module instances; the loader
  * supplies the callback that clears its per-installation transform marks. It
  * deliberately does not own patch state or hook registration.
  *
- * @module @oh-my-dsh/stent/hmr/reload
+ * @module @oh-my-dsh/stent/loader/reload
  */
 
 import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+
+import { requireBuiltin } from 'node-addon-require-builtin'
 
 const require = createRequire(import.meta.url)
 
@@ -25,23 +27,7 @@ interface EsmLoaderModule {
   readonly getOrInitializeCascadedLoader: () => unknown
 }
 
-/** Native addon face exposing Node's internal `requireBuiltin`. */
-interface BuiltinRequirer {
-  /** Load a Node-internal builtin module by its internal id. */
-  readonly requireBuiltin: (id: string) => unknown
-}
-
 const loaderCache: { current?: InternalLoader } = {}
-
-/** Narrow an addon export to the builtin-require face. */
-function isBuiltinRequirer(value: unknown): value is BuiltinRequirer {
-  return (
-    typeof value === 'object'
-    && value !== null
-    && 'requireBuiltin' in value
-    && typeof value.requireBuiltin === 'function'
-  )
-}
 
 /** Narrow a builtin module export to Node's ESM loader module. */
 function isEsmLoaderModule(value: unknown): value is EsmLoaderModule {
@@ -67,11 +53,7 @@ function isInternalLoader(value: unknown): value is InternalLoader {
 /** Load Node's internal ESM loader module, or nothing when unavailable. */
 function loadEsmLoaderModule(): unknown {
   try {
-    const addon: unknown = require('node-addon-require-builtin')
-    if (!isBuiltinRequirer(addon)) {
-      return undefined
-    }
-    return addon.requireBuiltin('internal/modules/esm/loader')
+    return requireBuiltin('internal/modules/esm/loader')
   } catch {
     return undefined
   }

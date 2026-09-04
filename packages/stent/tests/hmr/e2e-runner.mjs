@@ -34,7 +34,7 @@ import Include from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
 import { StentService, markStentDshLaunch } from '../../src/index.ts'
-import { installStentHooks } from '../../src/node/index.ts'
+import { installStentHooks } from '../../src/loader/index.ts'
 
 // This child intentionally models the approved stent-dsh launch path. The
 // production preload sets the same process-local capability before Host boot.

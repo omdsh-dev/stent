@@ -14,7 +14,7 @@
 
 import { text } from 'node:stream/consumers'
 
-import { flushBindingReports, installStentHooks } from '#src/node/index'
+import { flushBindingReports, installStentHooks } from '#src/loader/index'
 import { runtime } from '#src/runtime'
 import type { StentPatchStub } from '#src/types'
 

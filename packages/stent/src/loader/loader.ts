@@ -2,39 +2,38 @@
  * Node transformation hooks for Stent. This module owns installation lifecycle;
  * hook implementations and mutable loader state live in adjacent modules.
  *
- * @module @oh-my-dsh/stent/node/internal-loader
+ * @module @oh-my-dsh/stent/loader
  */
 
 import { installBridge } from '#src/bridge'
+import { runtime } from '#src/runtime'
+
+import { installAsyncHooks, writeAsyncConfig } from './async.ts'
 import {
   retransformCommonJs as reloadCommonJs,
   retransformEsm as reloadEsm,
-} from '#src/hmr/reload'
-import { runtime } from '#src/runtime'
-
-import { installAsyncHooks, writeAsyncConfig } from './loader-async.ts'
+} from './reload.ts'
 import {
+  addState,
   clearSeen,
-  createMatcher,
-  currentInstrumentations,
+  clearStateBuffers,
+  createLoaderState,
+  freeTransformers,
+  getStates,
+  hasActiveState,
   patchShapeKey,
   refreshDynamicState,
-  states,
-  supportsSyncHooks,
-} from './loader-state.ts'
+  removeState,
+} from './state.ts'
 import {
   installCompileWrapper,
   installSynchronousHooks,
-} from './loader-sync.ts'
-import type { LoaderState } from './loader-types.ts'
+  supportsSyncHooks,
+} from './sync.ts'
+import type { LoaderHost, LoaderState } from './types.ts'
 
 /** Size of an empty collection; named for the no-magic-numbers rule. */
 const EMPTY_COUNT = 0
-/** Result of `indexOf` when the searched value is absent. */
-const NOT_FOUND_INDEX = -1
-/** Number of entries removed when one installation is dropped. */
-const REMOVE_COUNT = 1
-
 /** Describe every required patch that bound no target at load time. */
 function missingRequiredPatches(): string[] {
   const missing: string[] = []
@@ -62,42 +61,21 @@ function checkRequiredPatches(): void {
   }
 }
 
-/** Whether a dynamic installation is already active in this process. */
-function hasActiveInstallation(): boolean {
-  for (const state of states) {
-    if (state.active) {
-      return true
-    }
-  }
-  return false
+const loaderHost: LoaderHost = {
+  getStates,
+  listPatches: () => runtime.list(),
+  recordBindings: (id, records) => {
+    runtime.recordBindings(id, records)
+  },
 }
 
 /** Choose the hook flavour this process supports, booting the loader thread. */
 function prepareHookThread(): boolean {
   const syncHooks = supportsSyncHooks()
   if (!syncHooks) {
-    installAsyncHooks(import.meta.url)
+    installAsyncHooks(import.meta.url, loaderHost)
   }
   return syncHooks
-}
-
-/** Build the mutable state backing one dynamic installation. */
-function createLoaderState(syncHooks: boolean): LoaderState {
-  const instrumentations = currentInstrumentations()
-  const pending: LoaderState['pending'] = new Map()
-  return {
-    active: true,
-    matcher: createMatcher(pending, instrumentations),
-    instrumentations,
-    syncHooks,
-    transformers: new Map(),
-    seen: new Set(),
-    pending,
-    pendingPreviousMatchers: [],
-    pendingLoadedModules: new Set(),
-    retransformQueued: false,
-    retransformPass: undefined,
-  }
 }
 
 /** Subscribe to patch changes and install the hooks this state uses. */
@@ -111,39 +89,15 @@ function activateHooks(state: LoaderState): () => void {
     ) {
       return
     }
-    refreshDynamicState(state, writeAsyncConfig)
+    refreshDynamicState(state, writeAsyncConfig, loaderHost.listPatches)
   })
   if (state.syncHooks) {
-    installSynchronousHooks(state)
+    installSynchronousHooks(state, loaderHost)
   } else {
     writeAsyncConfig()
   }
-  installCompileWrapper()
+  installCompileWrapper(loaderHost)
   return unsubscribePatchChanges
-}
-
-/** Release the buffers one disposed installation accumulated. */
-function clearStateBuffers(state: LoaderState): void {
-  state.pending.clear()
-  state.seen.clear()
-  state.pendingPreviousMatchers.length = EMPTY_COUNT
-  state.pendingLoadedModules.clear()
-}
-
-/** Drop one installation from the shared installation list. */
-function removeState(state: LoaderState): void {
-  const index = states.indexOf(state)
-  if (index !== NOT_FOUND_INDEX) {
-    states.splice(index, REMOVE_COUNT)
-  }
-}
-
-/** Free every transformer one installation cached. */
-function freeTransformers(state: LoaderState): void {
-  for (const transformer of state.transformers.values()) {
-    transformer.free()
-  }
-  state.transformers.clear()
 }
 
 /** Tear down one dynamic installation and republish the loader config. */
@@ -166,14 +120,14 @@ function installStentHooks(): () => void {
       'stent: installStentHooks does not accept arguments; use installStentHooks()',
     )
   }
-  if (hasActiveInstallation()) {
+  if (hasActiveState()) {
     throw new Error(
       'stent: installStentHooks allows only one active dynamic installation',
     )
   }
   installBridge()
-  const state = createLoaderState(prepareHookThread())
-  states.push(state)
+  const state = createLoaderState(prepareHookThread(), loaderHost.listPatches)
+  addState(state)
   const unsubscribePatchChanges = activateHooks(state)
   return () => {
     disposeInstallation(state, unsubscribePatchChanges)
@@ -217,7 +171,7 @@ async function retransformEsm(url: string): Promise<Record<string, unknown>> {
   return reloaded
 }
 
-export { flushBindingReports } from './loader-async.ts'
+export { flushBindingReports } from './async.ts'
 
 export {
   checkRequiredPatches,

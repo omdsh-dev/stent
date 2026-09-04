@@ -4,11 +4,10 @@ import { tmpdir } from 'node:os'
 import nodePath from 'node:path'
 import type { MessagePort } from 'node:worker_threads'
 
-import { runtime } from '#src/runtime'
 import { serializeInstrumentation } from '#src/transform/wire'
 import type { StentBindingReport } from '#src/types'
 
-import { states } from './loader-state.ts'
+import type { LoaderHost, LoaderState } from './types.ts'
 
 /** Default time to wait for the loader thread to acknowledge a flush. */
 const DEFAULT_FLUSH_TIMEOUT_MS = 200
@@ -20,6 +19,7 @@ interface AsyncHookState {
   installed: boolean
   configPath: string | undefined
   bindingPort: MessagePort | undefined
+  host: LoaderHost | undefined
 }
 
 /** One installed loader state as published to the loader thread. */
@@ -34,6 +34,7 @@ const asyncState: AsyncHookState = {
   installed: false,
   configPath: undefined,
   bindingPort: undefined,
+  host: undefined,
 }
 const flushWaiters: (() => void)[] = []
 
@@ -93,10 +94,11 @@ function bindingReportOf(value: unknown): StentBindingReport | undefined {
 /** Record one binding report in the runtime registry. */
 function recordBinding(value: unknown): void {
   const report = bindingReportOf(value)
-  if (report === undefined) {
+  const { host } = asyncState
+  if (report === undefined || host === undefined) {
     return
   }
-  runtime.recordBindings(report.patchId, [
+  host.recordBindings(report.patchId, [
     { module: report.module, file: report.file, nodes: report.nodes },
   ])
 }
@@ -126,26 +128,27 @@ function ensureAsyncConfigPath(): void {
 }
 
 /** Whether this module was loaded from its own directory rather than a bundle. */
-function isDirectNodeEntry(baseUrl: string): boolean {
+function isDirectLoaderEntry(baseUrl: string): boolean {
   return (
-    baseUrl.endsWith('/node/loader/loader.js')
-    || baseUrl.endsWith('/node/loader/loader.ts')
+    baseUrl.endsWith('/loader/loader.js')
+    || baseUrl.endsWith('/loader/loader.ts')
   )
 }
 
 /** Resolve the hook entry module the loader thread registers. */
 function hookEntryUrl(baseUrl: string): URL {
-  if (!isDirectNodeEntry(baseUrl)) {
-    return new URL('node/hook-entry.js', baseUrl)
+  if (!isDirectLoaderEntry(baseUrl)) {
+    return new URL('loader/hook-entry.js', baseUrl)
   }
   if (baseUrl.endsWith('.ts')) {
-    return new URL('../hook-entry.ts', baseUrl)
+    return new URL('hook-entry.ts', baseUrl)
   }
-  return new URL('../hook-entry.js', baseUrl)
+  return new URL('hook-entry.js', baseUrl)
 }
 
 /** Install the loader-thread hooks used when synchronous hooks are unavailable. */
-function installAsyncHooks(baseUrl: string): void {
+function installAsyncHooks(baseUrl: string, host: LoaderHost): void {
+  asyncState.host = host
   ensureAsyncConfigPath()
   if (asyncState.installed) {
     return
@@ -184,7 +187,7 @@ async function flushBindingReports(
 }
 
 /** Snapshot every installed loader state for the loader thread. */
-function snapshotStates(): AsyncStateSnapshot[] {
+function snapshotStates(states: readonly LoaderState[]): AsyncStateSnapshot[] {
   const snapshots: AsyncStateSnapshot[] = []
   for (const state of states) {
     snapshots.push({
@@ -202,7 +205,8 @@ function writeAsyncConfig(): void {
     return
   }
   const nextPath = `${configPath}.next`
-  writeFileSync(nextPath, JSON.stringify(snapshotStates()))
+  const states = asyncState.host?.getStates() ?? []
+  writeFileSync(nextPath, JSON.stringify(snapshotStates(states)))
   renameSync(nextPath, configPath)
 }
 

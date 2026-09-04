@@ -70,10 +70,10 @@ const BOOT_MANIFEST =
 const HEAL_STUB =
   "export function healProfilesModuleFallback(anchor) { console.log('HEAL-MARK ' + anchor) }\n"
 const STENT_MANIFEST =
-  '{"name":"@oh-my-dsh/stent","version":"1.0.0","type":"module","exports":{".":"./index.js","./activation":"./activation.js","./node":"./node.js"}}\n'
+  '{"name":"@oh-my-dsh/stent","version":"1.0.0","type":"module","exports":{".":"./index.js","./activation":"./activation.js","./loader":"./loader.js"}}\n'
 const PROFILE_STENT_INDEX =
   "export function markStentDshLaunch() { globalThis[Symbol.for('oh-my-dsh.stent-dsh.launch')] = true }\n"
-const PROFILE_STENT_NODE =
+const PROFILE_STENT_LOADER =
   'export function installStentHooks() { console.log(`PROFILE-BOOT dynamic=true`) }\n'
 const PROFILE_STENT_ACTIVATION =
   "export { markStentDshLaunch } from './index.js'\n"
@@ -98,7 +98,7 @@ const FIXTURE_FILES: readonly (readonly [string, string])[] = [
   [path.join(profileDir, 'package.json'), '{}\n'],
   [path.join(stubStent, 'package.json'), STENT_MANIFEST],
   [path.join(stubStent, 'index.js'), PROFILE_STENT_INDEX],
-  [path.join(stubStent, 'node.js'), PROFILE_STENT_NODE],
+  [path.join(stubStent, 'loader.js'), PROFILE_STENT_LOADER],
   [path.join(stubStent, 'activation.js'), PROFILE_STENT_ACTIVATION],
   /* An installed bundle bin derives `web` from this exact profile path. Keep
      this profile real (not a symlink), so the launcher exercises that path

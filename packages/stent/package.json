@@ -13,9 +13,9 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./node": {
-      "types": "./lib/node.d.ts",
-      "default": "./lib/node.js"
+    "./loader": {
+      "types": "./lib/loader.d.ts",
+      "default": "./lib/loader.js"
     },
     "./browser": {
       "types": "./lib/browser.d.ts",
@@ -37,10 +37,6 @@
       "types": "./lib/hmr/ownership.d.ts",
       "default": "./lib/hmr/ownership.js"
     },
-    "./hmr/reload": {
-      "types": "./lib/hmr/reload.d.ts",
-      "default": "./lib/hmr/reload.js"
-    },
     "./testing": {
       "types": "./lib/testing.d.ts",
       "default": "./lib/testing.js"
@@ -49,7 +45,7 @@
   },
   "files": [
     "lib/*.js",
-    "lib/node/*.js",
+    "lib/loader/*.js",
     "lib/browser/*.js",
     "lib/transform/*.js",
     "lib/hmr/*.js",

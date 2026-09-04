@@ -15,11 +15,11 @@ A trusted plugin (A) can change the behavior of another plugin's function (B) **
 | `around` | Decide whether the original body runs and optionally replace its result (call `invoke()` to delegate). |
 | `replace` | Own the call entirely; the original body only runs if the handler calls `invoke()`. |
 
-The source is layered inside the three packages rather than adding another package. The root entry contains only the platform-free runtime and service. Use `@oh-my-dsh/stent/node` for Node hook lifecycle APIs, `@oh-my-dsh/stent/browser` for build-time transforms and runtime bundle serving, and `@oh-my-dsh/stent/client` for the browser Cordis entry. The Orchestrion adapter and its intermediate instrumentation types are implementation details under `packages/stent/src/transform`, not public API. `packages/stent/src/node` owns Node hooks, `packages/stent/src/browser` owns the build/runtime browser seams, `packages/stent/src/hmr` owns HMR generation ownership and Node cache re-transformation, and `packages/stent/src/testing` owns child-process fixtures. `packages/stent-api/src/compat` separates the cooperative contract and service. The companion integration package's host, browser, and bootstrap entries provide host facades, browser services, and profile assembly. For the transform boundary, data flow, and edge cases, see `packages/stent/docs/transform-api.md` and `packages/stent/docs/transform-architecture.md`. Its catalog adapter is mounted by that companion package, so the pure Stent service has no catalog dependency.
+The source is layered inside the three packages rather than adding another package. The root entry contains only the platform-free runtime and service. Use `@oh-my-dsh/stent/loader` for Node hook lifecycle APIs, `@oh-my-dsh/stent/browser` for build-time transforms and runtime bundle serving, and `@oh-my-dsh/stent/client` for the browser Cordis entry. The Orchestrion adapter and its intermediate instrumentation types are implementation details under `packages/stent/src/transform`, not public API. `packages/stent/src/loader` is the single Node loader module: `loader.ts` coordinates installation, `state.ts` owns matcher snapshots, `sync.ts` and `async.ts` adapt Node hook APIs, `reload.ts` owns cache eviction, and `hook-entry.ts` owns the loader-thread entry. The `src/loader/index.ts` entry is the public loader API, while `packages/stent/src/browser` owns the build/runtime browser seams, `packages/stent/src/hmr` owns HMR generation ownership, cache operations live in the loader, and `packages/stent/src/testing` owns child-process fixtures. `packages/stent-api/src/compat` separates the cooperative contract and service. The companion integration package's host, browser, and bootstrap entries provide host facades, browser services, and profile assembly. For the transform boundary, data flow, and edge cases, see `packages/stent/docs/transform-api.md` and `packages/stent/docs/transform-architecture.md`. Its catalog adapter is mounted by that companion package, so the pure Stent service has no catalog dependency.
 ## Installation and bootstrap
 
 ```ts
-import { installStentHooks } from '@oh-my-dsh/stent/node'
+import { installStentHooks } from '@oh-my-dsh/stent/loader'
 import { StentService } from '@oh-my-dsh/stent'
 import type { Context } from 'cordis'
 
@@ -39,7 +39,7 @@ when a plugin registers is automatically re-transformed when the Node cache
 path supports it. Profile YAML only controls whether a Stent-dependent row is
 mounted (for example `config: { stent: true }`); it no longer carries patch
 stubs under `config.stent.patches`.
-The root entry contains only runtime and service APIs. Browser build APIs are imported from `@oh-my-dsh/stent/browser`; Node hook APIs are imported from `@oh-my-dsh/stent/node`. Neither platform entry exposes Orchestrion's intermediate instrumentation configuration.
+The root entry contains only runtime and service APIs. Browser build APIs are imported from `@oh-my-dsh/stent/browser`; Node hook APIs are imported from `@oh-my-dsh/stent/loader`. Neither platform entry exposes Orchestrion's intermediate instrumentation configuration.
 The launcher boundary is separate from hook installation. The `stent-dsh` preload marks the launch before bootstrapping hooks; a plain `dsh` launch never receives that marker. `StentService` uses it as Cordis's availability check, so plugins declaring `inject: ['stent']` remain pending under plain `dsh` even if another path installed the low-level bridge. The browser client entry marks the equivalent Stent client activation. The same gate is enforced by `getStent(ctx)` before it reuses or mounts a registry: a DSH plugin that omitted `inject: ['stent']` cannot silently activate through the accessor and instead fails loudly. Explicit `new StentService(ctx)` remains the low-level escape hatch for standalone callers that intentionally manage activation themselves.
 
 A patch may set `required: true`: once the application boots and every target
@@ -117,7 +117,7 @@ The registration is a fiber effect owned by the registering plugin: disposing th
 
 ## Platform support
 
-- **Node Host (ESM + CommonJS):** supported via `@oh-my-dsh/stent/node`. On Node
+- **Node Host (ESM + CommonJS):** supported via `@oh-my-dsh/stent/loader`. On Node
   versions with synchronous hooks (22.22.3+, 24.11.1+, or a later major),
   `module.registerHooks` and the CJS `_compile` wrapper read matcher state
   directly on the main thread; on the async `module.register` fallback, only ESM

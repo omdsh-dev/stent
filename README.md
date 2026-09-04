@@ -93,14 +93,14 @@ activation, but it must not contain `config.stent.patches` descriptors.
 The `@oh-my-dsh/stent` package is intentionally split by platform:
 
 - `@oh-my-dsh/stent` — platform-free runtime, bridge, service, and patch types;
-- `@oh-my-dsh/stent/node` — Node hook installation, binding flush, and cache re-transformation;
+- `@oh-my-dsh/stent/loader` — Node hook installation, binding flush, and cache re-transformation;
 - `@oh-my-dsh/stent/browser` — build transforms, package identity resolvers, and runtime bundle serving;
 - `@oh-my-dsh/stent/client` — browser Cordis client artifact;
 - `@oh-my-dsh/stent/testing` — isolated child-process fixtures.
 
 Orchestrion configuration, wire serialization, module identity internals, and
 loader-thread implementation remain private under `packages/stent/src/transform`
-and `packages/stent/src/node`. Browser transforms accept public `StentPatchStub`
+and `packages/stent/src/loader`. Browser transforms accept public `StentPatchStub`
 arrays and convert them internally; Node hooks read only the live runtime
 registry. The package no longer exports platform implementation files as
 compatibility subpaths.

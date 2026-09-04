@@ -8,7 +8,7 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import { StentService, getStent, markStentDshLaunch } from '@oh-my-dsh/stent'
-import { installStentHooks } from '@oh-my-dsh/stent/node'
+import { installStentHooks } from '@oh-my-dsh/stent/loader'
 import { StentCompatService } from '../../src/compat/service.ts'
 
 // The child harness models the approved stent-dsh launch path. The dedicated

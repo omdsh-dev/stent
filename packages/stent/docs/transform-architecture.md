@@ -18,17 +18,16 @@
    import。也就是说该目录可以消费包外的模块(`node:*`、`estree`、`typescript`、
    `@apm-js-collab/code-transformer`),但**绝不能反向依赖**
    `packages/stent/src/bridge.ts`、`packages/stent/src/runtime.ts`、
-   `packages/stent/src/types.ts`、`packages/stent/src/node/*`、
+   `packages/stent/src/types.ts`、`packages/stent/src/loader/*`、
    `packages/stent/src/browser/*` 等包内模块。
-2. **对外单向**。包内其他模块只通过 `packages/stent/src/transform` 拿到变换能力:
-   - `packages/stent/src/node/loader/loader.ts` → `config.ts`(expandPatchStub、StentInstrumentationConfig)、
-     `identity.ts`、`matcher.ts`、`wire.ts`;
-   - `packages/stent/src/node/hook-entry.ts`(loader 线程)→ `browser.ts`(createInstrumentedTransform)、
+ 2. **对外单向**。包内其他模块只通过 `packages/stent/src/transform` 拿到变换能力:
+   - `packages/stent/src/loader/loader.ts` → `runtime.ts`、`bridge.ts` 与 loader 内部
+     的状态、hook 和 cache adapter;
+   - `packages/stent/src/loader/state.ts` → `config.ts`、`identity.ts`、`matcher.ts`;
+   - `packages/stent/src/loader/hook-entry.ts`(loader 线程)→ `browser.ts`(createInstrumentedTransform)、
      `identity.ts`、`wire.ts`;
+   - `packages/stent/src/loader/index.ts` 是 Node public facade；异步入口和 HMR cache API 都直接由 loader 模块提供;
    - `packages/stent/src/browser/index.ts` / `packages/stent/src/browser/serve.ts` → `browser.ts`、`identity.ts`;
-   - `packages/stent/src/bridge.ts` → `protocol.ts`(GLOBAL_BRIDGE_KEY);
-   - `packages/stent/src/runtime.ts` → `validation.ts`(仅再导出守卫);
-   - `packages/stent/src/types.ts`(包公共类型)→ `packages/stent/src/transform/types.ts`(仅类型再导出)。
 
 边界与公开面的关系:README 明确声明 Orchestrion 适配器和中间 instrumentation
 类型是**内部实现细节,不是公开 API**;`packages/stent/package.json` 的 `exports`
@@ -77,7 +76,7 @@ Node 侧则通过 `installStentHooks()` 间接消费整个变换层。`packages/
   identity.ts ──value────────────────────────────────────────────► browser.ts
 
   index.ts ──explicit re-exports──► the selected symbols from the modules above
-  package consumers (outside this graph): packages/stent/src/node/*,
+  package consumers (outside this graph): packages/stent/src/loader/*,
   packages/stent/src/browser/*, packages/stent/src/bridge.ts, packages/stent/src/runtime.ts
 ```
 (示意图如实标明每条边;精确依赖边见下表,与 import 语句一一对应。)
@@ -121,7 +120,13 @@ Node 侧则通过 `installStentHooks()` 间接消费整个变换层。`packages/
 
 ## 3. 编译期数据流(patch 描述符 → 改写后的代码)
 
-### 3.1 Node 加载路径(`packages/stent/src/node/loader/loader.ts`)
+### 3.1 Node 加载路径(`packages/stent/src/loader/loader.ts`)
+
+Node 侧只有一个 loader 协调模块。`loader.ts` 管理安装、变更订阅、状态释放和公开 re-transform；`state.ts` 管理 matcher 快照与动态重变换队列；`sync.ts`、`async.ts` 分别适配同步 hooks 与 loader thread；`reload.ts` 集中处理 CJS/ESM cache eviction；`hook-entry.ts` 是异步 loader thread 的唯一实现。`src/loader/index.ts` 是 Node public facade，异步入口和 HMR cache API 都直接由 loader 模块提供。
+
+这些 adapter 通过 `types.ts` 的 `LoaderHost` 读取状态、patch snapshot 和 binding recorder，不直接访问 `runtime`。因此 runtime 仍是 patch 数据平面，Node 私有 API、`Module.prototype._compile`、`module.register` 和跨线程 wire 都被限制在 loader 目录内。
+
+`loader.ts` 仍然只允许一个 active dynamic installation；process-lifetime hook 函数在 disposer 后保留，但通过 central loader 的状态读取器观察到空的 active state。
 
 ```text
 插件 ctx.stent.register()                    runtime.register()
@@ -393,7 +398,7 @@ source/flags 并 revive 新的 RegExp,所以跨 JSON 往返不会保留该 `last
   `stent: failed to transform <url>`;async loader-thread 的 ESM `hook-entry.ts` 不
   包装,parser/selector 等原始错误会向上游传播。
 - 启动后:required patch 无绑定由 `checkRequiredPatches` 报出
-  (`packages/stent/src/node/loader/loader.ts`);browser transform 本身不执行 required 检查;
+  (`packages/stent/src/loader/loader.ts`);browser transform 本身不执行 required 检查;
 - 浏览器 serve:patch 未绑定或变换失败默认 500 点名 patch id,
   `fallback: 'raw'` 才降级为原样 bundle。
 

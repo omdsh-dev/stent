@@ -73,7 +73,7 @@ async function installStentBootstrap(rows: StentProfileRows): Promise<void> {
   if (!rows.has('stent') || isStentDshLaunch()) {
     return
   }
-  const { installStentHooks } = await import('@oh-my-dsh/stent/node')
+  const { installStentHooks } = await import('@oh-my-dsh/stent/loader')
   installStentHooks()
 }
 
@@ -82,7 +82,7 @@ async function checkStentRequiredPatches(
   rows: StentProfileRows,
 ): Promise<void> {
   assertDynamicProfile(rows)
-  const { checkRequiredPatches } = await import('@oh-my-dsh/stent/node')
+  const { checkRequiredPatches } = await import('@oh-my-dsh/stent/loader')
   checkRequiredPatches()
 }
 
@@ -141,7 +141,7 @@ function scheduleRequiredPatchCheck(ctx: Readonly<Context>): void {
     const { setTimeout: defer } = await import('node:timers/promises')
     await defer(PATCH_CHECK_DELAY_MS)
     const { checkRequiredPatches, flushBindingReports } =
-      await import('@oh-my-dsh/stent/node')
+      await import('@oh-my-dsh/stent/loader')
     const { runtime } = await import('@oh-my-dsh/stent')
     await flushBindingReports(BINDING_FLUSH_DELAY_MS)
     checkRequiredPatches()

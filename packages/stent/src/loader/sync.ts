@@ -8,8 +8,13 @@ import {
   transformStentSource,
 } from '#src/transform/matcher'
 
-import { flushBindings, states } from './loader-state.ts'
-import type { CompileFn, LoaderState } from './loader-types.ts'
+import { flushBindings } from './bindings.ts'
+import type {
+  CompileFn,
+  LoaderBindingRecorder,
+  LoaderHost,
+  LoaderState,
+} from './types.ts'
 
 /** Package identity resolved for a file the loader is about to transform. */
 type ResolvedIdentity = NonNullable<ReturnType<typeof resolvePackageIdentity>>
@@ -46,6 +51,45 @@ interface CompileHost {
 }
 
 const compileWrapper = { installed: false }
+
+/** Version component used when a Node version omits a segment. */
+const ZERO_PART = 0
+/** Node major line whose stable synchronous hook minimum is tracked. */
+const NODE_22_LINE = 22
+/** Node major line whose stable synchronous hook minimum is tracked. */
+const NODE_24_LINE = 24
+/** First release per Node major line whose synchronous module hooks are stable. */
+const SYNC_HOOK_MINIMUMS = new Map([
+  [NODE_22_LINE, { minor: 22, patch: 3 }],
+  [NODE_24_LINE, { minor: 11, patch: 1 }],
+])
+
+/** Whether a Node version string ships stable synchronous module hooks. */
+function syncHooksSupportedByVersion(version: string): boolean {
+  const parts = version.split('.').map(Number)
+  const [major = ZERO_PART, minor = ZERO_PART, patch = ZERO_PART] = parts
+  const minimum = SYNC_HOOK_MINIMUMS.get(major)
+  if (minimum === undefined) {
+    return major > NODE_24_LINE
+  }
+  return (
+    minor > minimum.minor || (minor === minimum.minor && patch >= minimum.patch)
+  )
+}
+
+/** Select the hook strategy, honoring the two environment overrides first. */
+function supportsSyncHooks(): boolean {
+  if (process.env.STENT_FORCE_ASYNC_HOOKS === '1') {
+    return false
+  }
+  if (process.env.STENT_FORCE_SYNC_HOOKS === '1') {
+    return true
+  }
+  if (typeof registerHooks !== 'function') {
+    return false
+  }
+  return syncHooksSupportedByVersion(process.versions.node)
+}
 
 /** Module format Orchestrion expects for a load-hook format. */
 function moduleTypeOf(format: string | null | undefined): 'esm' | 'cjs' {
@@ -90,7 +134,11 @@ function loadFailure(state: LoaderState, url: string, error: unknown): Error {
 }
 
 /** Transform one loaded module and record the bindings it produced. */
-function runLoadTransform(request: LoadRequest, path: string): string {
+function runLoadTransform(
+  request: LoadRequest,
+  path: string,
+  recordBindings: LoaderBindingRecorder,
+): string {
   const { state, transformer, result, url, format } = request
   try {
     const transformed = transformStentSource(
@@ -100,7 +148,7 @@ function runLoadTransform(request: LoadRequest, path: string): string {
     )
     const identity = resolvePackageIdentity(path)
     if (identity !== undefined) {
-      flushBindings(state, identity)
+      flushBindings(state, identity, recordBindings)
     }
     return transformed.code
   } catch (error) {
@@ -109,14 +157,17 @@ function runLoadTransform(request: LoadRequest, path: string): string {
 }
 
 /** Transformed source for one load, or undefined when it was already seen. */
-function transformLoaded(request: LoadRequest): string | undefined {
+function transformLoaded(
+  request: LoadRequest,
+  recordBindings: LoaderBindingRecorder,
+): string | undefined {
   const { state, url } = request
   const path = modulePath(url)
   if (state.seen.has(path)) {
     return undefined
   }
   state.seen.add(path)
-  return runLoadTransform(request, path)
+  return runLoadTransform(request, path, recordBindings)
 }
 
 /** Transformer this installation selects for a resolved module identity. */
@@ -136,7 +187,7 @@ function selectTransformer(
 }
 
 /** Register synchronous ESM and CJS load hooks for one installation. */
-function installSynchronousHooks(state: LoaderState): void {
+function installSynchronousHooks(state: LoaderState, host: LoaderHost): void {
   registerHooks({
     resolve: (specifier, context, nextResolve) => {
       const resolved = nextResolve(specifier, context)
@@ -162,13 +213,16 @@ function installSynchronousHooks(state: LoaderState): void {
       if (transformer === undefined) {
         return result
       }
-      const source = transformLoaded({
-        state,
-        transformer,
-        result,
-        url,
-        format: context.format,
-      })
+      const source = transformLoaded(
+        {
+          state,
+          transformer,
+          result,
+          url,
+          format: context.format,
+        },
+        host.recordBindings,
+      )
       if (source === undefined) {
         return result
       }
@@ -189,7 +243,11 @@ function compileFailure(
 }
 
 /** Apply one installation's transform to CommonJS source. */
-function compileForState(state: LoaderState, request: CompileRequest): string {
+function compileForState(
+  state: LoaderState,
+  request: CompileRequest,
+  recordBindings: LoaderBindingRecorder,
+): string {
   const { identity, filename, source } = request
   const transformer = selectTransformer(state, identity)
   if (transformer === undefined || state.seen.has(filename)) {
@@ -198,7 +256,7 @@ function compileForState(state: LoaderState, request: CompileRequest): string {
   state.seen.add(filename)
   try {
     const transformed = transformStentSource(transformer, source, 'cjs')
-    flushBindings(state, identity)
+    flushBindings(state, identity, recordBindings)
     return transformed.code
   } catch (error) {
     throw compileFailure(state, filename, error)
@@ -206,14 +264,23 @@ function compileForState(state: LoaderState, request: CompileRequest): string {
 }
 
 /** Apply every active installation's transform to CommonJS source. */
-function applyStentTransforms(content: string, filename: string): string {
+function applyStentTransforms(
+  content: string,
+  filename: string,
+  states: readonly LoaderState[],
+  recordBindings: LoaderBindingRecorder,
+): string {
   const identity = resolvePackageIdentity(filename)
   if (identity === undefined) {
     return content
   }
   let source = content
   for (const state of states) {
-    source = compileForState(state, { identity, filename, source })
+    source = compileForState(
+      state,
+      { identity, filename, source },
+      recordBindings,
+    )
   }
   return source
 }
@@ -227,7 +294,7 @@ function isCompileHost(value: object): value is CompileHost {
 }
 
 /** Install the process-wide CommonJS compile wrapper once. */
-function installCompileWrapper(): void {
+function installCompileWrapper(host: LoaderHost): void {
   if (compileWrapper.installed) {
     return
   }
@@ -242,9 +309,14 @@ function installCompileWrapper(): void {
     content: string,
     filename: string,
   ): unknown {
-    const source = applyStentTransforms(content, filename)
+    const source = applyStentTransforms(
+      content,
+      filename,
+      host.getStates(),
+      host.recordBindings,
+    )
     return originalCompile.call(this, source, filename)
   }
 }
 
-export { installCompileWrapper, installSynchronousHooks }
+export { installCompileWrapper, installSynchronousHooks, supportsSyncHooks }

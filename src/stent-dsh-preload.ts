@@ -13,7 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { healProfilesModuleFallback } from '@deepseek-ai/dsh-app-boot'
 import { markStentDshLaunch } from '@oh-my-dsh/stent/activation'
-import { installStentHooks } from '@oh-my-dsh/stent/node'
+import { installStentHooks } from '@oh-my-dsh/stent/loader'
 
 import { buildCliArgs, parseOpt } from './stent-dsh/args.ts'
 import { resolveHost } from './stent-dsh/cli.ts'
