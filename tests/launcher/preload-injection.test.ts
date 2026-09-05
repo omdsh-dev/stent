@@ -11,7 +11,7 @@ import { afterAll, describe, expect, it } from 'vitest'
  * The installed launcher tests cover the active dynamic preload path.
  */
 const repoRoot = path.join(import.meta.dirname, '..', '..')
-const preload = path.join(repoRoot, 'src', 'stent-dsh-preload.ts')
+const preload = path.join(repoRoot, 'src', 'stent-loader.ts')
 const entry = path.join(repoRoot, 'tests', 'fixtures', 'preload-entry.mjs')
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'stent-preload-'))

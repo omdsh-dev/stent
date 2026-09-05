@@ -26,7 +26,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
  */
 const repoRoot = path.join(import.meta.dirname, '..', '..')
 const launcher = path.join(repoRoot, 'lib', 'stent-dsh.js')
-const compiledPreload = path.join(repoRoot, 'lib', 'stent-dsh-preload.js')
+const compiledPreload = path.join(repoRoot, 'lib', 'stent-loader.js')
 if (!existsSync(launcher) || !existsSync(compiledPreload)) {
   throw new Error(
     'compiled launcher artifacts are missing; run pnpm run build before the launcher test',
@@ -188,7 +188,7 @@ function installFixtures(): void {
   fixtureTree.copyFixture(launcher, path.join(installedLib, 'stent-dsh.js'))
   fixtureTree.copyFixture(
     compiledPreload,
-    path.join(installedLib, 'stent-dsh-preload.js'),
+    path.join(installedLib, 'stent-loader.js'),
   )
   fixtureTree.linkFixture(
     '../@oh-my-dsh/stent-pack/lib/stent-dsh.js',
@@ -241,7 +241,7 @@ function expectPreloadHandoff(
   profile: string,
 ): void {
   expect(out.stdout).toContain(`FAKE-DSH argv=${argv}`)
-  expect(out.stdout).toContain('stent-dsh-preload.js')
+  expect(out.stdout).toContain('stent-loader.js')
   expect(out.stdout).toContain(`profile=${profile}`)
   expect(out.stderr).toContain('stent-dsh: exec ')
   expect(out.stderr).toContain(

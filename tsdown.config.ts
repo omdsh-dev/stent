@@ -26,7 +26,7 @@ export default [
   defineConfig({
     ...nodeOutput,
     entry: {
-      'stent-dsh-preload': 'src/stent-dsh-preload.ts',
+      'stent-loader': 'src/stent-loader.ts',
     },
     clean: false,
   }),

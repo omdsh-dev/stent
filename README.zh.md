@@ -28,8 +28,8 @@ profile bootstrap)。根包 `@oh-my-dsh/stent-pack` 是单独发布的 carrier,�
 ## 2. Host 集成:由 launcher 提供接线
 
 三个包通过编译后的 launcher 安装 hooks 并挂载 facade。`src/stent-dsh.ts`
-编译为 `lib/stent-dsh.js`，`src/stent-dsh-preload.ts` 编译为
-`lib/stent-dsh-preload.js`。bin 只解析 DSH 路径并转发其他参数，通过
+编译为 `lib/stent-dsh.js`，`src/stent-loader.ts` 编译为
+`lib/stent-loader.js`。bin 只解析 DSH 路径并转发其他参数，通过
 `NODE_OPTIONS=--import ...` 在官方 CLI 加载前注入编译后的 preload。profile
 组合、依赖修复、argv 规范化、环境设置和 hook 注册全部由 preload 负责。
 它通过 DSH 提供的 `@deepseek-ai/dsh-app-boot` peer 静态导入官方 profile 组合和修复

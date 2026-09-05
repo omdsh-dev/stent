@@ -22,8 +22,8 @@
   "files": [
     "lib/stent-dsh.js",
     "lib/stent-dsh.js.map",
-    "lib/stent-dsh-preload.js",
-    "lib/stent-dsh-preload.js.map",
+    "lib/stent-loader.js",
+    "lib/stent-loader.js.map",
     "cordis.patch.yml",
     "README.md"
   ],

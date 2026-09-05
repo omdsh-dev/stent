@@ -38,7 +38,7 @@ an upstream dependency and is not republished here.
 
 The three packages install hooks and mount facades through the compiled launcher.
 `src/stent-dsh.ts` compiles to `lib/stent-dsh.js`, while
-`src/stent-dsh-preload.ts` compiles to `lib/stent-dsh-preload.js`. The bin only
+`src/stent-loader.ts` compiles to `lib/stent-loader.js`. The bin only
 resolves the DSH path and forwards its arguments; it injects the compiled
 preload through `NODE_OPTIONS=--import ...` before the official CLI loads. The
 preload owns profile composition, dependency healing, argv normalization,
