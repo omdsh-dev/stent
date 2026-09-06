@@ -6,6 +6,7 @@ import url from 'node:url'
 import { Command } from 'commander'
 
 const EXIT_SUCCESS = 0
+const EXIT_FAILURE = 1
 
 function main(): number {
   // 线程配置:信号处理置空以保证退出顺序
@@ -47,6 +48,9 @@ function main(): number {
   }
 
   const result = spawnSync(dsh_cmd, args, { stdio: 'inherit', env })
+  if (result.error !== undefined) {
+    return EXIT_FAILURE
+  }
   return result.status ?? EXIT_SUCCESS
 }
 

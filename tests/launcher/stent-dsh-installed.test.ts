@@ -15,14 +15,9 @@ import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 /**
- * Installed-mode launcher resolution: without --dsh-path, stent-dsh runs a
- * registry-installed @deepseek-ai/dsh — the published lib/bin.js and bundled
- * preload are plain ESM, so the installed path needs neither tsx nor a
- * checkout. The CLI resolves from the caller's project dependencies or a PATH
- * shim (symlink shims and pnpm's cmd-shim script form alike). These offline
- * fixtures stand in for each resolution path; the stub `stent` in the profile
- * records what the preload delivered, and the stub `@deepseek-ai/dsh-app-boot`
- * records the pre-boot module-fallback heals.
+ * Fixtures for DSH launch scenarios. The stub `stent` in the profile records
+ * what the preload delivered, and the stub `@deepseek-ai/dsh-app-boot` records
+ * the pre-boot module-fallback heals.
  */
 const repoRoot = path.join(import.meta.dirname, '..', '..')
 const launcher = path.join(repoRoot, 'lib', 'stent-dsh.js')
@@ -269,15 +264,23 @@ describe('stent-dsh installed mode (registry-installed dsh)', () => {
 
   afterAll(fixtureTree.removeFixtures.bind(fixtureTree))
 
-  it('uses --dsh-path as the DSH path selector', { timeout: 30_000 }, () => {
+  it('uses --dsh as the DSH command selector', { timeout: 30_000 }, () => {
     expect.hasAssertions()
-    const source = path.join(tempDir, 'missing-source')
-    const out = run(['--dsh-path', source, ...PROFILE_DUMP_ARGV], {
-      path: SYSTEM_PATH,
-    })
-    expect(out.status).toBe(EXIT_FAILURE)
-    expect(out.stderr).toContain(`DSH path does not exist: ${source}`)
+    const out = run(['--dsh', process.execPath, binFile, ...PROFILE_DUMP_ARGV])
+    expect(out.status, `${out.stdout}\n${out.stderr}`).toBe(EXIT_SUCCESS)
+    expect(out.stdout).toContain(`FAKE-DSH argv=${PROFILE_FORWARDED_ARGV}`)
   })
+
+  it(
+    'fails when the DSH command cannot be spawned',
+    { timeout: 30_000 },
+    () => {
+      expect.hasAssertions()
+      const missingCommand = path.join(tempDir, 'missing-dsh')
+      const out = run(['--dsh', missingCommand, ...PROFILE_DUMP_ARGV])
+      expect(out.status).toBe(EXIT_FAILURE)
+    },
+  )
 
   it(
     'infers web and forwards it when invoked from the installed profile bin',
@@ -293,11 +296,6 @@ describe('stent-dsh installed mode (registry-installed dsh)', () => {
       )
     },
   )
-
-  it('resolves an explicit dsh path', { timeout: 30_000 }, () => {
-    expect.hasAssertions()
-    expectBoot(run(['--dsh-path', binFile, ...PROFILE_DUMP_ARGV]))
-  })
 })
 
 describe('stent-dsh installed mode CLI discovery', () => {
