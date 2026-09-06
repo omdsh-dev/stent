@@ -1,13 +1,25 @@
 {
   "name": "@oh-my-dsh/stent-api",
   "description": "Cooperative Stent API: the pure-Cordis compat facade over the stent registry",
-  "version": "0.1.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omdsh-dev/stent.git"
+  },
+  "license": "BSD-3-Clause",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "version": "0.1.1",
   "imports": {
     "#src/*": "./src/*.ts"
   },
+  "files": [
+    "lib/*.js",
+    "lib/compat/*.js",
+    "lib/**/*.d.ts",
+    "lib/**/*.d.ts.map"
+  ],
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
@@ -23,17 +35,8 @@
     },
     "./package.json": "./package.json"
   },
-  "files": [
-    "lib/*.js",
-    "lib/compat/*.js",
-    "lib/**/*.d.ts",
-    "lib/**/*.d.ts.map"
-  ],
-  "license": "BSD-3-Clause",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/omdsh-dev/stent.git"
-  },
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "scripts": {
     "build": "pnpm --filter @oh-my-dsh/stent run build && tsdown --config-loader unrun --config tsdown.config.ts",
     "fmt": "oxfmt --config ../../.oxfmtrc.json --write src tests",
@@ -59,8 +62,5 @@
     "tsx": "^4.23.11",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }

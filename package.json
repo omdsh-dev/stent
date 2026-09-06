@@ -1,20 +1,20 @@
 {
   "name": "@oh-my-dsh/stent-pack",
   "description": "Stent/Mixin extension workspace: installable profile bundle carrier over the stent package trio",
-  "version": "0.1.1",
-  "type": "module",
-  "packageManager": "pnpm@11.24.0",
-  "engines": {
-    "node": "^22.19.0 || >=24.0.0"
-  },
-  "license": "BSD-3-Clause",
   "repository": {
     "type": "git",
     "url": "https://github.com/omdsh-dev/stent.git"
   },
+  "license": "BSD-3-Clause",
   "publishConfig": {
     "access": "public"
   },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "type": "module",
+  "packageManager": "pnpm@11.24.0",
+  "version": "0.1.1",
   "imports": {
     "#src/*": "./src/*.ts",
     "#tools/*": "./tools/*.ts"
@@ -27,6 +27,14 @@
     "cordis.patch.yml",
     "README.md"
   ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "bin": {
+    "stent-dsh": "lib/stent-dsh.js"
+  },
   "scripts": {
     "build": "tsdown --config-loader unrun --config tsdown.config.ts",
     "fmt": "oxfmt --config .oxfmtrc.json --write src tests tools",
@@ -40,11 +48,6 @@
     "pack:lint": "pnpm run lint && pnpm --filter @oh-my-dsh/stent run lint && pnpm --filter @oh-my-dsh/stent-api run lint && pnpm --filter @oh-my-dsh/stent-dsh run lint",
     "pack:knip": "pnpm run knip && pnpm --filter @oh-my-dsh/stent run knip && pnpm --filter @oh-my-dsh/stent-api run knip && pnpm --filter @oh-my-dsh/stent-dsh run knip",
     "pack:test": "pnpm run test && pnpm --filter @oh-my-dsh/stent run test && pnpm --filter @oh-my-dsh/stent-api run test && pnpm --filter @oh-my-dsh/stent-dsh run test"
-  },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    }
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-app-boot": "^0.1.1-rc.2"
@@ -70,8 +73,5 @@
     "typescript": "^6.0.3",
     "unrun": "^0.3.1",
     "vitest": "^4.1.8"
-  },
-  "bin": {
-    "stent-dsh": "lib/stent-dsh.js"
   }
 }

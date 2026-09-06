@@ -1,13 +1,27 @@
 {
   "name": "@oh-my-dsh/stent-dsh",
   "description": "DSH integrations for the Cordis Stent layer: DSH-facing facades, the package invariant, and the runtime-driven DSH profile bootstrap",
-  "version": "0.1.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omdsh-dev/stent.git"
+  },
+  "license": "BSD-3-Clause",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "version": "0.1.1",
   "imports": {
     "#src/*": "./src/*.ts"
   },
+  "files": [
+    "lib/*.js",
+    "lib/host/*.js",
+    "lib/bootstrap/*.js",
+    "lib/browser/*.js",
+    "lib/**/*.d.ts",
+    "lib/**/*.d.ts.map"
+  ],
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
@@ -47,18 +61,13 @@
     },
     "./package.json": "./package.json"
   },
-  "files": [
-    "lib/*.js",
-    "lib/host/*.js",
-    "lib/bootstrap/*.js",
-    "lib/browser/*.js",
-    "lib/**/*.d.ts",
-    "lib/**/*.d.ts.map"
-  ],
-  "license": "BSD-3-Clause",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/omdsh-dev/stent.git"
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
   },
   "scripts": {
     "build": "pnpm --filter @oh-my-dsh/stent run build && tsdown --config-loader unrun --config tsdown.config.ts",
@@ -68,12 +77,6 @@
     "lint:fix": "oxlint --config .oxlintrc.json --type-check --deny-warnings --fix src tests",
     "knip": "knip --config knip.json --treat-config-hints-as-errors",
     "test": "pnpm run build && vitest run --config vitest.config.ts"
-  },
-  "dsh": {
-    "client": {
-      "platform": "web",
-      "inject": []
-    }
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1-0",
@@ -118,8 +121,5 @@
     "typescript": "^6.0.3",
     "unrun": "^0.3.1",
     "vitest": "^4.1.8"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }
