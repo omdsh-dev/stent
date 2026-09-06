@@ -36,47 +36,45 @@ interface StentBridgeCall {
 /** One bridge listener: dispatches a call and returns its result. */
 type BridgeListener = (call: StentBridgeCall) => unknown
 
-/** Bridge listeners in registration order (the runtime registers exactly one). */
-const listeners = new Set<BridgeListener>()
+/** Owns bridge subscriptions and dispatches calls in registration order. */
+class BridgeDispatcher {
+  readonly #listeners = new Set<BridgeListener>()
 
-/**
- * Subscribe to transformed calls.
- *
- * @param listener - Dispatch function for every published call.
- * @returns A disposer removing the listener.
- */
-function subscribeBridge(listener: BridgeListener): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
+  public subscribe(listener: BridgeListener): () => void {
+    this.#listeners.add(listener)
+    return () => {
+      this.#listeners.delete(listener)
+    }
+  }
+
+  public publish(call: StentBridgeCall): unknown {
+    const pending = this.#listeners.values()
+    const first = pending.next()
+    if (first.done === true) {
+      return call.traced()
+    }
+    let result = first.value(call)
+    for (const listener of pending) {
+      result = listener(call)
+    }
+    return result
   }
 }
 
-/**
- * Publish one transformed call to the runtime. Returns the value the caller
- * should return: the handler's result for `around`/`replace`, or the traced
- * body's result (rewritten by `after` handlers) for `before`/`after`.
- *
- * With multiple listeners (e.g. several `StentRuntime` instances in one
- * process), every listener sees the call in registration order and argument
- * mutations are visible to later ones; each listener's return becomes the
- * current result, and the last listener's result is returned.
- *
- * @param call - The call record assembled by the transform.
- * @returns The value to return from the wrapped function.
- */
+const bridge = new BridgeDispatcher()
+
+/** Subscribe to transformed calls. */
+function subscribeBridge(listener: BridgeListener): () => void {
+  const dispose = bridge.subscribe(listener)
+  return (): void => {
+    dispose()
+  }
+}
+
+/** Publish one transformed call to the runtime. */
 function publish(call: StentBridgeCall): unknown {
-  const pending = listeners.values()
-  const first = pending.next()
-  if (first.done === true) {
-    /* No handler is registered for this patch (disabled, disposed, or the
-       patch was never enabled): delegate to the original body untouched. */
-    return call.traced()
-  }
-  let result = first.value(call)
-  for (const listener of pending) {
-    result = listener(call)
-  }
+  const dispatcher = bridge
+  const result = dispatcher.publish(call)
   return result
 }
 

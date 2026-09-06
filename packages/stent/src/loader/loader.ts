@@ -8,29 +8,28 @@
 import { installBridge } from '#src/bridge'
 import { runtime } from '#src/runtime'
 
-import { installAsyncHooks, writeAsyncConfig } from './async.ts'
+import {
+  deactivateAsyncHooks,
+  installAsyncHooks,
+  writeAsyncConfig,
+} from './async.ts'
+import { loaderStates } from './registry.ts'
 import {
   retransformCommonJs as reloadCommonJs,
   retransformEsm as reloadEsm,
 } from './reload.ts'
 import {
-  addState,
-  clearSeen,
-  clearStateBuffers,
   createLoaderState,
-  freeTransformers,
-  getStates,
-  hasActiveState,
   patchShapeKey,
   refreshDynamicState,
-  removeState,
 } from './state.ts'
+import type { LoaderState } from './state.ts'
 import {
   installCompileWrapper,
   installSynchronousHooks,
   supportsSyncHooks,
 } from './sync.ts'
-import type { LoaderHost, LoaderState } from './types.ts'
+import type { LoaderHost } from './types.ts'
 
 /** Size of an empty collection; named for the no-magic-numbers rule. */
 const EMPTY_COUNT = 0
@@ -62,7 +61,7 @@ function checkRequiredPatches(): void {
 }
 
 const loaderHost: LoaderHost = {
-  getStates,
+  getStates: () => loaderStates.list(),
   listPatches: () => runtime.list(),
   recordBindings: (id, records) => {
     runtime.recordBindings(id, records)
@@ -105,11 +104,10 @@ function disposeInstallation(
   state: LoaderState,
   unsubscribePatchChanges: () => void,
 ): void {
-  state.active = false
+  deactivateAsyncHooks()
+  state.dispose()
   unsubscribePatchChanges()
-  clearStateBuffers(state)
-  removeState(state)
-  freeTransformers(state)
+  loaderStates.remove(state)
   writeAsyncConfig()
 }
 
@@ -120,14 +118,14 @@ function installStentHooks(): () => void {
       'stent: installStentHooks does not accept arguments; use installStentHooks()',
     )
   }
-  if (hasActiveState()) {
+  if (loaderStates.hasActive()) {
     throw new Error(
       'stent: installStentHooks allows only one active dynamic installation',
     )
   }
   installBridge()
   const state = createLoaderState(prepareHookThread(), loaderHost.listPatches)
-  addState(state)
+  loaderStates.add(state)
   const unsubscribePatchChanges = activateHooks(state)
   return () => {
     disposeInstallation(state, unsubscribePatchChanges)
@@ -150,7 +148,9 @@ interface ReloadRequest<Result> {
 function runRetransform<Result>(request: ReloadRequest<Result>): Result {
   const { reload } = request
   const { target } = request
-  return reload(target, clearSeen)
+  return reload(target, (filename) => {
+    loaderStates.clearSeen(filename)
+  })
 }
 
 /** Re-evaluate an already-loaded CommonJS module under the current matcher. */

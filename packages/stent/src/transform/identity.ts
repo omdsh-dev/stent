@@ -60,38 +60,37 @@ function findPackageRoot(filename: string): string | undefined {
   }
 }
 
-/** Manifest name/version cache, keyed by the package root directory. */
-const manifestCache = new Map<string, ManifestFields>()
+/** Owns manifest parsing and the process-local package metadata cache. */
+class PackageIdentityResolver {
+  readonly #manifestCache = new Map<string, ManifestFields>()
 
-/**
- * Read the manifest fields of a package root; unreadable or malformed files
- * yield empty fields.
- */
-function readManifest(root: string): ManifestFields {
-  try {
-    const parsed: unknown = JSON.parse(
-      readFileSync(path.join(root, 'package.json'), 'utf8'),
-    )
-    if (isRecord(parsed)) {
-      const { name, version } = parsed
-      return { name: stringField(name), version: stringField(version) }
+  public manifestFor(root: string): ManifestFields {
+    const cached = this.#manifestCache.get(root)
+    if (cached !== undefined) {
+      return cached
     }
-    return { name: '', version: '' }
-  } catch {
-    return { name: '', version: '' }
+    const manifest = this.readManifest(root)
+    this.#manifestCache.set(root, manifest)
+    return manifest
+  }
+
+  private readManifest(root: string): ManifestFields {
+    try {
+      const parsed: unknown = JSON.parse(
+        readFileSync(path.join(root, 'package.json'), 'utf8'),
+      )
+      if (isRecord(parsed)) {
+        const { name, version } = parsed
+        return { name: stringField(name), version: stringField(version) }
+      }
+      return { name: '', version: '' }
+    } catch {
+      return { name: '', version: '' }
+    }
   }
 }
 
-/** Cached manifest fields for a package root. */
-function manifestFor(root: string): ManifestFields {
-  const cached = manifestCache.get(root)
-  if (cached !== undefined) {
-    return cached
-  }
-  const manifest = readManifest(root)
-  manifestCache.set(root, manifest)
-  return manifest
-}
+const identityResolver = new PackageIdentityResolver()
 
 /** Convert a file URL to a path, passing plain paths through unchanged. */
 function toFilePath(urlOrPath: string): string {
@@ -123,7 +122,7 @@ function resolvePackageIdentity(
   if (root === undefined) {
     return undefined
   }
-  const manifest = manifestFor(root)
+  const manifest = identityResolver.manifestFor(root)
   if (manifest.name === '') {
     return undefined
   }

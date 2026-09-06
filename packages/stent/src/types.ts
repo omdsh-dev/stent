@@ -126,26 +126,26 @@ interface StentPatchInfo {
   /** Registration priority (defaults to 0); higher priorities are outer layers. */
   readonly priority: number
   /** Whether this Node bootstrap patch must bind a target during startup. */
-  required?: boolean
+  readonly required?: boolean
   /** Whether the patch is currently installed. */
   readonly enabled: boolean
   /**
    * Load-time bindings recorded for this patch, in recording order. Always
    * present on `list()` entries; registration inputs may omit it.
    */
-  bindings?: readonly StentBinding[]
+  readonly bindings?: readonly StentBinding[]
 }
 
 /** A patch-registry change observed by the Node loader. */
 interface StentPatchChange {
   /** Whether the change registered (or re-registered) or removed a patch. */
-  type: 'register' | 'remove'
+  readonly type: 'register' | 'remove'
   /** The patch id the change belongs to. */
-  id: PatchId
+  readonly id: PatchId
   /** Metadata replaced by this change, when an entry already existed. */
-  previous?: StentPatchInfo
+  readonly previous?: StentPatchInfo
   /** Metadata installed by this change; absent on removal. */
-  current?: StentPatchInfo
+  readonly current?: StentPatchInfo
 }
 
 /** Listener notified after patch metadata changes. */

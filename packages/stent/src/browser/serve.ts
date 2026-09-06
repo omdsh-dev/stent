@@ -25,6 +25,10 @@ import { createBrowserTransform } from '#src/transform/browser'
 import { resolvePackageIdentity } from '#src/transform/identity'
 import type { StentPatchStub } from '#src/types'
 
+import { BundleCodeCache } from './bundle-cache.ts'
+import { ExactRouteController } from './route-controller.ts'
+import type { ExactRoute, WebServerService } from './route-controller.ts'
+
 const STATUS_OK = 200
 const STATUS_NOT_FOUND = 404
 const STATUS_METHOD_NOT_ALLOWED = 405
@@ -56,14 +60,9 @@ interface ServeBrowserTransformOptions {
 }
 
 type BundleTransform = ReturnType<typeof createBrowserTransform>
-type BundleCode = () => string
-interface ExactRoute {
-  readonly kind: 'exact'
-  readonly path: string
-  readonly handler: (req: IncomingMessage, res: ServerResponse) => void
-}
-interface WebServerService {
-  readonly register: (route: ExactRoute) => () => void
+interface BundleCode {
+  readonly read: () => string
+  readonly clear: () => void
 }
 interface BundleTarget {
   readonly moduleName: string
@@ -180,16 +179,15 @@ function transformBundle(options: BundleCodeOptions, source: string): string {
 
 /** Build a cached bundle reader and transformer. */
 function createBundleCode(options: BundleCodeOptions): BundleCode {
-  const cache: { current?: { source: string; code: string } } = {}
-  return (): string => {
-    const source = readBundleSource(options.bundlePath)
-    const { current } = cache
-    if (current !== undefined && current.source === source) {
-      return current.code
-    }
-    const code = transformBundle(options, source)
-    cache.current = { source, code }
-    return code
+  const cache = new BundleCodeCache(
+    () => readBundleSource(options.bundlePath),
+    (source) => transformBundle(options, source),
+  )
+  return {
+    read: (): string => cache.read(),
+    clear: (): void => {
+      cache.clear()
+    },
   }
 }
 
@@ -217,7 +215,7 @@ function createBundleHandler(bundleCode: BundleCode): ExactRoute['handler'] {
       return
     }
     try {
-      const code = bundleCode()
+      const code = bundleCode.read()
       res.writeHead(STATUS_OK, {
         'content-type': 'text/javascript; charset=utf-8',
         'cache-control': 'no-cache',
@@ -275,15 +273,19 @@ function serveBrowserTransform(
     path: options.route,
     handler: createBundleHandler(bundleCode),
   }
-  const registration: { remove?: () => void } = {}
+  const controller = new ExactRouteController(
+    httpServer,
+    route,
+    bundleCode.clear,
+  )
   ctx.effect(() => {
-    registration.remove = httpServer.register(route)
+    controller.install()
     return (): void => {
-      registration.remove?.()
+      controller.dispose()
     }
   }, `stent:serveBrowserTransform(${options.route})`)
   return (): void => {
-    registration.remove?.()
+    controller.dispose()
   }
 }
 

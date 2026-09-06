@@ -151,7 +151,7 @@ The patches file holds a JSON array of static patch stubs for browser build
 instrumentation (it is not read by the Node DSH launcher; JSON cannot express
 a `RegExp` `filePath`, so file paths are strings), and a malformed file fails
 loudly when the transform callback reads it. The transform registers the file in the bundler's watch graph
-on every module. An edit rebuilds any bundle whose host bundler honors the watch
+on every module. An edit rebuilds any bundle whose host bundler honors the watch. The callable transform exposes `dispose()` so the host can clear its matcher cache when the bundler lifecycle ends
 hook and HMR chain; that build integration is the trigger for browser
 re-transformation. A static in-memory patch set can still use
 `createBrowserTransform` directly.

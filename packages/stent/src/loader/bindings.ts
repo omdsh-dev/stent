@@ -1,7 +1,8 @@
 import type { PackageIdentity } from '#src/transform/identity'
 import type { StentBinding } from '#src/types'
 
-import type { LoaderBindingRecorder, LoaderState } from './types.ts'
+import type { LoaderState } from './state.ts'
+import type { LoaderBindingRecorder } from './types.ts'
 
 const EMPTY_COUNT = 0
 
@@ -18,10 +19,11 @@ function flushBindings(
   identity: PackageIdentity,
   recordBindings: LoaderBindingRecorder,
 ): void {
-  if (state.pending.size === EMPTY_COUNT) {
+  const entries = state.pendingEntries()
+  if (entries.length === EMPTY_COUNT) {
     return
   }
-  for (const [patchId, nodes] of state.pending) {
+  for (const [patchId, nodes] of entries) {
     const binding: StentBinding = {
       module: identity.name,
       file: identity.path,
@@ -29,7 +31,7 @@ function flushBindings(
     }
     recordBindings(patchId, [binding])
   }
-  state.pending.clear()
+  state.clearPending()
 }
 
 export { flushBindings }

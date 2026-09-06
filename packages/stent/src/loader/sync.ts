@@ -9,12 +9,8 @@ import {
 } from '#src/transform/matcher'
 
 import { flushBindings } from './bindings.ts'
-import type {
-  CompileFn,
-  LoaderBindingRecorder,
-  LoaderHost,
-  LoaderState,
-} from './types.ts'
+import type { LoaderState } from './state.ts'
+import type { CompileFn, LoaderBindingRecorder, LoaderHost } from './types.ts'
 
 /** Package identity resolved for a file the loader is about to transform. */
 type ResolvedIdentity = NonNullable<ReturnType<typeof resolvePackageIdentity>>
@@ -128,8 +124,8 @@ function readSource(result: LoadedSource, url: string): string {
 
 /** Drop the cached transformer for a URL and describe the failed transform. */
 function loadFailure(state: LoaderState, url: string, error: unknown): Error {
-  state.pending.clear()
-  state.transformers.delete(url)
+  state.clearPending()
+  state.forgetTransformer(url)
   return new Error(`stent: failed to transform ${url}`, { cause: error })
 }
 
@@ -163,10 +159,10 @@ function transformLoaded(
 ): string | undefined {
   const { state, url } = request
   const path = modulePath(url)
-  if (state.seen.has(path)) {
+  if (state.hasSeen(path)) {
     return undefined
   }
-  state.seen.add(path)
+  state.markSeen(path)
   return runLoadTransform(request, path, recordBindings)
 }
 
@@ -200,7 +196,7 @@ function installSynchronousHooks(state: LoaderState, host: LoaderHost): void {
       }
       const transformer = selectTransformer(state, identity)
       if (transformer !== undefined) {
-        state.transformers.set(resolved.url, transformer)
+        state.rememberTransformer(resolved.url, transformer)
       }
       return resolved
     },
@@ -209,7 +205,7 @@ function installSynchronousHooks(state: LoaderState, host: LoaderHost): void {
       if (!state.active) {
         return result
       }
-      const transformer = state.transformers.get(url)
+      const transformer = state.transformerFor(url)
       if (transformer === undefined) {
         return result
       }
@@ -237,8 +233,8 @@ function compileFailure(
   filename: string,
   error: unknown,
 ): Error {
-  state.pending.clear()
-  state.seen.delete(filename)
+  state.clearPending()
+  state.clearSeen(filename)
   return new Error(`stent: failed to transform ${filename}`, { cause: error })
 }
 
@@ -250,10 +246,10 @@ function compileForState(
 ): string {
   const { identity, filename, source } = request
   const transformer = selectTransformer(state, identity)
-  if (transformer === undefined || state.seen.has(filename)) {
+  if (transformer === undefined || state.hasSeen(filename)) {
     return source
   }
-  state.seen.add(filename)
+  state.markSeen(filename)
   try {
     const transformed = transformStentSource(transformer, source, 'cjs')
     flushBindings(state, identity, recordBindings)

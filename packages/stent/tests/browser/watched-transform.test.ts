@@ -144,6 +144,16 @@ describe('createWatchedBrowserTransform watch graph registration', () => {
 describe('createWatchedBrowserTransform rebuild behavior', () => {
   afterEach(cleanupRoots)
 
+  it('disposes the cached matcher before the next transform', async () => {
+    expect.hasAssertions()
+    const { transform, patchesPath } = await stubTransform()
+    const source = await readFile(`${fixtureDir}index.mjs`, 'utf8')
+    requireOutput(transform(source, `${fixtureDir}index.mjs`))
+    await writeFile(patchesPath, 'not json {')
+    transform.dispose()
+    expectTransformFailure(transform, 'cannot parse watched patches file')
+  })
+
   it('rebuilds the matcher when patches change', async () => {
     expect.hasAssertions()
     const { transform, patchesPath } = await stubTransform()

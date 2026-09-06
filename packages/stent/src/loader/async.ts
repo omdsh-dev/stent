@@ -7,36 +7,17 @@ import type { MessagePort } from 'node:worker_threads'
 import { serializeInstrumentation } from '#src/transform/wire'
 import type { StentBindingReport } from '#src/types'
 
-import type { LoaderHost, LoaderState } from './types.ts'
+import type { LoaderState } from './state.ts'
+import type { LoaderHost } from './types.ts'
 
 /** Default time to wait for the loader thread to acknowledge a flush. */
 const DEFAULT_FLUSH_TIMEOUT_MS = 200
 /** Index of the first pending flush waiter. */
 const FIRST_WAITER_INDEX = 0
-
-/** Mutable module state owned by the loader-thread installation. */
-interface AsyncHookState {
-  installed: boolean
-  configPath: string | undefined
-  bindingPort: MessagePort | undefined
-  host: LoaderHost | undefined
-}
-
-/** One installed loader state as published to the loader thread. */
-interface AsyncStateSnapshot {
-  readonly active: boolean
-  readonly instrumentations: readonly ReturnType<
-    typeof serializeInstrumentation
-  >[]
-}
-
-const asyncState: AsyncHookState = {
-  installed: false,
-  configPath: undefined,
-  bindingPort: undefined,
-  host: undefined,
-}
-const flushWaiters: (() => void)[] = []
+/** Sentinel for a waiter that has already been removed. */
+const NOT_FOUND_INDEX = -1
+/** Number of waiter entries removed at a time. */
+const REMOVE_COUNT = 1
 
 /** Remove the published config file when this process exits. */
 function scheduleAsyncConfigCleanup(configPath: string): void {
@@ -48,6 +29,90 @@ function scheduleAsyncConfigCleanup(configPath: string): void {
     }
   })
 }
+
+/** One installed loader state as published to the loader thread. */
+interface AsyncStateSnapshot {
+  readonly active: boolean
+  readonly instrumentations: readonly ReturnType<
+    typeof serializeInstrumentation
+  >[]
+}
+
+/** Owns the async loader registration, channel, config path, and flush waiters. */
+class AsyncLoaderController {
+  #installed = false
+  #configPath: string | undefined
+  #bindingPort: MessagePort | undefined
+  #host: LoaderHost | undefined
+  readonly #flushWaiters: (() => void)[] = []
+
+  public setHost(host: LoaderHost): void {
+    this.#host = host
+  }
+
+  public get host(): LoaderHost | undefined {
+    return this.#host
+  }
+
+  public get installed(): boolean {
+    return this.#installed
+  }
+
+  public markInstalled(): void {
+    this.#installed = true
+  }
+
+  public get configPath(): string | undefined {
+    return this.#configPath
+  }
+
+  public ensureConfigPath(): string {
+    if (this.#configPath === undefined) {
+      this.#configPath = nodePath.join(
+        tmpdir(),
+        `stent-config-${process.pid}.json`,
+      )
+      scheduleAsyncConfigCleanup(this.#configPath)
+    }
+    return this.#configPath
+  }
+
+  public setBindingPort(port: MessagePort): void {
+    this.#bindingPort = port
+  }
+
+  public get bindingPort(): MessagePort | undefined {
+    return this.#bindingPort
+  }
+
+  public addFlushWaiter(resolve: () => void): () => void {
+    this.#flushWaiters.push(resolve)
+    return () => {
+      const index = this.#flushWaiters.indexOf(resolve)
+      if (index !== NOT_FOUND_INDEX) {
+        this.#flushWaiters.splice(index, REMOVE_COUNT)
+      }
+    }
+  }
+
+  public deactivate(): void {
+    const port = this.#bindingPort
+    this.#bindingPort = undefined
+    this.#host = undefined
+    this.#installed = false
+    port?.close()
+    this.resolveFlushWaiters()
+  }
+
+  public resolveFlushWaiters(): void {
+    const waiters = this.#flushWaiters.splice(FIRST_WAITER_INDEX)
+    for (const resolve of waiters) {
+      resolve()
+    }
+  }
+}
+
+const asyncController = new AsyncLoaderController()
 
 /** Whether a value is a plain object whose properties can be inspected. */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -64,14 +129,6 @@ function isFlushDoneMessage(message: unknown): boolean {
   }
   const { type } = message
   return type === 'flush-done'
-}
-
-/** Release every waiter registered for the pending flush request. */
-function resolveFlushWaiters(): void {
-  const waiters = flushWaiters.splice(FIRST_WAITER_INDEX)
-  for (const resolve of waiters) {
-    resolve()
-  }
 }
 
 /** Validate one binding report posted by the loader thread. */
@@ -94,7 +151,7 @@ function bindingReportOf(value: unknown): StentBindingReport | undefined {
 /** Record one binding report in the runtime registry. */
 function recordBinding(value: unknown): void {
   const report = bindingReportOf(value)
-  const { host } = asyncState
+  const { host } = asyncController
   if (report === undefined || host === undefined) {
     return
   }
@@ -106,7 +163,7 @@ function recordBinding(value: unknown): void {
 /** Dispatch one message received from the loader thread. */
 function handleBindingMessage(message: unknown): void {
   if (isFlushDoneMessage(message)) {
-    resolveFlushWaiters()
+    asyncController.resolveFlushWaiters()
     return
   }
   if (!Array.isArray(message)) {
@@ -115,16 +172,6 @@ function handleBindingMessage(message: unknown): void {
   for (const record of message) {
     recordBinding(record)
   }
-}
-
-/** Choose the config path once and schedule its removal. */
-function ensureAsyncConfigPath(): void {
-  if (asyncState.configPath !== undefined) {
-    return
-  }
-  const configPath = nodePath.join(tmpdir(), `stent-config-${process.pid}.json`)
-  asyncState.configPath = configPath
-  scheduleAsyncConfigCleanup(configPath)
 }
 
 /** Whether this module was loaded from its own directory rather than a bundle. */
@@ -148,27 +195,27 @@ function hookEntryUrl(baseUrl: string): URL {
 
 /** Install the loader-thread hooks used when synchronous hooks are unavailable. */
 function installAsyncHooks(baseUrl: string, host: LoaderHost): void {
-  asyncState.host = host
-  ensureAsyncConfigPath()
-  if (asyncState.installed) {
+  asyncController.setHost(host)
+  asyncController.ensureConfigPath()
+  if (asyncController.installed) {
     return
   }
-  asyncState.installed = true
   const channel = new MessageChannel()
-  asyncState.bindingPort = channel.port1
+  asyncController.setBindingPort(channel.port1)
   channel.port1.on('message', handleBindingMessage)
   channel.port1.unref()
   register(hookEntryUrl(baseUrl).href, baseUrl, {
-    data: { configPath: asyncState.configPath, port: channel.port2 },
+    data: { configPath: asyncController.configPath, port: channel.port2 },
     transferList: [channel.port2],
   })
+  asyncController.markInstalled()
 }
 
 /** Wait for binding reports posted by the loader thread to reach this thread. */
 async function flushBindingReports(
   timeoutMs = DEFAULT_FLUSH_TIMEOUT_MS,
 ): Promise<void> {
-  const { bindingPort } = asyncState
+  const { bindingPort } = asyncController
   if (bindingPort === undefined) {
     return
   }
@@ -178,12 +225,16 @@ async function flushBindingReports(
   const timer = setTimeout(() => {
     resolve(false)
   }, timeoutMs)
-  flushWaiters.push(() => {
+  const removeWaiter = asyncController.addFlushWaiter(() => {
     clearTimeout(timer)
     resolve(true)
   })
-  bindingPort.postMessage({ type: 'flush' }, [])
-  await promise
+  try {
+    bindingPort.postMessage({ type: 'flush' }, [])
+    await promise
+  } finally {
+    removeWaiter()
+  }
 }
 
 /** Snapshot every installed loader state for the loader thread. */
@@ -200,14 +251,27 @@ function snapshotStates(states: readonly LoaderState[]): AsyncStateSnapshot[] {
 
 /** Write the active matcher snapshots consumed by the loader thread. */
 function writeAsyncConfig(): void {
-  const { configPath } = asyncState
+  const { configPath } = asyncController
   if (configPath === undefined) {
     return
   }
   const nextPath = `${configPath}.next`
-  const states = asyncState.host?.getStates() ?? []
+  const states = asyncController.host?.getStates() ?? []
   writeFileSync(nextPath, JSON.stringify(snapshotStates(states)))
   renameSync(nextPath, configPath)
 }
 
-export { flushBindingReports, installAsyncHooks, writeAsyncConfig }
+function deactivateAsyncHooks(): void {
+  if (!asyncController.installed) {
+    return
+  }
+  asyncController.deactivate()
+}
+
+export {
+  AsyncLoaderController,
+  deactivateAsyncHooks,
+  flushBindingReports,
+  installAsyncHooks,
+  writeAsyncConfig,
+}

@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { runtime, validatePatchId, validatePatchStatic } from '#src/index'
-import type { StentPatchInfo } from '#src/types'
+import type { StentPatchChange, StentPatchInfo } from '#src/types'
 
 /* Deeply readonly views of the mutable records these callbacks only read. */
 type ChangeView = Readonly<{ type: string; id: string }>
@@ -178,6 +178,40 @@ describe('stent runtime change notifications', () => {
     const listed = runtime.list().find((info: IdView) => info.id === 'c')
     expect([listed?.enabled]).toStrictEqual([true])
   })
+
+  it(
+    'gives each change subscriber an independent metadata snapshot',
+    { timeout: 5000 },
+    () => {
+      expect.hasAssertions()
+      const first: StentPatchChange[] = []
+      const second: StentPatchChange[] = []
+      const unsubscribeFirst = runtime.onPatchChange((change) => {
+        first.push(change)
+      })
+      const unsubscribeSecond = runtime.onPatchChange((change) => {
+        second.push(change)
+      })
+      runtime.register(baseInfo('watch/isolated'))
+      unsubscribeFirst()
+      unsubscribeSecond()
+      const [firstChange] = first
+      const [secondChange] = second
+      expect([firstChange === secondChange]).toStrictEqual([false])
+      expect([
+        firstChange?.current?.target === secondChange?.current?.target,
+      ]).toStrictEqual([false])
+    },
+  )
+
+  it('returns defensive list snapshots', { timeout: 5000 }, () => {
+    expect.hasAssertions()
+    runtime.register(baseInfo('snapshot/a'))
+    const [listed] = runtime.list()
+    const [listedAgain] = runtime.list()
+    expect([listed === listedAgain]).toStrictEqual([false])
+    expect([listed?.target === listedAgain?.target]).toStrictEqual([false])
+  })
 })
 
 describe('stent patch id validation', () => {
@@ -278,6 +312,16 @@ describe('stent runtime bindings', () => {
     expect(runtime.bindingsOf('bind/nope')).toStrictEqual([])
     const files = runtime.allBindings().map((record: FileView) => record.file)
     expect(files).toStrictEqual(['index.js', 'lib.js', 'run.js'])
+  })
+
+  it('returns defensive binding snapshots', { timeout: 5000 }, () => {
+    expect.hasAssertions()
+    const bindings = runtime.bindingsOf('bind/a')
+    const bindingsAgain = runtime.bindingsOf('bind/a')
+    const [firstBinding] = bindings
+    const [secondBinding] = bindingsAgain
+    expect([bindings === bindingsAgain]).toStrictEqual([false])
+    expect([firstBinding === secondBinding]).toStrictEqual([false])
   })
 
   it('merges bindings into list()', { timeout: 5000 }, () => {

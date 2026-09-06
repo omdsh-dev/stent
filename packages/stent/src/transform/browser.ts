@@ -14,17 +14,13 @@ import path from 'node:path'
 
 import type { StentInstrumentationConfig } from './config.ts'
 import { expandPatchStub } from './config.ts'
+import { InstrumentedTransformController } from './instrumented-transform.ts'
 import type {
   IdentityResolver,
   ModuleIdentity,
   TransformOutput,
 } from './matcher.ts'
-import { createStentMatcher, transformModuleState } from './matcher.ts'
 import type { StentPatchStub } from './types.ts'
-
-/** Per-call pending-node counters. */
-const NO_PENDING_BINDINGS = 0
-const BINDING_INCREMENT = 1
 
 interface RepoSourceResolverOptions {
   /** Npm package name of the built client plugin. */
@@ -74,15 +70,15 @@ function createInstrumentedTransform(
   instrumentations: readonly StentInstrumentationConfig[],
   resolve: IdentityResolver,
 ): BrowserTransform {
-  const pending = new Map<string, number>()
-  const matcher = createStentMatcher(instrumentations, (patchId) => {
-    pending.set(
-      patchId,
-      (pending.get(patchId) ?? NO_PENDING_BINDINGS) + BINDING_INCREMENT,
-    )
-  })
-  return (code, id) =>
-    transformModuleState(code, id, { matcher, pending, resolve })
+  const controller = new InstrumentedTransformController(
+    instrumentations,
+    resolve,
+  )
+  const transform = (code: string, id: string): TransformOutput | null => {
+    const output = controller.transform(code, id)
+    return output
+  }
+  return transform
 }
 
 function createBrowserTransform({
@@ -96,11 +92,13 @@ function createBrowserTransform({
 }
 
 /** Browser transform that also receives the bundler's watch-file hook. */
-type WatchedBrowserTransform = (
+type WatchedBrowserTransform = ((
   code: string,
   id: string,
   addWatchFile?: (file: string) => void,
-) => TransformOutput | null
+) => TransformOutput | null) & {
+  readonly dispose: () => void
+}
 
 /** Parse the JSON body of a watched patches file or throw with its path. */
 function parsePatchesJson(content: string, patchesPath: string): unknown {
@@ -145,10 +143,57 @@ function parsePatchesFile(
   })
 }
 
-/** Cached build state for one watched file content. */
-interface CachedPatches {
-  content: string
-  transform: (code: string, id: string) => TransformOutput | null
+/** Owns the watched patch file cache and its transform lifecycle. */
+class WatchedBrowserTransformController {
+  #cached:
+    | {
+        content: string
+        transform: (code: string, id: string) => TransformOutput | null
+      }
+    | undefined
+  readonly #patchesPath: string
+  readonly #resolve: IdentityResolver
+
+  public constructor(options: WatchedBrowserTransformOptions) {
+    this.#patchesPath = options.patchesPath
+    this.#resolve = options.resolve
+  }
+
+  public dispose(): void {
+    this.#cached = undefined
+  }
+
+  public transform(
+    code: string,
+    id: string,
+    addWatchFile?: (file: string) => void,
+  ): TransformOutput | null {
+    addWatchFile?.(this.#patchesPath)
+    let content = ''
+    try {
+      content = readFileSync(this.#patchesPath, 'utf8')
+    } catch (error) {
+      throw new Error(
+        `stent: cannot read watched patches file ${this.#patchesPath}`,
+        { cause: error },
+      )
+    }
+    return this.transformFor(content)(code, id)
+  }
+
+  private transformFor(
+    content: string,
+  ): (code: string, id: string) => TransformOutput | null {
+    if (this.#cached?.content === content) {
+      return this.#cached.transform
+    }
+    const transform = createBrowserTransform({
+      patches: parsePatchesFile(content, this.#patchesPath),
+      resolve: this.#resolve,
+    })
+    this.#cached = { content, transform }
+    return transform
+  }
 }
 
 /** Build a bundler transform whose patch set lives in a JSON file. */
@@ -156,31 +201,20 @@ function createWatchedBrowserTransform({
   patchesPath,
   resolve,
 }: WatchedBrowserTransformOptions): WatchedBrowserTransform {
-  let cached: CachedPatches | undefined = undefined
-  const transformFor = (content: string): CachedPatches['transform'] => {
-    if (cached?.content === content) {
-      return cached.transform
-    }
-    const transform = createBrowserTransform({
-      patches: parsePatchesFile(content, patchesPath),
-      resolve,
-    })
-    cached = { content, transform }
-    return transform
-  }
-  return (code, id, addWatchFile) => {
-    addWatchFile?.(patchesPath)
-    let content = ''
-    try {
-      content = readFileSync(patchesPath, 'utf8')
-    } catch (error) {
-      throw new Error(
-        `stent: cannot read watched patches file ${patchesPath}`,
-        { cause: error },
-      )
-    }
-    return transformFor(content)(code, id)
-  }
+  const controller = new WatchedBrowserTransformController({
+    patchesPath,
+    resolve,
+  })
+  const transform: WatchedBrowserTransform = Object.assign(
+    (code: string, id: string, addWatchFile?: (file: string) => void) =>
+      controller.transform(code, id, addWatchFile),
+    {
+      dispose: (): void => {
+        controller.dispose()
+      },
+    },
+  )
+  return transform
 }
 
 export {

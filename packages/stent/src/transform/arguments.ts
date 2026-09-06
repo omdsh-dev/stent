@@ -16,17 +16,14 @@ import type { Node, Pattern, Program } from 'estree'
 
 import type { NameAllocator } from './ast-types.ts'
 
+/** Suffix step used when a base identifier collides with the program. */
+const NAME_SUFFIX_STEP = 1
+
 const AST_METADATA_KEYS = new Set(['loc', 'range', 'start', 'end'])
 const argumentBoundaryTypes = new Set([
   'FunctionDeclaration',
   'FunctionExpression',
 ])
-
-/** Per-file injected-name sets, keyed by the transformed Program node. */
-const programNames = new WeakMap<Program, Set<string>>()
-
-/** Suffix step used when a base identifier collides with the program. */
-const NAME_SUFFIX_STEP = 1
 
 /** Whether a value is an estree node for structural traversal. */
 function isEstreeNode(value: unknown): value is Node {
@@ -230,33 +227,38 @@ function collectIdentifiers(node: Node, out: Set<string>): void {
   }
 }
 
-/**
- * Per-program identifier allocator. The name set is seeded with every
- * identifier of the program on first use, so an injected name can never shadow
- * a reference the traced body keeps resolving.
- *
- * @param program - The matched file's Program node.
- * @returns A `unique(base)` allocator for that file.
- */
-function namesOf(program: Program): NameAllocator {
-  let names = programNames.get(program)
-  if (!names) {
-    names = new Set<string>()
-    collectIdentifiers(program, names)
-    programNames.set(program, names)
+/** Owns per-program identifier state for collision-free generated names. */
+class ProgramNameRegistry {
+  readonly #names = new WeakMap<Program, Set<string>>()
+
+  public namesOf(program: Program): NameAllocator {
+    let names = this.#names.get(program)
+    if (!names) {
+      names = new Set<string>()
+      collectIdentifiers(program, names)
+      this.#names.set(program, names)
+    }
+    return {
+      unique(base: string): string {
+        let name = base
+        let index = 0
+        while (names.has(name)) {
+          index += NAME_SUFFIX_STEP
+          name = `${base}_${index}`
+        }
+        names.add(name)
+        return name
+      },
+    }
   }
-  return {
-    unique(base: string): string {
-      let name = base
-      let index = 0
-      while (names.has(name)) {
-        index += NAME_SUFFIX_STEP
-        name = `${base}_${index}`
-      }
-      names.add(name)
-      return name
-    },
-  }
+}
+
+const programNames = new ProgramNameRegistry()
+
+/** Return the collision-free allocator for one AST program. */
+const namesOf = (program: Program): NameAllocator => {
+  const allocator = programNames.namesOf(program)
+  return allocator
 }
 
 export { mapOuterArguments, namesOf }

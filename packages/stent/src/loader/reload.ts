@@ -27,7 +27,20 @@ interface EsmLoaderModule {
   readonly getOrInitializeCascadedLoader: () => unknown
 }
 
-const loaderCache: { current?: InternalLoader } = {}
+/** Owns the lazily resolved process-wide Node loader reference. */
+class NodeLoaderCache {
+  #current: InternalLoader | undefined
+
+  public get(): InternalLoader | undefined {
+    return this.#current
+  }
+
+  public set(loader: InternalLoader): void {
+    this.#current = loader
+  }
+}
+
+const loaderCache = new NodeLoaderCache()
 
 /** Narrow a builtin module export to Node's ESM loader module. */
 function isEsmLoaderModule(value: unknown): value is EsmLoaderModule {
@@ -74,13 +87,13 @@ function resolveInternalLoader(): InternalLoader | undefined {
 
 /** Locate Node's internal cascaded module loader when available. */
 function internalLoader(): InternalLoader | undefined {
-  const { current } = loaderCache
+  const current = loaderCache.get()
   if (current !== undefined) {
     return current
   }
   const loader = resolveInternalLoader()
   if (loader !== undefined) {
-    loaderCache.current = loader
+    loaderCache.set(loader)
   }
   return loader
 }

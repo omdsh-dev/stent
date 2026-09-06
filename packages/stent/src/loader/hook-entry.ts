@@ -65,15 +65,48 @@ interface TransformPass {
   readonly reports: readonly StentBindingReport[]
 }
 
-/** Loader-thread state: registration data plus the last-read snapshot. */
-interface EntryState {
-  configPath?: string | undefined
-  bindingPort?: Readonly<MessagePort> | undefined
-  cached?: { config: string; transforms: readonly TransformFn[] } | undefined
+/** Owns loader-thread registration data and the cached transform snapshot. */
+class HookEntryController {
+  #configPath: string | undefined
+  #bindingPort: Readonly<MessagePort> | undefined
+  #cached: { config: string; transforms: readonly TransformFn[] } | undefined
+
+  public initialize(data: HookEntryData): void {
+    const changed =
+      this.#configPath !== data.configPath || this.#bindingPort !== data.port
+    this.#configPath = data.configPath
+    this.#bindingPort = data.port
+    if (changed) {
+      this.#cached = undefined
+    }
+  }
+
+  public get configPath(): string | undefined {
+    return this.#configPath
+  }
+
+  public get bindingPort(): Readonly<MessagePort> | undefined {
+    return this.#bindingPort
+  }
+
+  public get cached():
+    | { config: string; transforms: readonly TransformFn[] }
+    | undefined {
+    if (this.#cached === undefined) {
+      return undefined
+    }
+    return {
+      config: this.#cached.config,
+      transforms: [...this.#cached.transforms],
+    }
+  }
+
+  public cache(config: string, transforms: readonly TransformFn[]): void {
+    this.#cached = { config, transforms }
+  }
 }
 
-/** This loader thread's registration data and configuration snapshot. */
-const state: EntryState = {}
+const state = new HookEntryController()
 
 /** Post a structured-cloneable payload to the main thread. */
 function postToMain(message: unknown): void {
@@ -107,10 +140,11 @@ function handleMainMessage(message: unknown): void {
  *   main-thread binding channel end.
  */
 function initialize(data: HookEntryData = {}): void {
-  const { configPath, port } = data
-  state.configPath = configPath
-  state.bindingPort = port
-  port?.on('message', handleMainMessage)
+  state.initialize(data)
+  const port = state.bindingPort
+  if (port !== undefined) {
+    port.on('message', handleMainMessage)
+  }
 }
 
 /** Read the shared configuration file, or `''` when it cannot be read. */
@@ -205,7 +239,7 @@ function refreshCache(raw: string): readonly TransformFn[] {
   if (transforms === undefined) {
     return state.cached?.transforms ?? []
   }
-  state.cached = { config: raw, transforms }
+  state.cache(raw, transforms)
   return transforms
 }
 

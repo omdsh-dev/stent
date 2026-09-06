@@ -25,6 +25,7 @@ import {
   registerChange,
   targetKey,
 } from './runtime-dispatch.ts'
+import { StentPatchEntry, clonePatchInfo } from './runtime-entry.ts'
 import type {
   PatchId,
   StentBinding,
@@ -34,36 +35,31 @@ import type {
   StentPatchInfo,
 } from './types.ts'
 
-/** Runtime state of one registered patch. */
-interface PatchEntry {
-  /** Immutable patch metadata (no handler functions). */
-  info: StentPatchInfo
-  /** Currently installed handler, when the patch is enabled. */
-  handler: StentHandler | undefined
-  /**
-   * Identity of the registration owner: a patch id is exclusive to one owner,
-   * and only the same owner may re-register it (an HMR generation replaces its
-   * plugin's own patch; a different plugin's same-id claim is rejected). The
-   * Cordis service resolves the owner from the registering fiber (loader entry,
-   * plugin callback, or the fiber itself).
-   */
-  owner: unknown
-  /**
-   * The fiber whose disposal currently owns the entry's removal. A same-owner
-   * re-registration transfers ownership, so the previous fiber's disposer
-   * becomes a no-op and cannot unregister the newer registration.
-   */
-  fiber: unknown
+function copyBinding(binding: StentBinding): StentBinding {
+  const copy = { ...binding }
+  const result = copy
+  return result
+}
+
+function copyPatchChange(change: StentPatchChange): StentPatchChange {
+  let copy: StentPatchChange = { type: change.type, id: change.id }
+  if (change.previous !== undefined) {
+    copy = { ...copy, previous: clonePatchInfo(change.previous) }
+  }
+  if (change.current !== undefined) {
+    copy = { ...copy, current: clonePatchInfo(change.current) }
+  }
+  return copy
 }
 
 /** Registry of enabled Stent patches with the shared bridge subscription. */
 class StentRuntime {
-  private readonly entries = new Map<PatchId, PatchEntry>()
+  readonly #entries = new Map<PatchId, StentPatchEntry>()
   /** Load-time bindings per patch, recorded by the transformation hooks. */
-  private readonly bindings = new Map<PatchId, StentBinding[]>()
+  readonly #bindings = new Map<PatchId, StentBinding[]>()
   /** Node loader subscribers that rebuild their current matcher snapshot. */
-  private readonly patchListeners = new Set<StentPatchChangeListener>()
-  private subscribed = false
+  readonly #patchListeners = new Set<StentPatchChangeListener>()
+  #subscribed = false
 
   /**
    * Subscribe to patch metadata changes.
@@ -73,9 +69,9 @@ class StentRuntime {
    * emit events because transformed code dispatches through the runtime.
    */
   public onPatchChange(listener: StentPatchChangeListener): () => void {
-    this.patchListeners.add(listener)
+    this.#patchListeners.add(listener)
     return () => {
-      this.patchListeners.delete(listener)
+      this.#patchListeners.delete(listener)
     }
   }
 
@@ -88,7 +84,7 @@ class StentRuntime {
    *   for raw-runtime callers. Re-registering an id owned by a different owner
    *   fails loud — a patch id is exclusive to one plugin — while the same owner
    *   may re-register (an HMR generation takes its plugin's patch back) and
-   *   transfer {@link PatchEntry.fiber fiber} ownership.
+   *   transfer {@link StentPatchEntry.fiber fiber} ownership.
    * @param fiber - The fiber whose disposal owns the entry's removal; the
    *   Cordis service passes the registering fiber so its disposer can check
    *   {@link StentRuntime.isOwnedBy}.
@@ -101,7 +97,7 @@ class StentRuntime {
     owner: unknown = info.id,
     fiber?: unknown,
   ): boolean {
-    const previous = this.entries.get(info.id)
+    const previous = this.#entries.get(info.id)
     if (previous && previous.owner !== owner) {
       throw new Error(
         `stent: patch ${JSON.stringify(info.id)} is already registered by another owner; `
@@ -111,13 +107,11 @@ class StentRuntime {
     if (info.operation === 'replace') {
       this.claimReplaceTarget(info, previous)
     }
-    this.entries.set(info.id, {
-      info,
-      handler: previous?.handler,
-      owner,
-      fiber,
-    })
-    this.notifyPatchChange(registerChange(info, previous?.info))
+    const next = new StentPatchEntry(info, owner, fiber, previous?.handler)
+    this.#entries.set(info.id, next)
+    this.notifyPatchChange(
+      registerChange(next.snapshot(), previous?.snapshot()),
+    )
     return previous === undefined
   }
 
@@ -128,7 +122,7 @@ class StentRuntime {
    * @param handler - The trusted runtime handler.
    */
   public enable(id: PatchId, handler: StentHandler): void {
-    const entry = this.entries.get(id)
+    const entry = this.#entries.get(id)
     if (!entry) {
       throw new Error(
         `stent: cannot enable unregistered patch ${JSON.stringify(id)}`,
@@ -141,7 +135,7 @@ class StentRuntime {
         `stent: handler for patch ${JSON.stringify(id)} must be a function`,
       )
     }
-    entry.handler = handler
+    entry.enable(handler)
     this.subscribe()
   }
 
@@ -151,11 +145,11 @@ class StentRuntime {
    * @param id - The patch id.
    */
   public disable(id: PatchId): void {
-    const entry = this.entries.get(id)
+    const entry = this.#entries.get(id)
     if (!entry) {
       return
     }
-    entry.handler = undefined
+    entry.disable()
   }
 
   /**
@@ -166,38 +160,43 @@ class StentRuntime {
    * @param id - The patch id.
    */
   public remove(id: PatchId): void {
-    const previous = this.entries.get(id)
+    const previous = this.#entries.get(id)
     if (previous === undefined) {
       return
     }
-    this.entries.delete(id)
-    this.notifyPatchChange({ type: 'remove', id, previous: previous.info })
+    this.#entries.delete(id)
+    this.notifyPatchChange({
+      type: 'remove',
+      id,
+      previous: previous.snapshot(),
+    })
   }
 
   /** Whether the given fiber still owns the entry. */
   public isOwnedBy(id: PatchId, fiber: unknown): boolean {
-    const entry = this.entries.get(id)
-    return entry !== undefined && entry.fiber === fiber
+    const entry = this.#entries.get(id)
+    return entry !== undefined && entry.isOwnedBy(fiber)
   }
 
   /** Whether a patch is currently registered and enabled. */
   public isEnabled(id: PatchId): boolean {
-    return this.entries.get(id)?.handler !== undefined
+    return this.#entries.get(id)?.isEnabled() ?? false
   }
 
   /** Record the load-time bindings for a patch. */
   public recordBindings(id: PatchId, records: readonly StentBinding[]): void {
-    const existing = this.bindings.get(id)
+    const copies = records.map((record) => copyBinding(record))
+    const existing = this.#bindings.get(id)
     if (existing) {
-      existing.push(...records)
+      existing.push(...copies)
     } else {
-      this.bindings.set(id, [...records])
+      this.#bindings.set(id, copies)
     }
   }
 
   /** Return the recorded load-time bindings for a patch. */
   public bindingsOf(id: PatchId): readonly StentBinding[] {
-    return this.bindings.get(id) ?? []
+    return (this.#bindings.get(id) ?? []).map((record) => copyBinding(record))
   }
 
   /**
@@ -206,7 +205,7 @@ class StentRuntime {
    * @returns All recorded bindings across patches.
    */
   public allBindings(): readonly StentBinding[] {
-    return [...this.bindings.keys()]
+    return [...this.#bindings.keys()]
       .toSorted(compareStrings)
       .flatMap((id) => this.bindingsOf(id))
   }
@@ -219,11 +218,11 @@ class StentRuntime {
    */
   public list(): StentPatchInfo[] {
     const infos: StentPatchInfo[] = []
-    for (const entry of this.entries.values()) {
+    for (const entry of this.#entries.values()) {
       infos.push({
-        ...entry.info,
-        enabled: entry.handler !== undefined,
-        bindings: this.bindingsOf(entry.info.id),
+        ...entry.snapshot(),
+        enabled: entry.isEnabled(),
+        bindings: this.bindingsOf(entry.snapshot().id),
       })
     }
     return infos.toSorted(comparePatchOrder)
@@ -231,8 +230,8 @@ class StentRuntime {
 
   /** Notify all loader subscribers after the registry has changed. */
   private notifyPatchChange(change: StentPatchChange): void {
-    for (const listener of this.patchListeners) {
-      listener(change)
+    for (const listener of this.#patchListeners) {
+      listener(copyPatchChange(change))
     }
   }
 
@@ -247,16 +246,16 @@ class StentRuntime {
    */
   private claimReplaceTarget(
     info: StentPatchInfo,
-    previous: PatchEntry | undefined,
+    previous: StentPatchEntry | undefined,
   ): void {
     const key = targetKey(info.target)
     const selfClaim =
       previous?.info.operation === 'replace'
-      && targetKey(previous.info.target) === key
+      && targetKey(previous.snapshot().target) === key
     if (selfClaim) {
       return
     }
-    for (const existing of this.entries.values()) {
+    for (const existing of this.#entries.values()) {
       if (
         existing.info.operation === 'replace'
         && targetKey(existing.info.target) === key
@@ -270,12 +269,12 @@ class StentRuntime {
   }
 
   private subscribe(): void {
-    if (this.subscribed) {
+    if (this.#subscribed) {
       return
     }
-    this.subscribed = true
+    this.#subscribed = true
     subscribeBridge((call) => {
-      const entry = this.entries.get(call.id)
+      const entry = this.#entries.get(call.id)
       if (!entry) {
         return call.traced()
       }

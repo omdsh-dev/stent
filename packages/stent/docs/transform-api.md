@@ -537,7 +537,7 @@ name-query 不能生成 selector 的错误会在工厂创建时抛出。`require
 序列化 descriptor 中的 path 值必须是 string,但 `filePaths: string[]`
 仍会在重建时展开支持。外层只检查数组和 object target,其余字段交给重建时的
 `createBrowserTransform`。是否触发 bundle rebuild 取决于宿主打包器是否遵守
-`addWatchFile` 并接通自己的 watcher/HMR 链。
+`addWatchFile` 并接通自己的 watcher/HMR 链。返回的 callable transform 还提供 `dispose()`，用于清除其缓存的 matcher；宿主结束该 bundler 生命周期时应调用它。
 
 ### `serveBrowserTransform(ctx, options): () => void`(`packages/stent/src/browser/serve.ts`)
 
