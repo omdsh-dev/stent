@@ -25,7 +25,7 @@ import {
   registerChange,
   targetKey,
 } from './runtime-dispatch.ts'
-import { StentPatchEntry, clonePatchInfo } from './runtime-entry.ts'
+import { StentPatchEntry } from './runtime-entry.ts'
 import type {
   PatchId,
   StentBinding,
@@ -44,10 +44,10 @@ function copyBinding(binding: StentBinding): StentBinding {
 function copyPatchChange(change: StentPatchChange): StentPatchChange {
   let copy: StentPatchChange = { type: change.type, id: change.id }
   if (change.previous !== undefined) {
-    copy = { ...copy, previous: clonePatchInfo(change.previous) }
+    copy = { ...copy, previous: structuredClone(change.previous) }
   }
   if (change.current !== undefined) {
-    copy = { ...copy, current: clonePatchInfo(change.current) }
+    copy = { ...copy, current: structuredClone(change.current) }
   }
   return copy
 }

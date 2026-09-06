@@ -8,9 +8,11 @@
  * @module @oh-my-dsh/stent/transform/identity
  */
 
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { packageDirectorySync } from 'package-directory'
 /** One module's package identity: name, version, and package-relative path. */
 interface PackageIdentity {
   /** Npm package name from the owning manifest. */
@@ -43,21 +45,6 @@ function stringField(value: unknown): string {
     return value
   }
   return ''
-}
-
-/** Nearest package root for a file, or undefined when none exists up the tree. */
-function findPackageRoot(filename: string): string | undefined {
-  let dir = path.dirname(filename)
-  for (;;) {
-    if (existsSync(path.join(dir, 'package.json'))) {
-      return dir
-    }
-    const parent = path.dirname(dir)
-    if (parent === dir) {
-      return undefined
-    }
-    dir = parent
-  }
 }
 
 /** Owns manifest parsing and the process-local package metadata cache. */
@@ -118,7 +105,7 @@ function resolvePackageIdentity(
   urlOrPath: string,
 ): PackageIdentity | undefined {
   const filename = toFilePath(urlOrPath)
-  const root = findPackageRoot(filename)
+  const root = packageDirectorySync({ cwd: path.dirname(filename) })
   if (root === undefined) {
     return undefined
   }

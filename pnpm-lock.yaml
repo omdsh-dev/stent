@@ -77,6 +77,9 @@ importers:
       node-addon-require-builtin:
         specifier: ^0.1.4
         version: 0.1.4
+      package-directory:
+        specifier: ^8.2.0
+        version: 8.2.0
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1888,6 +1891,10 @@ packages:
   fflate@0.8.3:
     resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
+  find-up-simple@1.0.1:
+    resolution: {integrity: sha512-afd4O7zpqHeRyg4PfDQsXmlDe2PfdHtJt6Akt8jOWaApLOZk5JXs6VMR29lz03pRe9mpykrRCYIYxaJYcfpncQ==}
+    engines: {node: '>=18'}
+
   formatly@0.3.0:
     resolution: {integrity: sha512-9XNj/o4wrRFyhSMJOvsuyMwy8aUfBaZ1VrqHVfohyXf0Sw0e+yfKG+xZaY3arGCOMdwFsqObtzVOc1gU9KiT9w==}
     engines: {node: '>=18.3.0'}
@@ -2274,6 +2281,10 @@ packages:
         optional: true
       vite-plus:
         optional: true
+
+  package-directory@8.2.0:
+    resolution: {integrity: sha512-qJSu5Mo6tHmRxCy2KCYYKYgcfBdUpy9dwReaZD/xwf608AUk/MoRtIOWzgDtUeGeC7n/55yC3MI1Q+MbSoektw==}
+    engines: {node: '>=18'}
 
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
@@ -3919,6 +3930,8 @@ snapshots:
 
   fflate@0.8.3: {}
 
+  find-up-simple@1.0.1: {}
+
   formatly@0.3.0:
     dependencies:
       fd-package-json: 2.0.0
@@ -4565,6 +4578,10 @@ snapshots:
       '@oxlint/binding-win32-ia32-msvc': 1.76.0
       '@oxlint/binding-win32-x64-msvc': 1.76.0
       oxlint-tsgolint: 7.0.2001
+
+  package-directory@8.2.0:
+    dependencies:
+      find-up-simple: 1.0.1
 
   pathe@2.0.3: {}
 

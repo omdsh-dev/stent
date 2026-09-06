@@ -79,6 +79,7 @@
   "dependencies": {
     "@apm-js-collab/code-transformer": "^0.18.1",
     "node-addon-require-builtin": "^0.1.4",
+    "package-directory": "^8.2.0",
     "typescript": "^6.0.3"
   },
   "devDependencies": {

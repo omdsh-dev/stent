@@ -75,7 +75,10 @@ function parseOpt(...input: ParseOptInput): LauncherArgs {
     .option(
       '--patch <path>',
       'extra patch overlay',
-      (value: string, previous: string[]) => [...previous, value],
+      (value: string, previous: string[] | undefined) => [
+        ...(previous ?? []),
+        value,
+      ],
     )
 
   const { operands, unknown } = command.parseOptions([...argv])
