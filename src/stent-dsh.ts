@@ -49,7 +49,16 @@ function main(): number {
       .join(' '),
   }
 
-  const result = spawnSync(dsh_cmd, args, { stdio: 'inherit', env })
+  let spawnCommand = dsh_cmd
+  let spawnArgs = args
+  if (process.platform === 'win32') {
+    spawnCommand = process.env.ComSpec ?? 'cmd.exe'
+    spawnArgs = ['/d', '/s', '/c', dsh_cmd, ...args]
+  }
+  const result = spawnSync(spawnCommand, spawnArgs, {
+    stdio: 'inherit',
+    env,
+  })
   if (result.error !== undefined) {
     process.stderr.write(
       `stent-dsh: cannot execute ${dsh_cmd}: ${result.error.message}\n`,
