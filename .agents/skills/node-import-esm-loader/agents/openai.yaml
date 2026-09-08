@@ -1,0 +1,4 @@
+interface:
+  display_name: "Node --import ESM Loader"
+  short_description: "Build Node.js --import ESM preload modules"
+  default_prompt: "Use $node-import-esm-loader when designing, implementing, or debugging a Node.js --import ESM preload module with resolve/load hooks: delegate to Node at the defined points, keep per-registration state isolated, and preserve URL, format, and source-map identity."
