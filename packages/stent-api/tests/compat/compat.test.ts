@@ -72,8 +72,8 @@ function runCase(name: string): string {
 /** Mount a Cordis context carrying the low-level Stent registry. */
 async function mountStent(): Promise<Context> {
   const { Context: CordisContext } = await import('@deepseek-ai/cordis')
-  const { StentService, markStentDshLaunch } = await import('@oh-my-dsh/stent')
-  markStentDshLaunch()
+  const { StentService, activateStent } = await import('@oh-my-dsh/stent')
+  activateStent()
   const ctx = new CordisContext()
   await ctx.plugin(StentService)
   return ctx

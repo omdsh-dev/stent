@@ -14,9 +14,9 @@
  */
 
 export {
-  STENT_DSH_LAUNCH_KEY,
-  isStentDshLaunch,
-  markStentDshLaunch,
+  STENT_ACTIVATION_KEY,
+  isStentActive,
+  activateStent,
 } from './activation.ts'
 export {
   GLOBAL_BRIDGE_KEY,

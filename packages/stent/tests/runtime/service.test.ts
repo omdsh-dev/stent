@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   StentService,
+  activateStent,
   getStent,
   installBridge,
   isStentInstalled,
-  markStentDshLaunch,
   runtime,
 } from '#src/index'
 
@@ -49,7 +49,7 @@ const registrar =
 
 /** A fresh context created after the stent-dsh launch marker is set. */
 const launched = (): Context => {
-  markStentDshLaunch()
+  activateStent()
   return new Context()
 }
 
@@ -112,7 +112,7 @@ describe('stentService launch gating', () => {
 describe('stentService launch activation', () => {
   it('activates gated plugins after launch', { timeout: 5000 }, async () => {
     expect.hasAssertions()
-    markStentDshLaunch()
+    activateStent()
     const ctx = await mounted()
     let applied = false
     await ctx.plugin({
@@ -207,7 +207,7 @@ describe('stentService mounting', () => {
 
   it('returns an already-mounted service', { timeout: 5000 }, async () => {
     expect.hasAssertions()
-    markStentDshLaunch()
+    activateStent()
     const ctx = await mounted()
     expect(getStent(ctx)).toBeInstanceOf(StentService)
     expect(ctx.get('stent')).toBeInstanceOf(StentService)

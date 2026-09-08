@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
-import url from 'node:url'
+import { constants } from 'node:os'
 
 import { Command } from 'commander'
 
-const EXIT_SUCCESS = 0
 const EXIT_FAILURE = 1
+const SIGNAL_EXIT_BASE = 128
 
 function main(): number {
-  // 线程配置:信号处理置空以保证退出顺序
+  // Signal handling stays empty so the child controls exit ordering.
   process.on('SIGINT', () => {
     // The child process owns signal handling.
   })
@@ -27,7 +27,8 @@ function main(): number {
   let dsh_cmd = dsh
   let { args } = command
 
-  const stats = fs.statSync(dsh, { throwIfNoEntry: false }) // 此处是为了处理命令
+  // A directory selects a checkout command instead of a PATH executable.
+  const stats = fs.statSync(dsh, { throwIfNoEntry: false })
   if (stats !== undefined && stats.isDirectory()) {
     dsh_cmd = 'pnpm'
     args = ['run', '--dir', dsh, 'dsh', ...args]
@@ -38,20 +39,27 @@ function main(): number {
     stent_loader_file = './stent-loader.ts'
   }
   const stent_loader = new URL(stent_loader_file, import.meta.url)
-  const stent_loader_path = url.fileURLToPath(stent_loader)
+  // The href is already a string; it needs no extra JSON quoting.
+  const loaderImport = `--import ${stent_loader.href}`
 
   const env = {
     ...process.env,
-    NODE_OPTIONS: [process.env.NODE_OPTIONS, `--import "${stent_loader_path}"`]
+    NODE_OPTIONS: [process.env.NODE_OPTIONS, loaderImport]
       .filter(Boolean)
       .join(' '),
   }
 
   const result = spawnSync(dsh_cmd, args, { stdio: 'inherit', env })
   if (result.error !== undefined) {
+    process.stderr.write(
+      `stent-dsh: cannot execute ${dsh_cmd}: ${result.error.message}\n`,
+    )
     return EXIT_FAILURE
   }
-  return result.status ?? EXIT_SUCCESS
+  if (result.signal !== null) {
+    return SIGNAL_EXIT_BASE + constants.signals[result.signal]
+  }
+  return result.status ?? EXIT_FAILURE
 }
 
 process.exitCode = main()

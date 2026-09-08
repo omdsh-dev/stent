@@ -121,11 +121,9 @@ function composeOrCleanup(
     writeFileSync(installAnchor, '{}\n')
     return composeStentConfig({
       args: {
-        dshPath: undefined,
         profile: 'web',
         dshHome: undefined,
-        pathEnv: undefined,
-        launcherUrl: new URL(import.meta.url),
+        loaderUrl: new URL(import.meta.url),
         cwd: pathToFileURL(root),
         patchFiles: [],
         passthrough: passthroughArgs(mode),

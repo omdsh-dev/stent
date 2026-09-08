@@ -19,7 +19,6 @@ describe('stent launcher argument parsing', () => {
         { PATH: '' },
         new URL('file:///launcher'),
         cwd,
-        new URL('file:///dsh'),
       )
 
       expect(args.patchFiles.map((file) => fileURLToPath(file))).toStrictEqual([

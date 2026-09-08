@@ -17,7 +17,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 
-import { isStentDshLaunch } from './activation.ts'
+import { isStentActive } from './activation.ts'
 import { registrationOwner } from './hmr/ownership.ts'
 import { runtime, validatePatchId, validatePatchStatic } from './runtime.ts'
 import type {
@@ -86,7 +86,7 @@ class StentService extends Service {
    * standalone Stent usage; Cordis injection observes this availability check.
    */
   public [Service.check](): boolean {
-    return isStentDshLaunch()
+    return isStentActive()
   }
 
   /**
@@ -231,7 +231,7 @@ class StentService extends Service {
  * @throws When the process did not enter through the `stent-dsh` launch path.
  */
 function getStent(ctx: Context): StentService {
-  if (!isStentDshLaunch()) {
+  if (!isStentActive()) {
     throw new Error(
       'stent: getStent(ctx) requires the stent-dsh launch path; declare inject: ["stent"] for a DSH plugin so Cordis can keep it pending under plain dsh',
     )

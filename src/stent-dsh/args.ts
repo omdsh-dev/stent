@@ -7,13 +7,11 @@ const EXIT_FAILURE = 1
 const NO_ENTRIES = 0
 
 interface LauncherArgs {
-  readonly dshPath: URL | undefined
   readonly profile: string | undefined
   readonly dshHome: URL | undefined
-  readonly pathEnv: string | undefined
   readonly patchFiles: readonly URL[]
   readonly passthrough: readonly string[]
-  readonly launcherUrl: URL
+  readonly loaderUrl: URL
   readonly cwd: URL
 }
 
@@ -22,9 +20,8 @@ interface LauncherArgs {
 type ParseOptInput = [
   argv: readonly string[],
   env: NodeJS.ProcessEnv,
-  launcherUrl: URL,
+  loaderUrl: URL,
   cwd: URL,
-  dshPath: URL,
 ]
 
 type BuildCliArgsInput = [
@@ -67,7 +64,7 @@ function dshHomeUrl(dshHome: string | undefined): URL | undefined {
 
 /** Parse the launcher-owned flags and keep every other argument untouched. */
 function parseOpt(...input: ParseOptInput): LauncherArgs {
-  const [argv, env, launcherUrl, cwd, dshPath] = input
+  const [argv, env, loaderUrl, cwd] = input
   const command = new Command()
     .allowUnknownOption()
     .allowExcessArguments()
@@ -86,15 +83,13 @@ function parseOpt(...input: ParseOptInput): LauncherArgs {
   const cwdPath = fileURLToPath(cwd)
   const options = command.opts<{ profile?: string; patch?: string[] }>()
   return {
-    dshPath,
     profile: selectedProfile(options.profile, passthrough),
     dshHome: dshHomeUrl(env.DSH_HOME),
-    pathEnv: env.PATH,
     patchFiles: (options.patch ?? []).map((value) =>
       pathToFileURL(path.resolve(cwdPath, value)),
     ),
     passthrough,
-    launcherUrl,
+    loaderUrl,
     cwd: pathToFileURL(cwdPath + path.sep),
   }
 }

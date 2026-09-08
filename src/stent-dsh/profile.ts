@@ -38,13 +38,13 @@ interface ComposeOptions {
 }
 
 /** Relative path from an installed bundle launcher to its profile directory. */
-const LAUNCHER_TO_PROFILE = '../../../../..'
+const LOADER_TO_PROFILE = '../../../../..'
 const NO_ENTRIES = 0
 const JSON_INDENT = 2
 
-const installedLauncherGlobs = [
-  '**/profiles/*/node_modules/@oh-my-dsh/stent-pack/lib/stent-dsh.js',
-  '**/profiles/*/node_modules/@oh-my-dsh/stent-pack/lib/stent-dsh.mjs',
+const installedLoaderGlobs = [
+  '**/profiles/*/node_modules/@oh-my-dsh/stent-pack/lib/stent-loader.js',
+  '**/profiles/*/node_modules/@oh-my-dsh/stent-pack/lib/stent-loader.mjs',
 ]
 
 function childPath(base: URL, ...parts: string[]): URL {
@@ -60,16 +60,16 @@ function homeUrl(): URL {
 }
 
 function matchInstalledProfile(
-  launcherUrl: URL,
+  loaderUrl: URL,
 ): { home: URL; profile: string } | undefined {
-  const launcher = fileURLToPath(launcherUrl)
-  const isInstalled = installedLauncherGlobs.some((pattern) =>
+  const launcher = fileURLToPath(loaderUrl)
+  const isInstalled = installedLoaderGlobs.some((pattern) =>
     path.matchesGlob(launcher, pattern),
   )
   if (!isInstalled) {
     return undefined
   }
-  const profileDir = path.resolve(launcher, LAUNCHER_TO_PROFILE)
+  const profileDir = path.resolve(launcher, LOADER_TO_PROFILE)
   const profile = path.basename(profileDir)
   if (profile === '') {
     return undefined
@@ -82,9 +82,9 @@ function matchInstalledProfile(
 function resolveProfile({
   profile,
   dshHome: configuredHome,
-  launcherUrl,
+  loaderUrl,
 }: LauncherArgs): ResolvedProfile {
-  const installed = matchInstalledProfile(launcherUrl)
+  const installed = matchInstalledProfile(loaderUrl)
   const dshHome = installed?.home ?? configuredHome ?? homeUrl()
   const profileName = profile ?? installed?.profile ?? 'default'
   const effectiveProfile = profile ?? installed?.profile
@@ -137,7 +137,12 @@ function composeStentConfig(options: ComposeOptions): StentConfig {
   )
   const tempPath = mkdtempSync(path.join(tmpdir(), 'stent-overlay-'))
   const enablePath = childPath(pathToFileURL(tempPath), 'enable.yaml')
-  writeFileSync(enablePath, dumpOverlay(enableOverlay))
+  try {
+    writeFileSync(enablePath, dumpOverlay(enableOverlay))
+  } catch (error) {
+    rmSync(tempPath, { recursive: true, force: true })
+    throw error
+  }
   return {
     enablePath,
     enableOverlay,

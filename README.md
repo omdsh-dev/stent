@@ -34,20 +34,21 @@ separately publishable carrier, not a fourth implementation package. Anything
 else — including the official `@deepseek-ai/dsh-tool-cordis` toolset — remains
 an upstream dependency and is not republished here.
 
-## 2. Host integration: launcher-provided wiring
+## 2. Host integration: import-owned activation
 
-The three packages install hooks and mount facades through the compiled launcher.
+The three packages install hooks and mount facades through the compiled loader.
 `src/stent-dsh.ts` compiles to `lib/stent-dsh.js`, while
-`src/stent-loader.ts` compiles to `lib/stent-loader.js`. The bin only
-resolves the DSH path and forwards its arguments; it injects the compiled
-preload through `NODE_OPTIONS=--import ...` before the official CLI loads. The
-preload owns profile composition, dependency healing, argv normalization,
-environment setup, and hook registration. It statically imports the official profile
+`src/stent-loader.ts` compiles to `lib/stent-loader.js`. The bin is a thin
+command wrapper: it selects the command, injects the compiled loader through
+`NODE_OPTIONS=--import ...`, and forwards execution. Importing the loader is the
+activation boundary. The loader installs hooks for the importing process and
+performs profile composition, dependency healing, argv normalization, and
+environment setup only when the current entry is the official DSH CLI. It statically imports the official profile
 composition and healing APIs from the DSH-provided `@deepseek-ai/dsh-app-boot` peer;
 the carrier does not bundle a second app-boot copy. No host patch checkout is required.
-The preload also records a process-local `stent-dsh`
-launch capability, so Stent-dependent plugins stay unavailable under plain
-`dsh` even if low-level hooks were installed by another path. The same
+The loader also records process-local Stent activation, so Stent-dependent
+plugins stay unavailable under `dsh` without the loader import, even if
+low-level hooks were installed by another path. The same
 capability gate is enforced by `getStent(ctx)`: a plugin that omitted
 `inject: ['stent']` cannot mount the registry through the accessor under plain
 `dsh` and fails loudly instead.
@@ -56,7 +57,7 @@ Everything the official channels already cover is deliberately excluded:
 installing the trio (`dsh plugin add`), bundle roster rows and dependencies,
 catalog generation, invariant/gate exemptions for trio-in-workspace, and all
 documentation (`README*`, `docs/`, `.agents/`). What remains is what no
-channel can provide: the launcher-owned preload/bootstrap and its tests, the
+channel can provide: the import-owned loader/bootstrap and its tests, the
 `clientBundle` source-transform build seam, catalog entries compiled into the
 official `tool-cordis` package, and the pnpm-policy seams.
 
@@ -116,15 +117,22 @@ clean environment tsx auto-discovers the entry's tsconfig (extending the base)
 and resolves the aliases to `src`. The official script runs unchanged; no
 host-specific workaround is required.
 
+### 2.5 Migration to 0.2.0
+
+- Use `stent-dsh --dsh <command-or-checkout>`; the default command is `dsh` on PATH. A directory runs its own `pnpm run --dir <directory> dsh` script. The wrapper does not discover project dependencies or interpret shim comments.
+- Direct `node --import /absolute/path/to/lib/stent-loader.js <entry>` is sufficient to enable Stent. No launcher handshake or inherited completion flag is required. The loader reads its own URL, the current entry and cwd. Non-DSH Node processes install hooks without profile/argv rewriting.
+- Replace `markStentDshLaunch`, `isStentDshLaunch`, and `STENT_DSH_LAUNCH_KEY` with `activateStent`, `isStentActive`, and `STENT_ACTIVATION_KEY`. The low-level `@oh-my-dsh/stent/loader` API remains separate from this import activation entry.
+- Upgrade the carrier and all three packages together to 0.2.0. No old API aliases or persisted-data migration are provided or needed.
+
 ## 3. Install model: npm bundle
 
 The publishable root bundle `@oh-my-dsh/stent-pack` declares the three published
 npm implementation packages:
 
 ```
-@oh-my-dsh/stent@^0.1.1
-@oh-my-dsh/stent-api@^0.1.1
-@oh-my-dsh/stent-dsh@^0.1.1
+@oh-my-dsh/stent@^0.2.0
+@oh-my-dsh/stent-api@^0.2.0
+@oh-my-dsh/stent-dsh@^0.2.0
 ```
 
 The same tag workflow publishes the root carrier after those three packages,
@@ -136,7 +144,7 @@ This keeps installation to one npm package:
 dsh plugin --profile web add @oh-my-dsh/stent-pack
 ```
 
-At installation, pnpm resolves those npm semver dependencies. At launch, `stent-dsh` asks DSH's module-fallback healer to map the bundle's dependency closure into `$DSH_HOME/profiles/node_modules`, so the Profile and the preload resolve the same trio copies.
+At installation, pnpm resolves those npm semver dependencies. At launch, `stent-loader` asks DSH's module-fallback healer to map the bundle's dependency closure into `$DSH_HOME/profiles/node_modules`, so the Profile and the preload resolve the same trio copies.
 
 - Host source installs declare the bundle in `apps/cli/package.json`; run the
   harness workspace's `pnpm install` and `pnpm run pack:build`, then install the

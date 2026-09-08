@@ -25,21 +25,22 @@ dsh plugin --profile <p> add @oh-my-dsh/stent-pack
 profile bootstrap)。根包 `@oh-my-dsh/stent-pack` 是单独发布的 carrier,不是第四个实现包。
 官方 `@deepseek-ai/dsh-tool-cordis` 保持为上游依赖,不在此重新发布。
 
-## 2. Host 集成:由 launcher 提供接线
+## 2. Host 集成:由 import 启用 loader
 
-三个包通过编译后的 launcher 安装 hooks 并挂载 facade。`src/stent-dsh.ts`
+三个包通过编译后的 loader 安装 hooks 并挂载 facade。`src/stent-dsh.ts`
 编译为 `lib/stent-dsh.js`，`src/stent-loader.ts` 编译为
-`lib/stent-loader.js`。bin 只解析 DSH 路径并转发其他参数，通过
-`NODE_OPTIONS=--import ...` 在官方 CLI 加载前注入编译后的 preload。profile
-组合、依赖修复、argv 规范化、环境设置和 hook 注册全部由 preload 负责。
+`lib/stent-loader.js`。bin 是薄命令层：选择命令、通过
+`NODE_OPTIONS=--import ...` 注入 loader 并转发执行。import loader 本身就是
+activation 边界；loader 为导入它的进程安装 hooks，只有识别为官方 DSH CLI
+入口时才执行 profile 组合、依赖修复、argv 规范化和环境设置。
 它通过 DSH 提供的 `@deepseek-ai/dsh-app-boot` peer 静态导入官方 profile 组合和修复
 API；carrier 不会再捆绑另一份 app-boot，也不需要 host patch checkout。preload 还会记录进程内的
-`stent-dsh` 启动能力，因此即使其他路径安装了底层 hooks，普通 `dsh` 下
+Stent 启用状态，因此即使其他路径安装了底层 hooks，未 import loader 的 `dsh` 下
 Stent 依赖插件仍不可用。`getStent(ctx)` 也使用同一能力门控：漏写
 `inject: ['stent']` 的插件在普通 `dsh` 下无法通过 accessor 挂载 registry，
 而会 loud failure。
 
-官方通道已经覆盖的内容被刻意排除:安装 trio(`dsh plugin add`)、bundle 行名册与依赖、catalog 生成、trio-in-workspace 的 invariant/gate 豁免、以及全部文档(`README*`、`docs/`、`.agents/`)。剩下的是任何通道都提供不了的:launcher-owned preload/bootstrap、`clientBundle` 源码 transform 构建接缝、编译进官方 `tool-cordis` 包的 catalog 条目、它们的测试、以及 pnpm 策略接缝。### 2.1 disabled opt-in 行
+官方通道已经覆盖的内容被刻意排除:安装 trio(`dsh plugin add`)、bundle 行名册与依赖、catalog 生成、trio-in-workspace 的 invariant/gate 豁免、以及全部文档(`README*`、`docs/`、`.agents/`)。剩下的是任何通道都提供不了的:import-owned loader/bootstrap、`clientBundle` 源码 transform 构建接缝、编译进官方 `tool-cordis` 包的 catalog 条目、它们的测试、以及 pnpm 策略接缝。### 2.1 disabled opt-in 行
 
 web-app bundle 层把 `stent` / `stent-dsh` 行插入为 **disabled opt-in**。动态
 patch plugin 的 row 只需要 activation marker（例如 `config: { stent: true }`）；
@@ -60,14 +61,21 @@ CJS/ESM 模块在同步 Node hooks 可用时会调度 cache re-transform。handl
 
 `dsh` 的 source 启动一度看起来需要 `TSX_TSCONFIG_PATH` 或 register preload:`FiberState`(const enum,只在 `vendor/cordis/src` 存在)解析失败。两个 workaround 都曾发布,后来**全部撤销**——真正原因是 shell 里一个指向旧 staging checkout 的过期 `TSX_TSCONFIG_PATH`。干净环境下 tsx 自动发现入口的 tsconfig(继承 base)并把别名解析到 `src`。官方脚本原样运行;patch 中不存在相关接缝。
 
+### 2.4 迁移到 0.2.0
+
+- 使用 `stent-dsh --dsh <命令或源码目录>`，默认执行 PATH 上的 `dsh`。目录通过自身的 `pnpm run --dir <目录> dsh` 脚本启动；薄命令层不再搜索项目依赖或解释 shim 注释。
+- 直接 `node --import /absolute/path/to/lib/stent-loader.js <入口>` 即可启用 Stent，不需要 launcher 握手或可继承的完成标志。loader 自读模块 URL、当前入口和 cwd；非 DSH Node 进程安装 hooks，但不改写 profile/argv。
+- 将 `markStentDshLaunch`、`isStentDshLaunch`、`STENT_DSH_LAUNCH_KEY` 替换为 `activateStent`、`isStentActive`、`STENT_ACTIVATION_KEY`。底层 `@oh-my-dsh/stent/loader` API 与此 import 启用入口仍然分开。
+- carrier 和三个实现包一起升级到 0.2.0；不保留旧 API 别名，不涉及持久化数据迁移。
+
 ## 3. 安装模型:npm bundle
 
 可发布的根 bundle `@oh-my-dsh/stent-pack` 声明三个已发布的 npm 实现包：
 
 ```
-@oh-my-dsh/stent@^0.1.1
-@oh-my-dsh/stent-api@^0.1.1
-@oh-my-dsh/stent-dsh@^0.1.1
+@oh-my-dsh/stent@^0.2.0
+@oh-my-dsh/stent-api@^0.2.0
+@oh-my-dsh/stent-dsh@^0.2.0
 ```
 
 同一个 tag workflow 会在这三个包之后发布根 carrier,确保它的 semver 依赖已经存在于 npm。

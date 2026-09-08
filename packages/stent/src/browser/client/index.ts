@@ -18,7 +18,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 
-import { markStentDshLaunch } from '#src/activation'
+import { activateStent } from '#src/activation'
 import { installBridge } from '#src/bridge'
 import { StentService } from '#src/service'
 
@@ -34,7 +34,7 @@ const name = 'stent'
  * @param ctx - Cordis context that owns the service.
  */
 async function apply(ctx: Context): Promise<void> {
-  markStentDshLaunch()
+  activateStent()
   installBridge()
   await ctx.plugin(StentService)
 }

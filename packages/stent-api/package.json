@@ -10,7 +10,7 @@
     "access": "public"
   },
   "type": "module",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "imports": {
     "#src/*": "./src/*.ts"
   },
@@ -47,7 +47,7 @@
     "test": "pnpm run build && vitest run --config vitest.config.ts"
   },
   "peerDependencies": {
-    "@oh-my-dsh/stent": "^0.1.0",
+    "@oh-my-dsh/stent": "^0.2.0",
     "@deepseek-ai/cordis": "^4.0.1-0"
   },
   "devDependencies": {

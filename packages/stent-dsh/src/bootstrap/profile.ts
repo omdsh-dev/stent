@@ -10,7 +10,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { isStentDshLaunch } from '@oh-my-dsh/stent/activation'
+import { isStentActive } from '@oh-my-dsh/stent/activation'
 import type { StentBinding, StentPatchInfo } from '@oh-my-dsh/stent/types'
 
 /** Delay before the deferred post-boot patch check starts. */
@@ -70,7 +70,7 @@ function assertDynamicProfile(rows: StentProfileRows): void {
  */
 async function installStentBootstrap(rows: StentProfileRows): Promise<void> {
   assertDynamicProfile(rows)
-  if (!rows.has('stent') || isStentDshLaunch()) {
+  if (!rows.has('stent') || isStentActive()) {
     return
   }
   const { installStentHooks } = await import('@oh-my-dsh/stent/loader')
@@ -134,7 +134,7 @@ function logHookSummary(
  * dynamic hooks are already active.
  */
 function scheduleRequiredPatchCheck(ctx: Readonly<Context>): void {
-  if (!isStentDshLaunch()) {
+  if (!isStentActive()) {
     return
   }
   ctx.effect(async (): Promise<() => void> => {
